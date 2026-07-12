@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScoutAI — ניתוח ספורטאים עם AI</title>
+<meta name="description" content="ScoutAI — פלטפורמת ניתוח ביצועי ספורטאים מבוססת AI. העלו וידאו של משחק וקבלו מדדי מהירות, דיוק מסירות, מפות חום ודוחות סקאוטינג מקצועיים.">
+<meta property="og:title" content="ScoutAI — ניתוח ספורטאים עם AI">
+<meta property="og:description" content="ניתוח וידאו חכם לכדורגל, כדורסל וריצה — מדדים, השוואות שחקנים ודוחות PDF לסקאוטים ומאמנים.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#3b82f6">
+<style>
+:root{
+  --bg:#060c18;--bg2:#0a1122;--bg3:#0d1830;--card:#0c1628;
+  --border:rgba(255,255,255,.07);--text:#cce0ff;--muted:#3d5a80;
+  --cyan:#06b6d4;--blue:#3b82f6;--navy:#1e3a5f;--gold:#f59e0b;
+  --green:#22c55e;--red:#ef4444;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;direction:rtl}
+
+/* ── NAV ── */
+nav{display:flex;align-items:center;justify-content:space-between;padding:13px 24px;background:rgba(10,17,34,.97);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:60;backdrop-filter:blur(12px)}
+.logo{font-size:1.25rem;font-weight:900;color:var(--cyan);letter-spacing:-.5px}
+.logo em{color:#fff;font-style:normal;font-weight:400}
+.nav-center{display:flex;gap:6px}
+.sport-pill{padding:6px 14px;border-radius:20px;font-size:.75rem;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all .2s;color:var(--muted);background:transparent}
+.sport-pill.active,.sport-pill:hover{background:rgba(6,182,212,.12);color:var(--cyan)}
+.sport-pill.active{border:1px solid rgba(6,182,212,.25)}
+.nav-right{display:flex;gap:10px;align-items:center}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:.8rem;font-weight:700;font-family:inherit;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-cyan{background:var(--cyan);color:#060c18}
+.btn-cyan:hover{background:#0891b2;transform:translateY(-1px);box-shadow:0 4px 16px rgba(6,182,212,.3)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn-outline:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* ── APP SHELL ── */
+.app-shell{display:grid;grid-template-columns:220px 1fr 280px;height:calc(100vh - 53px);overflow:hidden}
+
+/* ── LEFT SIDEBAR ── */
+.sidebar{background:var(--bg2);border-left:1px solid var(--border);padding:20px 14px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+.sidebar-section{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px}
+.sidebar-title{font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+.sport-btn{display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;border-radius:8px;border:none;background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;cursor:pointer;transition:all .2s;margin-bottom:4px;text-align:right}
+.sport-btn:hover{background:rgba(6,182,212,.06);color:var(--text)}
+.sport-btn.active{background:rgba(6,182,212,.12);color:var(--cyan);border:1px solid rgba(6,182,212,.2)}
+.sport-btn .sport-ico{font-size:1rem}
+.session-stat{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.session-stat:last-child{border-bottom:none}
+.session-label{font-size:.73rem;color:var(--muted)}
+.session-val{font-size:.82rem;font-weight:700;color:var(--cyan)}
+.ai-status{display:flex;align-items:center;gap:8px;padding:10px;background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:8px}
+.ai-status .dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;box-shadow:0 0 6px var(--green)}
+.ai-status p{font-size:.72rem;color:var(--green);line-height:1.4}
+
+/* ── MAIN CANVAS AREA ── */
+.main-area{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.canvas-wrapper{flex:1;position:relative;overflow:hidden;background:var(--bg)}
+canvas#fieldCanvas{display:block;width:100%;height:100%}
+.canvas-overlay{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:8px}
+.overlay-badge{background:rgba(6,26,50,.85);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.72rem;backdrop-filter:blur(6px);display:flex;align-items:center;gap:6px}
+.player-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* ── TIMELINE ── */
+.timeline-panel{background:var(--bg2);border-top:1px solid var(--border);padding:14px 20px;flex-shrink:0}
+.timeline-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.timeline-title{font-size:.73rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.timeline-time{font-size:.73rem;color:var(--cyan);font-variant-numeric:tabular-nums;font-weight:700}
+.timeline-track{position:relative;height:36px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer}
+.timeline-fill{height:100%;background:linear-gradient(90deg,rgba(6,182,212,.15),rgba(6,182,212,.05));border-radius:8px;transition:width .5s linear;position:relative}
+.timeline-fill::after{content:'';position:absolute;top:0;right:0;width:2px;height:100%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.timeline-events{position:absolute;top:0;left:0;right:0;height:100%;pointer-events:none}
+.t-event{position:absolute;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;cursor:pointer;pointer-events:auto;transition:transform .2s;border:2px solid transparent}
+.t-event:hover{transform:translateY(-50%) scale(1.2)}
+.t-goal{background:rgba(245,158,11,.2);border-color:var(--gold);color:var(--gold)}
+.t-pass{background:rgba(6,182,212,.2);border-color:var(--cyan);color:var(--cyan)}
+.t-sprint{background:rgba(34,197,94,.2);border-color:var(--green);color:var(--green)}
+.t-event-label{position:absolute;top:-22px;right:50%;transform:translateX(50%);white-space:nowrap;font-size:.6rem;background:var(--bg3);border:1px solid var(--border);padding:2px 6px;border-radius:4px;opacity:0;transition:opacity .2s;pointer-events:none}
+.t-event:hover .t-event-label{opacity:1}
+.timeline-legend{display:flex;gap:16px;margin-top:8px}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:.68rem;color:var(--muted)}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* ── RIGHT PANEL ── */
+.right-panel{background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.panel-tabs{display:flex;border-bottom:1px solid var(--border)}
+.panel-tab{flex:1;padding:12px 8px;font-size:.72rem;font-weight:700;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:inherit;transition:all .2s;border-bottom:2px solid transparent}
+.panel-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.panel-body{flex:1;padding:16px;display:flex;flex-direction:column;gap:16px}
+
+/* ── RADAR ── */
+.radar-section{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px}
+.radar-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+.radar-canvas-wrap{display:flex;justify-content:center}
+canvas#radarCanvas{display:block}
+.radar-legend{display:flex;gap:12px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+.rl{display:flex;align-items:center;gap:4px;font-size:.67rem;color:var(--muted)}
+.rl-dot{width:8px;height:8px;border-radius:50%}
+.compare-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.compare-toggle label{font-size:.75rem;color:var(--muted)}
+.toggle{position:relative;width:36px;height:20px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,.08);border-radius:10px;transition:.3s}
+.toggle-slider::before{content:'';position:absolute;height:14px;width:14px;right:3px;top:3px;background:var(--muted);border-radius:50%;transition:.3s}
+.toggle input:checked + .toggle-slider{background:rgba(6,182,212,.3)}
+.toggle input:checked + .toggle-slider::before{transform:translateX(-16px);background:var(--cyan)}
+
+/* ── PLAYERS ROSTER ── */
+.roster-section{background:var(--bg3);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.roster-header{padding:12px 14px;border-bottom:1px solid var(--border);font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.player-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .2s}
+.player-row:last-child{border-bottom:none}
+.player-row:hover{background:rgba(6,182,212,.04)}
+.player-row.selected{background:rgba(6,182,212,.08)}
+.player-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;color:#fff;flex-shrink:0}
+.player-info{flex:1;min-width:0}
+.player-name{font-size:.82rem;font-weight:700}
+.player-pos{font-size:.68rem;color:var(--muted)}
+.player-rating{font-size:1rem;font-weight:900;color:var(--cyan);min-width:28px;text-align:left}
+.trend-up{color:var(--green);font-size:.75rem}
+.trend-down{color:var(--red);font-size:.75rem}
+.rating-bar{height:3px;background:rgba(255,255,255,.06);border-radius:2px;margin-top:4px;overflow:hidden}
+.rating-fill{height:100%;border-radius:2px;transition:width 1s}
+
+/* ── METRICS (panel) ── */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.metric-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+.metric-n{font-size:1.4rem;font-weight:900;color:var(--cyan);font-variant-numeric:tabular-nums}
+.metric-l{font-size:.65rem;color:var(--muted);margin-top:2px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:28px;right:50%;transform:translateX(50%);background:#0d2033;border:1px solid rgba(6,182,212,.4);border-radius:12px;padding:14px 22px;font-size:.88rem;font-weight:600;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:999;opacity:0;transition:opacity .3s,bottom .3s;pointer-events:none;white-space:nowrap;color:var(--text)}
+.toast.show{opacity:1;bottom:36px}
+
+/* ── PRICING RIBBON ── */
+.pricing-ribbon{background:linear-gradient(90deg,rgba(6,182,212,.1),rgba(59,130,246,.06));border-bottom:1px solid rgba(6,182,212,.18);padding:8px 24px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:.78rem;color:var(--text)}
+.pricing-ribbon strong{color:var(--cyan)}
+.ribbon-sep{color:var(--muted)}
+
+/* ── SCOUT PRICING MODAL ── */
+.scout-pricing-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px}
+@media(max-width:700px){.scout-pricing-grid{grid-template-columns:1fr}}
+.scout-plan{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px;position:relative}
+.scout-plan.popular{border-color:rgba(6,182,212,.5);box-shadow:0 0 20px rgba(6,182,212,.08)}
+.scout-popular-tag{position:absolute;top:-10px;right:50%;transform:translateX(50%);background:var(--cyan);color:#060c18;font-size:.62rem;font-weight:800;padding:2px 10px;border-radius:10px;white-space:nowrap}
+.scout-plan-name{font-size:.88rem;font-weight:800;color:var(--text)}
+.scout-plan-price{font-size:1.35rem;font-weight:900;color:var(--cyan)}
+.scout-plan-price span{font-size:.72rem;color:var(--muted);font-weight:400}
+.scout-plan-features{list-style:none;display:flex;flex-direction:column;gap:5px;margin-top:4px}
+.scout-plan-features li{font-size:.74rem;color:var(--muted);display:flex;align-items:flex-start;gap:5px;line-height:1.4}
+.scout-plan-features li::before{content:'✓';color:var(--cyan);font-weight:800;flex-shrink:0}
+.scout-plan-features li.no::before{content:'✗';color:var(--red)}
+.scout-plan-cta{margin-top:auto;padding-top:10px}
+
+/* ── UPGRADE PROMPT ── */
+.upgrade-prompt{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;align-items:center;justify-content:center;padding:16px}
+.upgrade-prompt.show{display:flex}
+.upgrade-box{background:var(--bg2);border:1px solid rgba(6,182,212,.3);border-radius:18px;padding:32px;max-width:420px;width:100%;text-align:center}
+.upgrade-icon{font-size:2.5rem;margin-bottom:12px}
+.upgrade-title{font-size:1.1rem;font-weight:800;margin-bottom:8px}
+.upgrade-sub{font-size:.82rem;color:var(--muted);margin-bottom:20px;line-height:1.6}
+.upgrade-actions{display:flex;gap:10px;justify-content:center}
+
+/* ── DRAG DROP OVERLAY ── */
+.drop-overlay{position:absolute;inset:0;background:rgba(6,182,212,.12);border:3px solid var(--cyan);border-radius:0;display:none;align-items:center;justify-content:center;z-index:20;backdrop-filter:blur(2px)}
+.drop-overlay.active{display:flex}
+.drop-text{font-size:1.8rem;font-weight:900;color:var(--cyan);text-shadow:0 0 24px rgba(6,182,212,.6);animation:dropPulse 1s ease-in-out infinite}
+@keyframes dropPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+
+/* ── EMPTY CANVAS STATE ── */
+.canvas-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,182,212,.05) 0%,transparent 70%);z-index:5}
+.canvas-empty .ce-icon{font-size:3.5rem;opacity:.7}
+.canvas-empty .ce-title{font-size:1.1rem;font-weight:700;color:var(--text);text-align:center;line-height:1.5}
+.canvas-empty .ce-sub{font-size:.8rem;color:var(--muted);text-align:center}
+
+/* ── PROGRESS STAGES ── */
+.analysis-stages{position:absolute;bottom:0;left:0;right:0;background:rgba(6,26,50,.92);border-top:1px solid var(--border);padding:10px 18px;z-index:10;display:none}
+.analysis-stages.show{display:block}
+.stage-text{font-size:.82rem;color:var(--cyan);font-weight:700;margin-bottom:6px}
+.stage-bar-track{height:4px;background:rgba(255,255,255,.07);border-radius:2px}
+.stage-bar-fill{height:100%;background:var(--cyan);border-radius:2px;transition:width .5s ease}
+
+/* ── PLAYER CARD HOVER ── */
+.player-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .2s,border-right .2s,box-shadow .2s;border-right:2px solid transparent}
+.player-row:last-child{border-bottom:none}
+.player-row:hover{background:rgba(6,182,212,.07);border-right-color:var(--cyan);box-shadow:inset 0 0 12px rgba(6,182,212,.04)}
+.player-row.selected{background:rgba(6,182,212,.08);border-right-color:var(--cyan)}
+
+/* ── AUTH ── */
+.auth-tabs{display:flex;gap:6px;margin-bottom:16px;background:var(--bg3);border-radius:10px;padding:4px}
+.auth-tab{flex:1;padding:9px;border:none;border-radius:8px;background:transparent;color:var(--muted);font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .2s}
+.auth-tab.active{background:rgba(6,182,212,.14);color:var(--cyan)}
+.auth-note{display:none;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);color:var(--cyan);border-radius:10px;padding:10px 14px;font-size:.8rem;font-weight:600;margin-bottom:14px;text-align:right}
+.field{margin-bottom:12px;text-align:right}
+.field label{display:block;font-size:.75rem;color:var(--muted);margin-bottom:5px;font-weight:600}
+.field input,.field textarea{width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:.85rem;font-family:inherit;direction:rtl;transition:border-color .2s}
+.field input:focus,.field textarea:focus{outline:none;border-color:var(--cyan)}
+.field textarea{min-height:70px;resize:vertical}
+.user-avatar{width:34px;height:34px;border-radius:50%;background:rgba(6,182,212,.18);border:2px solid var(--cyan);color:var(--cyan);font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.user-menu{position:relative}
+.user-dropdown{display:none;position:absolute;top:calc(100% + 8px);left:0;background:var(--bg2);border:1px solid var(--border);border-radius:12px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:200;overflow:hidden}
+.user-dropdown.open{display:block}
+.user-dropdown .ud-name{padding:11px 14px;font-size:.78rem;font-weight:700;border-bottom:1px solid var(--border);color:var(--text)}
+.user-dropdown button{display:block;width:100%;text-align:right;padding:10px 14px;background:transparent;border:none;color:var(--muted);font-family:inherit;font-size:.8rem;cursor:pointer}
+.user-dropdown button:hover{background:rgba(6,182,212,.08);color:var(--cyan)}
+
+/* ── ONBOARDING ── */
+.onboard-dots{display:flex;gap:8px;justify-content:center;margin-bottom:18px}
+.onboard-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.12);transition:background .2s}
+.onboard-dot.active{background:var(--cyan)}
+
+/* ── FEEDBACK ── */
+.feedback-fab{position:fixed;bottom:22px;left:22px;z-index:250;background:var(--cyan);color:#060c18;border:none;border-radius:24px;padding:10px 18px;font-family:inherit;font-size:.82rem;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(6,182,212,.35);transition:transform .2s}
+.feedback-fab:hover{transform:translateY(-2px)}
+.stars-row{display:flex;gap:6px;justify-content:center;margin:12px 0 16px;direction:ltr}
+.star-btn{background:transparent;border:none;font-size:1.6rem;cursor:pointer;transition:transform .15s;filter:grayscale(1);opacity:.45}
+.star-btn:hover{transform:scale(1.15)}
+.star-btn.on{filter:none;opacity:1}
+
+/* ── LEGAL / FOOTER ── */
+.legal-body{font-size:.8rem;color:var(--muted);line-height:1.8;max-height:55vh;overflow-y:auto;text-align:right}
+.legal-body p{margin-bottom:11px}
+.legal-body strong{color:var(--text)}
+.app-footer{display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 24px;background:var(--bg2);border-top:1px solid var(--border);font-size:.72rem;color:var(--muted)}
+.app-footer a{color:var(--muted);text-decoration:none;transition:color .2s}
+.app-footer a:hover{color:var(--cyan)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .app-shell{grid-template-columns:1fr;grid-template-rows:auto 1fr auto}
+  .sidebar{display:none}
+  .right-panel{max-height:400px}
+  .timeline-panel{padding:10px 12px}
+  .metrics-grid{grid-template-columns:1fr}
+  canvas#fieldCanvas{height:200px!important;max-height:200px}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">Scout<em>AI</em></div>
+  <div class="nav-center">
+    <button class="sport-pill active" onclick="setSport('football',this)">⚽ כדורגל</button>
+    <button class="sport-pill" onclick="setSport('basketball',this)">🏀 כדורסל</button>
+    <button class="sport-pill" onclick="setSport('running',this)">🏃 ריצה</button>
+  </div>
+  <div class="nav-right">
+    <span style="font-size:.73rem;color:var(--muted);display:flex;align-items:center;gap:6px"><span class="live-dot"></span>ניתוח חי</span>
+    <button class="btn btn-outline" onclick="showScoutPricing()" style="border-color:rgba(6,182,212,.35);color:var(--cyan)">📊 תוכניות ומחירים</button>
+    <button class="btn btn-outline" onclick="exportReport()">📄 הורד דוח PDF</button>
+    <button class="btn btn-cyan" onclick="simulateDemo()">⚡ דמו</button>
+    <div id="authArea"></div>
+  </div>
+</nav>
+
+<!-- PRICING RIBBON -->
+<div class="pricing-ribbon">
+  <span>📊 <strong>ניסיון חינמי</strong> — 3 ניתוחי וידאו, 2 שחקנים, ללא PDF</span>
+  <span class="ribbon-sep">|</span>
+  <span>לאחר מכן מ-<strong>₪299/חודש</strong> · ניתוחים ללא הגבלה · דוחות PDF · API</span>
+  <button onclick="showScoutPricing()" style="margin-right:10px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);color:var(--cyan);font-size:.72rem;font-weight:700;padding:3px 11px;border-radius:7px;cursor:pointer;font-family:inherit">השווה תוכניות ↗</button>
+</div>
+
+<!-- SCOUT PRICING MODAL -->
+<div class="upgrade-prompt" id="scoutPricingModal">
+  <div class="upgrade-box" style="max-width:700px;text-align:right">
+    <button onclick="document.getElementById('scoutPricingModal').classList.remove('show')" style="float:left;background:rgba(255,255,255,.06);border:none;color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.9rem">✕</button>
+    <div style="clear:both"></div>
+    <div style="font-size:1.1rem;font-weight:800;margin-bottom:4px">📊 תוכניות ScoutAI</div>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:4px">ניתוח ספורטאים מבוסס AI לכל רמה</p>
+    <div class="scout-pricing-grid">
+      <div class="scout-plan">
+        <div class="scout-plan-name">Scout Free</div>
+        <div class="scout-plan-price">חינם <span>לתמיד</span></div>
+        <ul class="scout-plan-features">
+          <li>3 ניתוחי וידאו / חודש</li>
+          <li>עד 2 שחקנים</li>
+          <li class="no">ללא ייצוא PDF</li>
+          <li class="no">ללא השוואת שחקנים</li>
+          <li>גישה לדאשבורד בסיסי</li>
+        </ul>
+        <div class="scout-plan-cta"><button class="btn btn-outline" style="width:100%;justify-content:center;font-size:.78rem" onclick="document.getElementById('scoutPricingModal').classList.remove('show')">התוכנית הנוכחית</button></div>
+      </div>
+      <div class="scout-plan popular">
+        <div class="scout-popular-tag">הכי פופולרי</div>
+        <div class="scout-plan-name">Club</div>
+        <div class="scout-plan-price">₪299 <span>/ חודש</span></div>
+        <ul class="scout-plan-features">
+          <li>ניתוחים ללא הגבלה</li>
+          <li>עד 25 שחקנים</li>
+          <li>ייצוא דוחות PDF</li>
+          <li>השוואת שחקנים מלאה</li>
+          <li>תמיכה מועדפת</li>
+        </ul>
+        <div class="scout-plan-cta"><button class="btn btn-cyan" style="width:100%;justify-content:center;font-size:.78rem" onclick="track('upgrade_click',{plan:'club'});document.getElementById('scoutPricingModal').classList.remove('show');showToast('🎉 ניסיון Club התחיל! נציג יצור קשר בקרוב')">התחל ניסיון חינמי</button></div>
+      </div>
+      <div class="scout-plan">
+        <div class="scout-plan-name">Academy</div>
+        <div class="scout-plan-price">₪799 <span>/ חודש</span></div>
+        <ul class="scout-plan-features">
+          <li>כל מועדוני הספורט</li>
+          <li>Multi-user (עד 10 משתמשים)</li>
+          <li>גישת API מלאה</li>
+          <li>דוחות גיוס AI</li>
+          <li>דאשבורד מנהל</li>
+          <li>מנהל חשבון ייעודי</li>
+        </ul>
+        <div class="scout-plan-cta"><button class="btn btn-outline" style="width:100%;justify-content:center;font-size:.78rem;border-color:rgba(6,182,212,.3);color:var(--cyan)" onclick="track('upgrade_click',{plan:'academy'});document.getElementById('scoutPricingModal').classList.remove('show');showToast('📞 נציג Academy יחזור אליך תוך 24 שעות')">צור קשר עם מכירות</button></div>
+      </div>
+    </div>
+    <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:14px">ביטול בכל עת · אין עלויות הפתעה · חשבונית מס</p>
+  </div>
+</div>
+
+<!-- PDF UPGRADE PROMPT -->
+<div class="upgrade-prompt" id="pdfUpgradePrompt">
+  <div class="upgrade-box">
+    <div class="upgrade-icon">⚠️</div>
+    <div class="upgrade-title">הגעת למגבלת Free</div>
+    <div class="upgrade-sub">הורדת 3 דוחות PDF — המגבלה החינמית מוצתה.<br>שדרג לתוכנית <strong style="color:var(--cyan)">Club ₪299/חודש</strong> להורדות ללא הגבלה.</div>
+    <div class="upgrade-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('pdfUpgradePrompt').classList.remove('show')">אחר כך</button>
+      <button class="btn btn-cyan" onclick="track('upgrade_click',{plan:'pdf_limit'});document.getElementById('pdfUpgradePrompt').classList.remove('show');showScoutPricing()">שדרג עכשיו ⚡</button>
+    </div>
+  </div>
+</div>
+
+<div class="app-shell">
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">בחר ענף ספורט</div>
+      <button class="sport-btn active" id="sb-football" onclick="setSport('football',null,this)">
+        <span class="sport-ico">⚽</span> כדורגל
+      </button>
+      <button class="sport-btn" id="sb-basketball" onclick="setSport('basketball',null,this)">
+        <span class="sport-ico">🏀</span> כדורסל
+      </button>
+      <button class="sport-btn" id="sb-running" onclick="setSport('running',null,this)">
+        <span class="sport-ico">🏃</span> ריצה
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">פרטי סשן</div>
+      <div class="session-stat"><span class="session-label">זמן ניתוח</span><span class="session-val" id="sessionTime">00:00</span></div>
+      <div class="session-stat"><span class="session-label">שחקנים</span><span class="session-val">6</span></div>
+      <div class="session-stat"><span class="session-label">פריימים</span><span class="session-val" id="frameCount">0</span></div>
+      <div class="session-stat"><span class="session-label">אירועים</span><span class="session-val">8</span></div>
+      <div class="session-stat"><span class="session-label">דיוק AI</span><span class="session-val">94.7%</span></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">סטטוס מערכת</div>
+      <div class="ai-status">
+        <span class="dot"></span>
+        <p>מנוע AI פעיל<br>מעבד <span id="fps">30</span> פריימים/שנייה</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CANVAS + TIMELINE -->
+  <div class="main-area">
+    <div class="canvas-wrapper" id="canvasWrapper"
+      ondragover="event.preventDefault();showDropOverlay()"
+      ondragleave="hideDropOverlay()"
+      ondrop="event.preventDefault();hideDropOverlay();startDemoFromDrop()">
+      <!-- Drop overlay -->
+      <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-text">שחרר כאן 📹</div>
+      </div>
+      <!-- Empty state -->
+      <div class="canvas-empty" id="canvasEmpty">
+        <div class="ce-icon">📹</div>
+        <div class="ce-title">גרור וידאו לכאן<br>או לחץ על ⚡ ניתוח דמו לראות דוגמה מיידית</div>
+        <div class="ce-sub">תומך ב-MP4, MOV, AVI · עד 2GB</div>
+      </div>
+      <!-- Analysis stages -->
+      <div class="analysis-stages" id="analysisStages">
+        <div class="stage-text" id="stageText">🎬 מעבד פריימים...</div>
+        <div class="stage-bar-track"><div class="stage-bar-fill" id="stageBarFill" style="width:0%"></div></div>
+      </div>
+      <canvas id="fieldCanvas"></canvas>
+      <div class="canvas-overlay">
+        <div class="overlay-badge"><span class="player-dot" style="background:#3b82f6"></span>#7 כהן — 28.4 קמ"ש</div>
+        <div class="overlay-badge"><span class="player-dot" style="background:#f59e0b"></span>#11 לוי — 24.1 קמ"ש</div>
+        <div class="overlay-badge" style="margin-top:4px;font-size:.68rem;color:var(--muted)">⏱ <span id="matchTime">42</span>'</div>
+      </div>
+    </div>
+
+    <div class="timeline-panel">
+      <div class="timeline-header">
+        <span class="timeline-title">ציר זמן אירועים</span>
+        <span class="timeline-time" id="tlTime">00:00 / 90:00</span>
+      </div>
+      <div class="timeline-track" id="timelineTrack" onclick="seekTimeline(event)">
+        <div class="timeline-fill" id="timelineFill" style="width:47%"></div>
+        <div class="timeline-events" id="timelineEvents"></div>
+      </div>
+      <div class="timeline-legend">
+        <div class="legend-item"><span class="legend-dot" style="background:var(--gold)"></span>גול</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--cyan)"></span>מסירה מדויקת</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>ספרינט</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="panel-tabs">
+      <button class="panel-tab active" onclick="setPanelTab('radar',this)">📊 ניתוח</button>
+      <button class="panel-tab" onclick="setPanelTab('roster',this)">👥 שחקנים</button>
+      <button class="panel-tab" onclick="setPanelTab('metrics',this)">📈 מדדים</button>
+    </div>
+
+    <!-- RADAR TAB -->
+    <div class="panel-body" id="tab-radar">
+      <div class="radar-section">
+        <div class="radar-title">פרופיל ביצועים</div>
+        <div class="radar-canvas-wrap"><canvas id="radarCanvas" width="220" height="200"></canvas></div>
+        <div class="radar-legend">
+          <div class="rl"><span class="rl-dot" style="background:#3b82f6"></span>#7 כהן</div>
+          <div class="rl"><span class="rl-dot" style="background:#f59e0b"></span>#11 לוי</div>
+        </div>
+        <div class="compare-toggle">
+          <label>השוואת שחקנים</label>
+          <label class="toggle"><input type="checkbox" id="compareToggle" onchange="drawRadar()"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-n" id="mSpeed">28.4</div><div class="metric-l">מהירות מקס׳ (קמ״ש)</div></div>
+        <div class="metric-card"><div class="metric-n" id="mDist">6.8</div><div class="metric-l">מרחק (ק"מ)</div></div>
+        <div class="metric-card"><div class="metric-n" id="mPass">87%</div><div class="metric-l">דיוק מסירות</div></div>
+        <div class="metric-card"><div class="metric-n" id="mTouch">34</div><div class="metric-l">מגעים בכדור</div></div>
+      </div>
+    </div>
+
+    <!-- ROSTER TAB -->
+    <div class="panel-body" id="tab-roster" style="display:none;padding:0">
+      <div class="roster-section" style="border-radius:0;border:none">
+        <div class="roster-header">רשימת שחקנים — מחזור 23</div>
+        <div id="rosterList"></div>
+      </div>
+    </div>
+
+    <!-- METRICS TAB -->
+    <div class="panel-body" id="tab-metrics" style="display:none">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px">
+        <div class="sidebar-title" style="margin-bottom:10px">ממוצע קבוצתי</div>
+        <div class="session-stat"><span class="session-label">מהירות ממוצעת</span><span class="session-val">22.3 קמ"ש</span></div>
+        <div class="session-stat"><span class="session-label">ריצה ממוצעת</span><span class="session-val">5.4 ק"מ</span></div>
+        <div class="session-stat"><span class="session-label">דיוק מסירות</span><span class="session-val">81%</span></div>
+        <div class="session-stat"><span class="session-label">מגעים ממוצעים</span><span class="session-val">28</span></div>
+        <div class="session-stat"><span class="session-label">נגיעות שטח יריב</span><span class="session-val">14</span></div>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-n" style="color:var(--gold)">3</div><div class="metric-l">שערים</div></div>
+        <div class="metric-card"><div class="metric-n" style="color:var(--green)">7</div><div class="metric-l">בעיטות למסגרת</div></div>
+        <div class="metric-card"><div class="metric-n">62%</div><div class="metric-l">החזקת כדור</div></div>
+        <div class="metric-card"><div class="metric-n" style="color:var(--red)">4</div><div class="metric-l">כרטיסים צהובים</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="app-footer">
+  <span>© 2026 ScoutAI</span>
+  <a href="#" onclick="openLegal('terms');return false">תנאי שימוש</a>
+  <a href="#" onclick="openLegal('privacy');return false">מדיניות פרטיות</a>
+</footer>
+
+<!-- AUTH MODAL -->
+<div class="upgrade-prompt" id="authModal">
+  <div class="upgrade-box" style="max-width:400px;text-align:right">
+    <button onclick="closeAuth()" style="float:left;background:rgba(255,255,255,.06);border:none;color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.9rem">✕</button>
+    <div style="clear:both"></div>
+    <div style="font-size:1.05rem;font-weight:800;margin-bottom:4px">👤 החשבון שלי</div>
+    <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">הצטרף לסקאוטים ולמאמנים שמנתחים חכם יותר</p>
+    <div class="auth-note" id="authNote"></div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="authTabLogin" onclick="setAuthTab('login')">התחברות</button>
+      <button class="auth-tab" id="authTabRegister" onclick="setAuthTab('register')">הרשמה</button>
+    </div>
+    <div class="field" id="authNameField" style="display:none"><label>שם מלא</label><input id="aName" placeholder="ישראל ישראלי"></div>
+    <div class="field"><label>כתובת מייל</label><input id="aEmail" type="email" placeholder="you@club.co.il"></div>
+    <div class="field"><label>סיסמה</label><input id="aPass" type="password" placeholder="••••••••"></div>
+    <div class="upgrade-actions" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="closeAuth()">ביטול</button>
+      <button class="btn btn-cyan" id="authSubmitBtn" onclick="submitAuth()">התחבר</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEGAL MODAL -->
+<div class="upgrade-prompt" id="legalModal">
+  <div class="upgrade-box" style="max-width:560px;text-align:right">
+    <button onclick="document.getElementById('legalModal').classList.remove('show')" style="float:left;background:rgba(255,255,255,.06);border:none;color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.9rem">✕</button>
+    <div style="clear:both"></div>
+    <div style="font-size:1.05rem;font-weight:800;margin-bottom:12px" id="legalTitle"></div>
+    <div class="legal-body" id="legalBody"></div>
+  </div>
+</div>
+
+<!-- ONBOARDING -->
+<div class="upgrade-prompt" id="onboardBg" style="z-index:400">
+  <div class="upgrade-box" style="max-width:440px">
+    <div class="upgrade-icon" id="obIcon">🎯</div>
+    <div class="upgrade-title" id="obTitle"></div>
+    <div class="upgrade-sub" id="obText"></div>
+    <div class="onboard-dots" id="obDots"></div>
+    <div class="upgrade-actions">
+      <button class="btn btn-outline" onclick="finishOnboard()">דלג</button>
+      <button class="btn btn-cyan" id="obNextBtn" onclick="nextOnboard()">הבא</button>
+    </div>
+  </div>
+</div>
+
+<!-- FEEDBACK -->
+<button class="feedback-fab" onclick="openFeedback()">💬 משוב</button>
+<div class="upgrade-prompt" id="feedbackModal">
+  <div class="upgrade-box" style="max-width:400px">
+    <div class="upgrade-title">💬 מה דעתך על ScoutAI?</div>
+    <div class="upgrade-sub">המשוב שלך עוזר לנו להשתפר</div>
+    <div class="stars-row" id="starsRow">
+      <button class="star-btn" onclick="setStars(1)">⭐</button>
+      <button class="star-btn" onclick="setStars(2)">⭐</button>
+      <button class="star-btn" onclick="setStars(3)">⭐</button>
+      <button class="star-btn" onclick="setStars(4)">⭐</button>
+      <button class="star-btn" onclick="setStars(5)">⭐</button>
+    </div>
+    <div class="field"><label>ספר לנו עוד (אופציונלי)</label><textarea id="fbText" placeholder="מה עבד טוב? מה אפשר לשפר?"></textarea></div>
+    <div class="upgrade-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('feedbackModal').classList.remove('show')">ביטול</button>
+      <button class="btn btn-cyan" onclick="sendFeedback()">📨 שלח משוב</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──
+let animId, frameN = 0, tlProgress = 0.47, selectedPlayer = 0, compareMode = false;
+let sessionStart = Date.now();
+
+const PLAYERS = [
+  {name:'#7 כהן',   pos:'חלוץ מרכזי',    rating:91, trend:'up',   color:'#3b82f6', avatar:'כה', stats:[88,92,85,90,94]},
+  {name:'#11 לוי',  pos:'קשר יצירתי',     rating:84, trend:'up',   color:'#f59e0b', avatar:'לו', stats:[75,80,95,85,78]},
+  {name:'#9 פרץ',   pos:'חלוץ ימני',      rating:79, trend:'down', color:'#22c55e', avatar:'פר', stats:[90,72,70,75,82]},
+  {name:'#5 אלון',  pos:'בלם ימני',       rating:77, trend:'up',   color:'#a78bfa', avatar:'אל', stats:[65,85,74,88,91]},
+  {name:'#3 מזרחי', pos:'מגן שמאלי',      rating:72, trend:'down', color:'#fb7185', avatar:'מז', stats:[70,78,68,72,80]},
+  {name:'#17 ביטון','pos':'קשר מגן',       rating:68, trend:'up',   color:'#34d399', avatar:'בי', stats:[60,88,65,82,95]},
+];
+
+const TIMELINE_EVENTS = [
+  {pct:12, type:'t-sprint', label:'ספרינט #7 — 31.2 קמ״ש', icon:'⚡'},
+  {pct:27, type:'t-pass',   label:'מסירה מדויקת #11 → #9', icon:'🎯'},
+  {pct:38, type:'t-goal',   label:'גול! #7 כהן — רגל ימין', icon:'⚽'},
+  {pct:52, type:'t-sprint', label:'ספרינט #9 — 29.5 קמ״ש', icon:'⚡'},
+  {pct:63, type:'t-pass',   label:'מסירה מדויקת #5 → #11', icon:'🎯'},
+  {pct:71, type:'t-goal',   label:'גול! #11 לוי — ראש', icon:'⚽'},
+  {pct:82, type:'t-sprint', label:'ספרינט #7 — 28.9 קמ״ש', icon:'⚡'},
+  {pct:89, type:'t-goal',   label:'גול! #9 פרץ — מגע חופשי', icon:'⚽'},
+];
+
+// ── FIELD CANVAS ──
+let fieldW, fieldH;
+const canvas = document.getElementById('fieldCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const wrapper = canvas.parentElement;
+  fieldW = canvas.width = wrapper.clientWidth;
+  fieldH = canvas.height = wrapper.clientHeight;
+  drawField(tlProgress);
+}
+
+// Player path waypoints (normalized 0-1)
+const P1_PATH = [[.12,.22],[.22,.30],[.34,.25],[.45,.38],[.52,.28],[.62,.22],[.68,.35],[.58,.48],[.48,.42],[.55,.30],[.65,.18],[.75,.26],[.82,.40],[.76,.55],[.65,.62],[.55,.50]];
+const P2_PATH = [[.85,.75],[.76,.68],[.65,.72],[.55,.62],[.48,.70],[.38,.58],[.30,.68],[.22,.60],[.18,.72],[.28,.80],[.40,.75],[.52,.82],[.62,.70],[.72,.62],[.80,.55],[.88,.62]];
+
+function lerp(a,b,t){return a+(b-a)*t}
+function getPos(path, t) {
+  const n = path.length-1;
+  const i = Math.min(Math.floor(t*n), n-1);
+  const f = t*n - i;
+  return [lerp(path[i][0],path[i+1][0],f)*fieldW, lerp(path[i][1],path[i+1][1],f)*fieldH];
+}
+
+function drawField(t) {
+  if (!fieldW) return;
+  const W = fieldW, H = fieldH;
+  ctx.clearRect(0,0,W,H);
+
+  // Pitch green (with stripe pattern)
+  const stripeW = W/12;
+  for (let i=0;i<12;i++) {
+    ctx.fillStyle = i%2===0 ? '#0f2d14' : '#112f16';
+    ctx.fillRect(i*stripeW,0,stripeW,H);
+  }
+
+  // Lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+  ctx.lineWidth = 2;
+
+  // Outer border
+  const M=24;
+  ctx.strokeRect(M,M,W-M*2,H-M*2);
+
+  // Center line
+  ctx.beginPath(); ctx.moveTo(W/2,M); ctx.lineTo(W/2,H-M); ctx.stroke();
+
+  // Center circle
+  ctx.beginPath(); ctx.arc(W/2,H/2,Math.min(W,H)*0.12,0,Math.PI*2); ctx.stroke();
+
+  // Center spot
+  ctx.beginPath(); ctx.arc(W/2,H/2,4,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.fill();
+
+  // Left penalty area
+  const pa=Math.min(H*0.5,160), pb=Math.min(W*0.18,110);
+  ctx.strokeRect(M,H/2-pa/2,pb,pa);
+  // Left small box
+  ctx.strokeRect(M,H/2-pa*0.36,pb*0.4,pa*0.72);
+  // Left penalty spot
+  ctx.beginPath(); ctx.arc(M+pb*0.7,H/2,3,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.fill();
+  // Left penalty arc
+  ctx.beginPath(); ctx.arc(M+pb*0.7,H/2,Math.min(W,H)*0.08,Math.PI*1.7,Math.PI*2.3); ctx.stroke();
+
+  // Right penalty area
+  ctx.strokeRect(W-M-pb,H/2-pa/2,pb,pa);
+  ctx.strokeRect(W-M-pb*0.4,H/2-pa*0.36,pb*0.4,pa*0.72);
+  ctx.beginPath(); ctx.arc(W-M-pb*0.7,H/2,3,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.4)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(W-M-pb*0.7,H/2,Math.min(W,H)*0.08,Math.PI*.7,Math.PI*1.3); ctx.stroke();
+
+  // Corner arcs
+  [[M,M],[W-M,M],[M,H-M],[W-M,H-M]].forEach(([cx,cy]) => {
+    const as = (cx===M ? 0 : Math.PI) + (cy===M ? 0 : Math.PI/2);
+    ctx.beginPath(); ctx.arc(cx,cy,18,as,as+Math.PI/2); ctx.stroke();
+  });
+
+  // Goal nets
+  ctx.fillStyle='rgba(255,255,255,0.08)';
+  const gH=pa*0.3, gD=14;
+  ctx.fillRect(M-gD,H/2-gH/2,gD,gH);
+  ctx.fillRect(W-M,H/2-gH/2,gD,gH);
+  ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1;
+  ctx.strokeRect(M-gD,H/2-gH/2,gD,gH);
+  ctx.strokeRect(W-M,H/2-gH/2,gD,gH);
+
+  // Grid overlay (subtle)
+  ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=1;
+  for(let x=M;x<W-M;x+=40){ctx.beginPath();ctx.moveTo(x,M);ctx.lineTo(x,H-M);ctx.stroke()}
+  for(let y=M;y<H-M;y+=40){ctx.beginPath();ctx.moveTo(M,y);ctx.lineTo(W-M,y);ctx.stroke()}
+
+  // Draw trails
+  const trailLen = 12;
+  [[P1_PATH,'#3b82f6'],[P2_PATH,'#f59e0b']].forEach(([path,color]) => {
+    for (let ti=Math.max(0,t-.12); ti<=t; ti+=0.01) {
+      const pos = getPos(path, ti);
+      const alpha = (ti-(t-.12))/0.12 * 0.7;
+      ctx.beginPath(); ctx.arc(pos[0],pos[1],3,0,Math.PI*2);
+      ctx.fillStyle = color.replace(')',`,${alpha})`).replace('rgb','rgba').replace('#','').length>6
+        ? color : hexA(color, alpha);
+      ctx.fill();
+    }
+    // Player dot
+    const pos = getPos(path, t);
+    // Shadow
+    ctx.beginPath(); ctx.arc(pos[0],pos[1],14,0,Math.PI*2);
+    ctx.fillStyle = hexA(color,.15); ctx.fill();
+    // Outer ring
+    ctx.beginPath(); ctx.arc(pos[0],pos[1],11,0,Math.PI*2);
+    ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.stroke();
+    // Inner fill
+    ctx.beginPath(); ctx.arc(pos[0],pos[1],8,0,Math.PI*2);
+    ctx.fillStyle=color; ctx.fill();
+  });
+}
+
+function hexA(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`}
+
+// ── ANIMATION ──
+let animT = 0;
+function animate() {
+  animT = (animT + 0.0008) % 1;
+  frameN++;
+  tlProgress = 0.47 + animT * 0.06; // slow crawl from 47%
+  if (tlProgress > 1) tlProgress = 1;
+  drawField(animT);
+  document.getElementById('frameCount').textContent = frameN;
+  document.getElementById('matchTime').textContent = Math.floor(42 + animT * 5);
+  const secs = Math.floor((Date.now()-sessionStart)/1000);
+  document.getElementById('sessionTime').textContent = `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+  const tlMins = Math.floor(tlProgress*90);
+  const tlSecs = Math.floor((tlProgress*90-tlMins)*60);
+  document.getElementById('tlTime').textContent = `${String(tlMins).padStart(2,'0')}:${String(tlSecs).padStart(2,'0')} / 90:00`;
+  document.getElementById('timelineFill').style.width = (tlProgress*100)+'%';
+  animId = requestAnimationFrame(animate);
+}
+
+// ── TIMELINE ──
+function buildTimeline() {
+  const el = document.getElementById('timelineEvents');
+  el.innerHTML = '';
+  TIMELINE_EVENTS.forEach(ev => {
+    const d = document.createElement('div');
+    d.className = `t-event ${ev.type}`;
+    d.style.right = ev.pct+'%';
+    d.innerHTML = `${ev.icon}<span class="t-event-label">${ev.label}</span>`;
+    d.onclick = (e) => { e.stopPropagation(); showToast('🎯 '+ev.label); };
+    el.appendChild(d);
+  });
+}
+
+function seekTimeline(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = rect.right - e.clientX; // RTL
+  tlProgress = Math.max(0,Math.min(1, x/rect.width));
+  animT = (tlProgress - 0.47) / 0.06;
+  if (animT < 0) animT = 0;
+  document.getElementById('timelineFill').style.width=(tlProgress*100)+'%';
+}
+
+// ── RADAR CHART ──
+const RADAR_LABELS = ['מהירות','כוח','דיוק','קבלת\nהחלטות','עמידה\nבלחץ'];
+function drawRadar() {
+  const cv = document.getElementById('radarCanvas');
+  const rc = cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  rc.clearRect(0,0,W,H);
+  const cx=W/2, cy=H/2+8, R=74, n=5;
+  const angles = Array.from({length:n},(_,i)=> -Math.PI/2 + i*2*Math.PI/n);
+  const compare = document.getElementById('compareToggle').checked;
+
+  // Background web
+  [1,.75,.5,.25].forEach(f => {
+    rc.beginPath();
+    angles.forEach((a,i) => { const x=cx+Math.cos(a)*R*f, y=cy+Math.sin(a)*R*f; i===0?rc.moveTo(x,y):rc.lineTo(x,y); });
+    rc.closePath();
+    rc.strokeStyle='rgba(255,255,255,0.06)'; rc.lineWidth=1; rc.stroke();
+  });
+  // Axes
+  angles.forEach(a => {
+    rc.beginPath(); rc.moveTo(cx,cy); rc.lineTo(cx+Math.cos(a)*R, cy+Math.sin(a)*R);
+    rc.strokeStyle='rgba(255,255,255,0.1)'; rc.lineWidth=1; rc.stroke();
+  });
+
+  function drawPlayerRadar(stats, color, alpha) {
+    rc.beginPath();
+    angles.forEach((a,i) => {
+      const v=stats[i]/100, x=cx+Math.cos(a)*R*v, y=cy+Math.sin(a)*R*v;
+      i===0?rc.moveTo(x,y):rc.lineTo(x,y);
+    });
+    rc.closePath();
+    rc.fillStyle=hexA(color,alpha*0.18); rc.fill();
+    rc.strokeStyle=hexA(color,alpha); rc.lineWidth=2; rc.stroke();
+    // Dots
+    angles.forEach((a,i) => {
+      const v=stats[i]/100, x=cx+Math.cos(a)*R*v, y=cy+Math.sin(a)*R*v;
+      rc.beginPath(); rc.arc(x,y,4,0,Math.PI*2);
+      rc.fillStyle=hexA(color,alpha); rc.fill();
+    });
+  }
+
+  const sel = PLAYERS[selectedPlayer];
+  drawPlayerRadar(sel.stats, sel.color, 1);
+  if (compare) {
+    const other = PLAYERS[selectedPlayer===0 ? 1 : 0];
+    drawPlayerRadar(other.stats, other.color, 0.85);
+  }
+
+  // Labels
+  rc.fillStyle='rgba(204,224,255,0.7)'; rc.font='bold 10px Segoe UI'; rc.textAlign='center';
+  angles.forEach((a,i) => {
+    const lx=cx+Math.cos(a)*(R+18), ly=cy+Math.sin(a)*(R+18);
+    const lines=RADAR_LABELS[i].split('\n');
+    lines.forEach((line,li)=>rc.fillText(line,lx,ly+(li-lines.length/2+.5)*12));
+  });
+}
+
+// ── ROSTER ──
+function buildRoster() {
+  const el = document.getElementById('rosterList');
+  el.innerHTML = '';
+  PLAYERS.forEach((p,i) => {
+    const d = document.createElement('div');
+    d.className = 'player-row' + (i===selectedPlayer?' selected':'');
+    const ratingColor = p.rating>=85?'var(--cyan)':p.rating>=75?'var(--green)':'var(--gold)';
+    d.innerHTML = `
+      <div class="player-avatar" style="background:${p.color}22;border:2px solid ${p.color}">${p.avatar}</div>
+      <div class="player-info">
+        <div class="player-name">${p.name}</div>
+        <div class="player-pos">${p.pos}</div>
+        <div class="rating-bar"><div class="rating-fill" style="width:${p.rating}%;background:${p.color}"></div></div>
+      </div>
+      <div style="text-align:left">
+        <div class="player-rating" style="color:${ratingColor}">${p.rating}</div>
+        <div class="${p.trend==='up'?'trend-up':'trend-down'}">${p.trend==='up'?'↑':'↓'}</div>
+      </div>`;
+    d.onclick = () => { selectedPlayer=i; buildRoster(); drawRadar(); };
+    el.appendChild(d);
+  });
+}
+
+// ── SPORT SELECTOR ──
+function setSport(sport, navBtn, sbBtn) {
+  document.querySelectorAll('.sport-pill').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.sport-btn').forEach(b=>b.classList.remove('active'));
+  if(navBtn) navBtn.classList.add('active');
+  const sbEl = document.getElementById('sb-'+sport);
+  if(sbEl) sbEl.classList.add('active');
+  const names={'football':'⚽ כדורגל','basketball':'🏀 כדורסל','running':'🏃 ריצה'};
+  showToast('🔄 עובר לניתוח '+names[sport]);
+}
+
+// ── PANEL TABS ──
+function setPanelTab(tab, btn) {
+  document.querySelectorAll('.panel-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  ['radar','roster','metrics'].forEach(t => {
+    const el = document.getElementById('tab-'+t);
+    if(el) el.style.display = t===tab?'flex':'none';
+  });
+}
+
+// ── PRICING ──
+function showScoutPricing() {
+  track('pricing_open');
+  document.getElementById('scoutPricingModal').classList.add('show');
+}
+
+// ── EXPORT ──
+let pdfClickCount = 0;
+function exportReport() {
+  pdfClickCount++;
+  if (pdfClickCount > 3) {
+    document.getElementById('pdfUpgradePrompt').classList.add('show');
+    return;
+  }
+  showToast('📄 דוח PDF נשלח למייל המגייס — aviran@scoutai.co.il');
+  if (pdfClickCount === 3) {
+    setTimeout(() => document.getElementById('pdfUpgradePrompt').classList.add('show'), 2000);
+  }
+}
+
+// ── DRAG DROP ──
+function showDropOverlay() { document.getElementById('dropOverlay').classList.add('active'); }
+function hideDropOverlay() { document.getElementById('dropOverlay').classList.remove('active'); }
+function startDemoFromDrop() { simulateDemo(); }
+
+// ── ANALYSIS STAGES ──
+const STAGES = [
+  {text:'🎬 מעבד פריימים...', pct:18, dur:2000},
+  {text:'🔍 מזהה שחקנים...', pct:45, dur:2000},
+  {text:'📊 מחשב מדדים...', pct:75, dur:1500},
+  {text:'✅ מוכן!',           pct:100, dur:700},
+];
+
+function runStages(cb) {
+  const panel = document.getElementById('analysisStages');
+  const txt   = document.getElementById('stageText');
+  const bar   = document.getElementById('stageBarFill');
+  panel.classList.add('show');
+  let i = 0;
+  const next = () => {
+    if (i >= STAGES.length) { setTimeout(() => { panel.classList.remove('show'); if(cb) cb(); }, 400); return; }
+    const s = STAGES[i++];
+    txt.textContent = s.text;
+    bar.style.width = s.pct + '%';
+    setTimeout(next, s.dur);
+  };
+  next();
+}
+
+// ── METRICS ANIMATION ──
+function animateMetric(id, target, isFloat, suffix) {
+  const el = document.getElementById(id);
+  const start = 0, dur = 1200;
+  const t0 = performance.now();
+  const tick = (now) => {
+    const p = Math.min((now - t0) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    const val = start + (target - start) * ease;
+    el.textContent = isFloat ? val.toFixed(1) + (suffix||'') : Math.round(val) + (suffix||'');
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// ── DEMO ──
+function simulateDemo() {
+  if (!requireAuth(simulateDemo)) return;
+  track('primary_action', {type:'video_analysis'});
+  document.getElementById('canvasEmpty').style.display = 'none';
+  cancelAnimationFrame(animId);
+  animT=0; frameN=0;
+  runStages(() => {
+    showToast('✅ ניתוח הושלם — שחקן #7 כהן vs #11 לוי');
+    animateMetric('mSpeed', 28.4, true);
+    animateMetric('mDist',  6.8,  true);
+    animateMetric('mPass',  87,   false, '%');
+    animateMetric('mTouch', 34,   false);
+  });
+  animate();
+}
+
+// ── TOAST ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'),4000);
+}
+
+/* ══ ANALYTICS STUB ══ */
+function track(event, props) {
+  try {
+    const k = 'scout_analytics';
+    const a = JSON.parse(localStorage.getItem(k) || '[]');
+    a.push({event, props: props || {}, ts: Date.now()});
+    while (a.length > 200) a.shift();
+    localStorage.setItem(k, JSON.stringify(a));
+  } catch(e) {}
+}
+
+/* ══ AUTH ══ */
+let authMode = 'login', pendingAction = null;
+function getUser() { try { return JSON.parse(localStorage.getItem('scout_user') || 'null'); } catch(e) { return null; } }
+function openAuth(mode, msg) {
+  const note = document.getElementById('authNote');
+  note.textContent = msg || '';
+  note.style.display = msg ? 'block' : 'none';
+  setAuthTab(mode || 'login');
+  document.getElementById('authModal').classList.add('show');
+}
+function closeAuth() { document.getElementById('authModal').classList.remove('show'); pendingAction = null; }
+function setAuthTab(mode) {
+  authMode = mode;
+  document.getElementById('authTabLogin').classList.toggle('active', mode === 'login');
+  document.getElementById('authTabRegister').classList.toggle('active', mode === 'register');
+  document.getElementById('authNameField').style.display = mode === 'register' ? 'block' : 'none';
+  document.getElementById('authSubmitBtn').textContent = mode === 'register' ? 'צור חשבון' : 'התחבר';
+}
+function submitAuth() {
+  const email = document.getElementById('aEmail').value.trim();
+  const pass = document.getElementById('aPass').value;
+  const name = document.getElementById('aName').value.trim();
+  if (!email || !email.includes('@')) { showToast('⚠️ נא להזין כתובת מייל תקינה'); return; }
+  if (!pass || pass.length < 4) { showToast('⚠️ סיסמה קצרה מדי (לפחות 4 תווים)'); return; }
+  if (authMode === 'register' && !name) { showToast('⚠️ נא להזין שם מלא'); return; }
+  const user = {name: name || email.split('@')[0], email, joined: Date.now()};
+  localStorage.setItem('scout_user', JSON.stringify(user));
+  track(authMode === 'register' ? 'signup' : 'login', {email});
+  document.getElementById('authModal').classList.remove('show');
+  renderAuthArea();
+  showToast(authMode === 'register' ? '🎉 החשבון נוצר! ברוך הבא ל-ScoutAI' : '✅ התחברת בהצלחה, ' + user.name);
+  if (pendingAction) { const fn = pendingAction; pendingAction = null; setTimeout(fn, 300); }
+}
+function logout() {
+  localStorage.removeItem('scout_user');
+  track('logout');
+  renderAuthArea();
+  showToast('👋 התנתקת בהצלחה');
+}
+function toggleUserMenu() { document.getElementById('userDropdown').classList.toggle('open'); }
+function renderAuthArea() {
+  const area = document.getElementById('authArea');
+  const u = getUser();
+  if (u) {
+    area.innerHTML = `
+      <div class="user-menu">
+        <div class="user-avatar" onclick="toggleUserMenu()">${(u.name || '?').charAt(0).toUpperCase()}</div>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="ud-name">👤 ${u.name}</div>
+          <button onclick="toggleUserMenu();showToast('⚙️ החשבון שלי — בקרוב')">החשבון שלי</button>
+          <button onclick="logout()">התנתק</button>
+        </div>
+      </div>`;
+  } else {
+    area.innerHTML = `<button class="btn btn-outline" onclick="openAuth('login')" style="border-color:rgba(6,182,212,.35);color:var(--cyan)">התחבר</button>`;
+  }
+}
+function requireAuth(fn) {
+  if (getUser()) return true;
+  pendingAction = fn;
+  openAuth('register', '✨ צור חשבון חינם כדי להמשיך');
+  return false;
+}
+document.addEventListener('click', e => {
+  const dd = document.getElementById('userDropdown');
+  if (dd && dd.classList.contains('open') && !e.target.closest('.user-menu')) dd.classList.remove('open');
+});
+
+/* ══ ONBOARDING ══ */
+const ONBOARD_STEPS = [
+  {icon:'🎯', title:'ברוכים הבאים ל-ScoutAI', text:'פלטפורמת ניתוח ביצועי ספורטאים מבוססת AI. העלו וידאו של משחק או אימון — והמערכת מזהה שחקנים, מודדת מהירויות, מסירות וספרינטים אוטומטית.'},
+  {icon:'📹', title:'איך משתמשים?', text:'גררו קובץ וידאו למסך המרכזי או לחצו על ⚡ דמו לדוגמה מיידית. בפאנל הימני תמצאו פרופיל ביצועים, רשימת שחקנים ומדדים קבוצתיים. ציר הזמן מציג גולים, מסירות וספרינטים.'},
+  {icon:'📄', title:'תוכנית Club — הכלים המלאים', text:'בתוכנית בתשלום תקבלו: ניתוחים ללא הגבלה, עד 25 שחקנים, ייצוא דוחות PDF, השוואת שחקנים מלאה ותמיכה מועדפת. התחילו ניסיון חינמי מתפריט התוכניות.'},
+];
+let obStep = 0;
+function renderOnboard() {
+  const s = ONBOARD_STEPS[obStep];
+  document.getElementById('obIcon').textContent = s.icon;
+  document.getElementById('obTitle').textContent = s.title;
+  document.getElementById('obText').textContent = s.text;
+  document.getElementById('obDots').innerHTML = ONBOARD_STEPS.map((_,i)=>`<span class="onboard-dot${i===obStep?' active':''}"></span>`).join('');
+  document.getElementById('obNextBtn').textContent = obStep === ONBOARD_STEPS.length - 1 ? 'בואו נתחיל 🚀' : 'הבא';
+}
+function nextOnboard() {
+  if (obStep < ONBOARD_STEPS.length - 1) { obStep++; renderOnboard(); }
+  else finishOnboard();
+}
+function finishOnboard() {
+  localStorage.setItem('scout_onboarded', '1');
+  document.getElementById('onboardBg').classList.remove('show');
+}
+if (!localStorage.getItem('scout_onboarded')) {
+  renderOnboard();
+  document.getElementById('onboardBg').classList.add('show');
+}
+
+/* ══ LEGAL ══ */
+const LEGAL = {
+  terms: {title:'📄 תנאי שימוש', body:`
+<p><strong>1. כללי.</strong> ScoutAI היא פלטפורמת תוכנה לניתוח ביצועי ספורטאים באמצעות בינה מלאכותית. השימוש בשירות, לרבות העלאת סרטוני וידאו וצפייה בדוחות, כפוף לתנאים אלה ומהווה הסכמה מלאה להם.</p>
+<p><strong>2. תוכן שמועלה לשירות.</strong> באחריות המשתמש לוודא שברשותו הזכויות וההסכמות הנדרשות להעלאת סרטוני וידאו, לרבות הסכמת השחקנים המצולמים או האפוטרופוסים שלהם כאשר מדובר בקטינים. חל איסור להעלות תוכן הפוגע בפרטיות או בזכויות צדדים שלישיים.</p>
+<p><strong>3. דיוק הניתוח.</strong> מדדי הביצועים, הדירוגים והדוחות מופקים על ידי מודלים סטטיסטיים ואינם מהווים חוות דעת מקצועית. אין לקבל החלטות גיוס, רפואיות או חוזיות על סמך הנתונים בלבד, ו-ScoutAI אינה אחראית להחלטות שיתקבלו בהסתמך עליהם.</p>
+<p><strong>4. מנויים וחיובים.</strong> תוכנית Free מוגבלת בכמות הניתוחים והשחקנים. תוכניות בתשלום מתחדשות חודשית וניתנות לביטול בכל עת; הביטול ייכנס לתוקף בסוף תקופת החיוב הנוכחית. מחירים עשויים להתעדכן בהודעה מוקדמת של 30 יום.</p>
+<p><strong>5. קניין רוחני.</strong> אלגוריתמי הניתוח, הממשק והדוחות בפורמט שלהם הם קניינה של ScoutAI. הנתונים הגולמיים והסרטונים שהעלית נותרים בבעלותך, ואתה מעניק לנו רישיון מוגבל לעבדם לצורך מתן השירות בלבד.</p>
+<p><strong>6. דין וסמכות שיפוט.</strong> על תנאים אלה יחולו דיני מדינת ישראל, וסמכות השיפוט הבלעדית נתונה לבתי המשפט המוסמכים במחוז תל אביב.</p>`},
+  privacy: {title:'🔒 מדיניות פרטיות', body:`
+<p><strong>1. איסוף מידע.</strong> בעת ההרשמה נאספים שם, כתובת מייל ופרטי המועדון או הארגון. בעת שימוש בשירות נאספים סרטוני הווידאו שהועלו, נתוני הביצועים המופקים מהם ונתוני שימוש בסיסיים.</p>
+<p><strong>2. נתוני ספורטאים.</strong> ניתוח וידאו מפיק מידע על אנשים מזוהים (מהירות, מיקום, דירוג). מידע זה נגיש רק לחשבון שהעלה את הווידאו ולמשתמשים שהוא שיתף במפורש. איננו משתמשים בנתוני ספורטאים לאימון מודלים ללא הסכמה מפורשת.</p>
+<p><strong>3. שיתוף עם צדדים שלישיים.</strong> איננו מוכרים מידע אישי. שיתוף נתונים עם ספקי ענן נעשה לצורך תפעול השירות בלבד, בכפוף להסכמי סודיות ואבטחה מחייבים.</p>
+<p><strong>4. אחסון מקומי (Cookies).</strong> האפליקציה שומרת בדפדפן (localStorage) פרטי התחברות, העדפות ונתוני שימוש אנונימיים לצורך שיפור המוצר. ניתן למחוק נתונים אלה בכל עת דרך הגדרות הדפדפן.</p>
+<p><strong>5. אבטחה ושמירת מידע.</strong> סרטונים ונתונים נשמרים באחסון מוצפן. עם סגירת החשבון יימחקו הסרטונים והנתונים בתוך 30 יום, למעט מידע שחובה לשמרו על פי דין.</p>
+<p><strong>6. זכויותיך.</strong> בהתאם לחוק הגנת הפרטיות, התשמ"א-1981, באפשרותך לעיין במידע השמור עליך, לתקנו או לבקש את מחיקתו. לפניות: privacy@scoutai.co.il.</p>`},
+};
+function openLegal(kind) {
+  const l = LEGAL[kind];
+  document.getElementById('legalTitle').textContent = l.title;
+  document.getElementById('legalBody').innerHTML = l.body;
+  document.getElementById('legalModal').classList.add('show');
+}
+
+/* ══ FEEDBACK ══ */
+let fbStars = 0;
+function openFeedback() { document.getElementById('feedbackModal').classList.add('show'); }
+function setStars(n) {
+  fbStars = n;
+  document.querySelectorAll('#starsRow .star-btn').forEach((b,i)=>b.classList.toggle('on', i < n));
+}
+function sendFeedback() {
+  if (!fbStars) { showToast('⚠️ נא לבחור דירוג כוכבים'); return; }
+  const text = document.getElementById('fbText').value.trim();
+  try {
+    const arr = JSON.parse(localStorage.getItem('scout_feedback') || '[]');
+    arr.push({stars: fbStars, text, ts: Date.now(), user: (getUser()||{}).email || 'anonymous'});
+    localStorage.setItem('scout_feedback', JSON.stringify(arr));
+  } catch(e) {}
+  track('feedback', {stars: fbStars});
+  fbStars = 0;
+  document.getElementById('fbText').value = '';
+  document.querySelectorAll('#starsRow .star-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('feedbackModal').classList.remove('show');
+  showToast('💙 תודה על המשוב!');
+}
+
+// ── INIT ──
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+buildTimeline();
+buildRoster();
+drawRadar();
+animate();
+renderAuthArea();
+</script>
+</body>
+</html>
