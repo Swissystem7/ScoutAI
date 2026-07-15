@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ScoutAI — ניתוח ספורטאים עם AI</title>
-<meta name="description" content="ScoutAI — פלטפורמת ניתוח ביצועי ספורטאים מבוססת AI. העלו וידאו של משחק וקבלו מדדי מהירות, דיוק מסירות, מפות חום ודוחות סקאוטינג מקצועיים.">
-<meta property="og:title" content="ScoutAI — ניתוח ספורטאים עם AI">
-<meta property="og:description" content="ניתוח וידאו חכם לכדורגל, כדורסל וריצה — מדדים, השוואות שחקנים ודוחות PDF לסקאוטים ומאמנים.">
+<title>ScoutAI — דמו מקומי דטרמיניסטי</title>
+<meta name="description" content="ScoutAI הוא דמו מקומי ודטרמיניסטי: וידאו נשאר בדפדפן, המדדים הם DEMO_METRIC, ושירות VERIFIED_ANALYSIS_SERVICE אינו זמין בדמו.">
+<meta property="og:title" content="ScoutAI — דמו מקומי דטרמיניסטי">
+<meta property="og:description" content="דמו מקומי בלבד ללא העלאה לשרת: LOCAL_VIDEO + DEMO_METRIC + VERIFIED_ANALYSIS_SERVICE לא זמין.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#3b82f6">
 <style>
@@ -28,8 +28,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:13px 2
 .sport-pill.active,.sport-pill:hover{background:rgba(6,182,212,.12);color:var(--cyan)}
 .sport-pill.active{border:1px solid rgba(6,182,212,.25)}
 .nav-right{display:flex;gap:10px;align-items:center}
-.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .btn{padding:8px 18px;border-radius:8px;border:none;cursor:pointer;font-size:.8rem;font-weight:700;font-family:inherit;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
 .btn-cyan{background:var(--cyan);color:#060c18}
 .btn-cyan:hover{background:#0891b2;transform:translateY(-1px);box-shadow:0 4px 16px rgba(6,182,212,.3)}
@@ -138,6 +136,9 @@ canvas#radarCanvas{display:block}
 .pricing-ribbon{background:linear-gradient(90deg,rgba(6,182,212,.1),rgba(59,130,246,.06));border-bottom:1px solid rgba(6,182,212,.18);padding:8px 24px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:.78rem;color:var(--text)}
 .pricing-ribbon strong{color:var(--cyan)}
 .ribbon-sep{color:var(--muted)}
+.provenance-banner{position:sticky;top:53px;z-index:59;background:rgba(12,22,40,.98);border-bottom:1px solid rgba(6,182,212,.3);padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.prov-chip{font-size:.7rem;font-weight:800;padding:4px 8px;border-radius:999px;border:1px solid rgba(6,182,212,.3);color:var(--cyan);background:rgba(6,182,212,.08)}
+.metric-tag{font-size:.6rem;color:var(--gold);font-weight:800;display:block;margin-top:4px}
 
 /* ── SCOUT PRICING MODAL ── */
 .scout-pricing-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px}
@@ -249,20 +250,26 @@ canvas#radarCanvas{display:block}
     <button class="sport-pill" onclick="setSport('running',this)">🏃 ריצה</button>
   </div>
   <div class="nav-right">
-    <span style="font-size:.73rem;color:var(--muted);display:flex;align-items:center;gap:6px"><span class="live-dot"></span>ניתוח חי</span>
-    <button class="btn btn-outline" onclick="showScoutPricing()" style="border-color:rgba(6,182,212,.35);color:var(--cyan)">📊 תוכניות ומחירים</button>
-    <button class="btn btn-outline" onclick="exportReport()">📄 הורד דוח PDF</button>
+    <span style="font-size:.73rem;color:var(--muted)">LOCAL DEMO · ללא שירות חיצוני</span>
+    <button class="btn btn-outline" onclick="showScoutPricing()" style="border-color:rgba(6,182,212,.35);color:var(--cyan)">🔌 סטטוס אינטגרציה</button>
+    <button class="btn btn-outline" onclick="exportReport()">📄 דוח חיצוני (לא זמין)</button>
     <button class="btn btn-cyan" onclick="simulateDemo()">⚡ דמו</button>
     <div id="authArea"></div>
   </div>
 </nav>
 
+<div class="provenance-banner">
+  <span class="prov-chip">LOCAL_VIDEO: קובץ נבחר/נקרא רק בדפדפן</span>
+  <span class="prov-chip">DEMO_METRIC: נתוני Fixture דטרמיניסטיים</span>
+  <span class="prov-chip">VERIFIED_ANALYSIS_SERVICE: לא זמין (אינטגרציה עתידית)</span>
+</div>
+
 <!-- PRICING RIBBON -->
 <div class="pricing-ribbon">
-  <span>📊 <strong>ניסיון חינמי</strong> — 3 ניתוחי וידאו, 2 שחקנים, ללא PDF</span>
+  <span>📌 <strong>דמו מקומי בלבד</strong> — אין חיוב, אין מנוי, אין שליחת דוחות</span>
   <span class="ribbon-sep">|</span>
-  <span>לאחר מכן מ-<strong>₪299/חודש</strong> · ניתוחים ללא הגבלה · דוחות PDF · API</span>
-  <button onclick="showScoutPricing()" style="margin-right:10px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);color:var(--cyan);font-size:.72rem;font-weight:700;padding:3px 11px;border-radius:7px;cursor:pointer;font-family:inherit">השווה תוכניות ↗</button>
+  <span>כל הנתונים בתצוגה מסומנים כ-<strong>DEMO_METRIC</strong> ואינם מדידה מקצועית</span>
+  <button onclick="showScoutPricing()" style="margin-right:10px;background:rgba(6,182,212,.15);border:1px solid rgba(6,182,212,.3);color:var(--cyan);font-size:.72rem;font-weight:700;padding:3px 11px;border-radius:7px;cursor:pointer;font-family:inherit">מה לא זמין בדמו ↗</button>
 </div>
 
 <!-- SCOUT PRICING MODAL -->
@@ -270,49 +277,49 @@ canvas#radarCanvas{display:block}
   <div class="upgrade-box" style="max-width:700px;text-align:right">
     <button onclick="document.getElementById('scoutPricingModal').classList.remove('show')" style="float:left;background:rgba(255,255,255,.06);border:none;color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.9rem">✕</button>
     <div style="clear:both"></div>
-    <div style="font-size:1.1rem;font-weight:800;margin-bottom:4px">📊 תוכניות ScoutAI</div>
-    <p style="font-size:.78rem;color:var(--muted);margin-bottom:4px">ניתוח ספורטאים מבוסס AI לכל רמה</p>
+    <div style="font-size:1.1rem;font-weight:800;margin-bottom:4px">🔌 מצב אינטגרציות</div>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:4px">דמו מקומי — ללא שירות מאומת וללא פעולות חיצוניות</p>
     <div class="scout-pricing-grid">
       <div class="scout-plan">
-        <div class="scout-plan-name">Scout Free</div>
-        <div class="scout-plan-price">חינם <span>לתמיד</span></div>
+        <div class="scout-plan-name">LOCAL_VIDEO</div>
+        <div class="scout-plan-price">זמין <span>מקומית</span></div>
         <ul class="scout-plan-features">
-          <li>3 ניתוחי וידאו / חודש</li>
-          <li>עד 2 שחקנים</li>
-          <li class="no">ללא ייצוא PDF</li>
-          <li class="no">ללא השוואת שחקנים</li>
-          <li>גישה לדאשבורד בסיסי</li>
+          <li>בחירת קובץ וידאו מקומי בדפדפן</li>
+          <li>קריאה מקומית בלבד (ללא upload)</li>
+          <li>אין שליחה לשרת</li>
+          <li>אין שיתוף חיצוני</li>
+          <li>אין תביעה למדידה אמיתית</li>
         </ul>
-        <div class="scout-plan-cta"><button class="btn btn-outline" style="width:100%;justify-content:center;font-size:.78rem" onclick="document.getElementById('scoutPricingModal').classList.remove('show')">התוכנית הנוכחית</button></div>
+        <div class="scout-plan-cta"><button class="btn btn-outline" style="width:100%;justify-content:center;font-size:.78rem" onclick="document.getElementById('scoutPricingModal').classList.remove('show')">הבנתי</button></div>
       </div>
       <div class="scout-plan popular">
-        <div class="scout-popular-tag">הכי פופולרי</div>
-        <div class="scout-plan-name">Club</div>
-        <div class="scout-plan-price">₪299 <span>/ חודש</span></div>
+        <div class="scout-popular-tag">סטטוס פיצ'ר</div>
+        <div class="scout-plan-name">DEMO_METRIC</div>
+        <div class="scout-plan-price">Fixture <span>דטרמיניסטי</span></div>
         <ul class="scout-plan-features">
-          <li>ניתוחים ללא הגבלה</li>
-          <li>עד 25 שחקנים</li>
-          <li>ייצוא דוחות PDF</li>
-          <li>השוואת שחקנים מלאה</li>
-          <li>תמיכה מועדפת</li>
+          <li>מדדים מחושבים מ-seed בלבד</li>
+          <li>אותו seed = אותה תוצאה</li>
+          <li>ציר זמן דטרמיניסטי בלבד</li>
+          <li>תיוג ברור: DEMO_METRIC</li>
+          <li>לא מיועד להחלטות מקצועיות</li>
         </ul>
-        <div class="scout-plan-cta"><button class="btn btn-cyan" style="width:100%;justify-content:center;font-size:.78rem" onclick="track('upgrade_click',{plan:'club'});document.getElementById('scoutPricingModal').classList.remove('show');showToast('🎉 ניסיון Club התחיל! נציג יצור קשר בקרוב')">התחל ניסיון חינמי</button></div>
+        <div class="scout-plan-cta"><button class="btn btn-cyan" style="width:100%;justify-content:center;font-size:.78rem" onclick="track('feature_unavailable',{feature:'trial_start'});document.getElementById('scoutPricingModal').classList.remove('show');showToast('🚫 תחילת ניסיון אינה זמינה בדמו מקומי')">הדגם מגבלה</button></div>
       </div>
       <div class="scout-plan">
-        <div class="scout-plan-name">Academy</div>
-        <div class="scout-plan-price">₪799 <span>/ חודש</span></div>
+        <div class="scout-plan-name">VERIFIED_ANALYSIS_SERVICE</div>
+        <div class="scout-plan-price">לא זמין <span>כרגע</span></div>
         <ul class="scout-plan-features">
-          <li>כל מועדוני הספורט</li>
-          <li>Multi-user (עד 10 משתמשים)</li>
-          <li>גישת API מלאה</li>
-          <li>דוחות גיוס AI</li>
-          <li>דאשבורד מנהל</li>
-          <li>מנהל חשבון ייעודי</li>
+          <li>אין backend לניתוח מאומת</li>
+          <li>אין API פעיל</li>
+          <li>אין שליחת PDF/Email</li>
+          <li>אין OAuth או תשלומים</li>
+          <li>אין תמיכת מכירות</li>
+          <li>אינטגרציה עתידית בלבד</li>
         </ul>
-        <div class="scout-plan-cta"><button class="btn btn-outline" style="width:100%;justify-content:center;font-size:.78rem;border-color:rgba(6,182,212,.3);color:var(--cyan)" onclick="track('upgrade_click',{plan:'academy'});document.getElementById('scoutPricingModal').classList.remove('show');showToast('📞 נציג Academy יחזור אליך תוך 24 שעות')">צור קשר עם מכירות</button></div>
+        <div class="scout-plan-cta"><button class="btn btn-outline" style="width:100%;justify-content:center;font-size:.78rem;border-color:rgba(6,182,212,.3);color:var(--cyan)" onclick="track('feature_unavailable',{feature:'sales_callback'});document.getElementById('scoutPricingModal').classList.remove('show');showToast('🚫 פנייה למכירות לא זמינה בדמו מקומי')">צור קשר (לא זמין)</button></div>
       </div>
     </div>
-    <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:14px">ביטול בכל עת · אין עלויות הפתעה · חשבונית מס</p>
+    <p style="font-size:.7rem;color:var(--muted);text-align:center;margin-top:14px">מוצג כדמו בלבד · ללא התחייבות שירות · ללא עיבוד חיצוני</p>
   </div>
 </div>
 
@@ -320,11 +327,11 @@ canvas#radarCanvas{display:block}
 <div class="upgrade-prompt" id="pdfUpgradePrompt">
   <div class="upgrade-box">
     <div class="upgrade-icon">⚠️</div>
-    <div class="upgrade-title">הגעת למגבלת Free</div>
-    <div class="upgrade-sub">הורדת 3 דוחות PDF — המגבלה החינמית מוצתה.<br>שדרג לתוכנית <strong style="color:var(--cyan)">Club ₪299/חודש</strong> להורדות ללא הגבלה.</div>
+    <div class="upgrade-title">דוח חיצוני לא זמין</div>
+    <div class="upgrade-sub">ייצוא PDF/שליחה במייל אינם זמינים בדמו המקומי.<br>המערכת אינה יוצרת קובץ חיצוני ואינה שולחת דבר.</div>
     <div class="upgrade-actions">
-      <button class="btn btn-outline" onclick="document.getElementById('pdfUpgradePrompt').classList.remove('show')">אחר כך</button>
-      <button class="btn btn-cyan" onclick="track('upgrade_click',{plan:'pdf_limit'});document.getElementById('pdfUpgradePrompt').classList.remove('show');showScoutPricing()">שדרג עכשיו ⚡</button>
+      <button class="btn btn-outline" onclick="document.getElementById('pdfUpgradePrompt').classList.remove('show')">סגור</button>
+      <button class="btn btn-cyan" onclick="track('feature_unavailable',{feature:'pdf_export'});document.getElementById('pdfUpgradePrompt').classList.remove('show');showScoutPricing()">הצג מגבלות 🔍</button>
     </div>
   </div>
 </div>
@@ -350,15 +357,15 @@ canvas#radarCanvas{display:block}
       <div class="session-stat"><span class="session-label">זמן ניתוח</span><span class="session-val" id="sessionTime">00:00</span></div>
       <div class="session-stat"><span class="session-label">שחקנים</span><span class="session-val">6</span></div>
       <div class="session-stat"><span class="session-label">פריימים</span><span class="session-val" id="frameCount">0</span></div>
-      <div class="session-stat"><span class="session-label">אירועים</span><span class="session-val">8</span></div>
-      <div class="session-stat"><span class="session-label">דיוק AI</span><span class="session-val">94.7%</span></div>
+      <div class="session-stat"><span class="session-label">אירועים (DEMO_METRIC)</span><span class="session-val" id="sessionEvents">6</span></div>
+      <div class="session-stat"><span class="session-label">מהימנות Fixture</span><span class="session-val">DEMO_METRIC</span></div>
     </div>
 
     <div class="sidebar-section">
       <div class="sidebar-title">סטטוס מערכת</div>
       <div class="ai-status">
         <span class="dot"></span>
-        <p>מנוע AI פעיל<br>מעבד <span id="fps">30</span> פריימים/שנייה</p>
+        <p>VERIFIED_ANALYSIS_SERVICE<br>לא זמין בדמו מקומי</p>
       </div>
     </div>
   </aside>
@@ -368,7 +375,7 @@ canvas#radarCanvas{display:block}
     <div class="canvas-wrapper" id="canvasWrapper"
       ondragover="event.preventDefault();showDropOverlay()"
       ondragleave="hideDropOverlay()"
-      ondrop="event.preventDefault();hideDropOverlay();startDemoFromDrop()">
+      ondrop="event.preventDefault();hideDropOverlay();startDemoFromDrop(event)">
       <!-- Drop overlay -->
       <div class="drop-overlay" id="dropOverlay">
         <div class="drop-text">שחרר כאן 📹</div>
@@ -376,25 +383,25 @@ canvas#radarCanvas{display:block}
       <!-- Empty state -->
       <div class="canvas-empty" id="canvasEmpty">
         <div class="ce-icon">📹</div>
-        <div class="ce-title">גרור וידאו לכאן<br>או לחץ על ⚡ ניתוח דמו לראות דוגמה מיידית</div>
-        <div class="ce-sub">תומך ב-MP4, MOV, AVI · עד 2GB</div>
+        <div class="ce-title">גרור LOCAL_VIDEO לכאן<br>או לחץ על ⚡ דמו ל-fixture דטרמיניסטי</div>
+        <div class="ce-sub">קריאה בדפדפן בלבד · ללא העלאה/שליחה לשרת</div>
       </div>
       <!-- Analysis stages -->
       <div class="analysis-stages" id="analysisStages">
-        <div class="stage-text" id="stageText">🎬 מעבד פריימים...</div>
+        <div class="stage-text" id="stageText">🎬 טוען fixture דטרמיניסטי...</div>
         <div class="stage-bar-track"><div class="stage-bar-fill" id="stageBarFill" style="width:0%"></div></div>
       </div>
       <canvas id="fieldCanvas"></canvas>
       <div class="canvas-overlay">
-        <div class="overlay-badge"><span class="player-dot" style="background:#3b82f6"></span>#7 כהן — 28.4 קמ"ש</div>
-        <div class="overlay-badge"><span class="player-dot" style="background:#f59e0b"></span>#11 לוי — 24.1 קמ"ש</div>
+        <div class="overlay-badge"><span class="player-dot" style="background:#3b82f6"></span>#7 כהן — <span id="overlayP1">28.4</span> קמ"ש · DEMO_METRIC</div>
+        <div class="overlay-badge"><span class="player-dot" style="background:#f59e0b"></span>#11 לוי — <span id="overlayP2">24.1</span> קמ"ש · DEMO_METRIC</div>
         <div class="overlay-badge" style="margin-top:4px;font-size:.68rem;color:var(--muted)">⏱ <span id="matchTime">42</span>'</div>
       </div>
     </div>
 
     <div class="timeline-panel">
       <div class="timeline-header">
-        <span class="timeline-title">ציר זמן אירועים</span>
+        <span class="timeline-title">ציר זמן אירועים (DEMO_METRIC)</span>
         <span class="timeline-time" id="tlTime">00:00 / 90:00</span>
       </div>
       <div class="timeline-track" id="timelineTrack" onclick="seekTimeline(event)">
@@ -432,17 +439,17 @@ canvas#radarCanvas{display:block}
         </div>
       </div>
       <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-n" id="mSpeed">28.4</div><div class="metric-l">מהירות מקס׳ (קמ״ש)</div></div>
-        <div class="metric-card"><div class="metric-n" id="mDist">6.8</div><div class="metric-l">מרחק (ק"מ)</div></div>
-        <div class="metric-card"><div class="metric-n" id="mPass">87%</div><div class="metric-l">דיוק מסירות</div></div>
-        <div class="metric-card"><div class="metric-n" id="mTouch">34</div><div class="metric-l">מגעים בכדור</div></div>
+        <div class="metric-card"><div class="metric-n" id="mSpeed">28.4</div><div class="metric-l">מהירות מקס׳ (קמ״ש)<span class="metric-tag">DEMO_METRIC</span></div></div>
+        <div class="metric-card"><div class="metric-n" id="mDist">6.8</div><div class="metric-l">מרחק (ק"מ)<span class="metric-tag">DEMO_METRIC</span></div></div>
+        <div class="metric-card"><div class="metric-n" id="mPass">87%</div><div class="metric-l">דיוק מסירות<span class="metric-tag">DEMO_METRIC</span></div></div>
+        <div class="metric-card"><div class="metric-n" id="mTouch">34</div><div class="metric-l">מגעים בכדור<span class="metric-tag">DEMO_METRIC</span></div></div>
       </div>
     </div>
 
     <!-- ROSTER TAB -->
     <div class="panel-body" id="tab-roster" style="display:none;padding:0">
       <div class="roster-section" style="border-radius:0;border:none">
-        <div class="roster-header">רשימת שחקנים — מחזור 23</div>
+        <div class="roster-header">רשימת שחקנים — Fixture דטרמיניסטי</div>
         <div id="rosterList"></div>
       </div>
     </div>
@@ -450,12 +457,12 @@ canvas#radarCanvas{display:block}
     <!-- METRICS TAB -->
     <div class="panel-body" id="tab-metrics" style="display:none">
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px">
-        <div class="sidebar-title" style="margin-bottom:10px">ממוצע קבוצתי</div>
-        <div class="session-stat"><span class="session-label">מהירות ממוצעת</span><span class="session-val">22.3 קמ"ש</span></div>
-        <div class="session-stat"><span class="session-label">ריצה ממוצעת</span><span class="session-val">5.4 ק"מ</span></div>
-        <div class="session-stat"><span class="session-label">דיוק מסירות</span><span class="session-val">81%</span></div>
-        <div class="session-stat"><span class="session-label">מגעים ממוצעים</span><span class="session-val">28</span></div>
-        <div class="session-stat"><span class="session-label">נגיעות שטח יריב</span><span class="session-val">14</span></div>
+        <div class="sidebar-title" style="margin-bottom:10px">ממוצע קבוצתי (DEMO_METRIC)</div>
+        <div class="session-stat"><span class="session-label">מהירות ממוצעת</span><span class="session-val" id="teamAvgSpeed">22.3 קמ"ש</span></div>
+        <div class="session-stat"><span class="session-label">ריצה ממוצעת</span><span class="session-val" id="teamAvgRun">5.4 ק"מ</span></div>
+        <div class="session-stat"><span class="session-label">דיוק מסירות</span><span class="session-val" id="teamAvgPass">81%</span></div>
+        <div class="session-stat"><span class="session-label">מגעים ממוצעים</span><span class="session-val" id="teamAvgTouches">28</span></div>
+        <div class="session-stat"><span class="session-label">נגיעות שטח יריב</span><span class="session-val">DEMO_METRIC</span></div>
       </div>
       <div class="metrics-grid">
         <div class="metric-card"><div class="metric-n" style="color:var(--gold)">3</div><div class="metric-l">שערים</div></div>
@@ -479,8 +486,8 @@ canvas#radarCanvas{display:block}
   <div class="upgrade-box" style="max-width:400px;text-align:right">
     <button onclick="closeAuth()" style="float:left;background:rgba(255,255,255,.06);border:none;color:var(--muted);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.9rem">✕</button>
     <div style="clear:both"></div>
-    <div style="font-size:1.05rem;font-weight:800;margin-bottom:4px">👤 החשבון שלי</div>
-    <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">הצטרף לסקאוטים ולמאמנים שמנתחים חכם יותר</p>
+    <div style="font-size:1.05rem;font-weight:800;margin-bottom:4px">👤 פרופיל מקומי בלבד</div>
+    <p style="font-size:.76rem;color:var(--muted);margin-bottom:14px">אין פתיחת חשבון שירות — נשמר רק ב-localStorage</p>
     <div class="auth-note" id="authNote"></div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="authTabLogin" onclick="setAuthTab('login')">התחברות</button>
@@ -544,10 +551,15 @@ canvas#radarCanvas{display:block}
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="./demo-fixtures.js"></script>
 <script>
 // ── STATE ──
 let animId, frameN = 0, tlProgress = 0.47, selectedPlayer = 0, compareMode = false;
 let sessionStart = Date.now();
+let currentSeed = (window.ScoutAIDemoFixtures && window.ScoutAIDemoFixtures.DEFAULT_SEED) || 'SCOUTAI_LOCAL_DEMO';
+let currentFixture = window.ScoutAIDemoFixtures
+  ? window.ScoutAIDemoFixtures.createDemoFixture(currentSeed)
+  : { metrics: {}, timelineEvents: [] };
 
 const PLAYERS = [
   {name:'#7 כהן',   pos:'חלוץ מרכזי',    rating:91, trend:'up',   color:'#3b82f6', avatar:'כה', stats:[88,92,85,90,94]},
@@ -558,16 +570,24 @@ const PLAYERS = [
   {name:'#17 ביטון','pos':'קשר מגן',       rating:68, trend:'up',   color:'#34d399', avatar:'בי', stats:[60,88,65,82,95]},
 ];
 
-const TIMELINE_EVENTS = [
-  {pct:12, type:'t-sprint', label:'ספרינט #7 — 31.2 קמ״ש', icon:'⚡'},
-  {pct:27, type:'t-pass',   label:'מסירה מדויקת #11 → #9', icon:'🎯'},
-  {pct:38, type:'t-goal',   label:'גול! #7 כהן — רגל ימין', icon:'⚽'},
-  {pct:52, type:'t-sprint', label:'ספרינט #9 — 29.5 קמ״ש', icon:'⚡'},
-  {pct:63, type:'t-pass',   label:'מסירה מדויקת #5 → #11', icon:'🎯'},
-  {pct:71, type:'t-goal',   label:'גול! #11 לוי — ראש', icon:'⚽'},
-  {pct:82, type:'t-sprint', label:'ספרינט #7 — 28.9 קמ״ש', icon:'⚡'},
-  {pct:89, type:'t-goal',   label:'גול! #9 פרץ — מגע חופשי', icon:'⚽'},
-];
+function updateFixtureFromSeed(seed) {
+  if (!window.ScoutAIDemoFixtures) return;
+  currentSeed = window.ScoutAIDemoFixtures.normalizeSeed(seed);
+  currentFixture = window.ScoutAIDemoFixtures.createDemoFixture(currentSeed);
+  const m = currentFixture.metrics;
+  document.getElementById('mSpeed').textContent = m.speedKmh.toFixed(1);
+  document.getElementById('mDist').textContent = m.distanceKm.toFixed(1);
+  document.getElementById('mPass').textContent = m.passAccuracyPct + '%';
+  document.getElementById('mTouch').textContent = String(m.touches);
+  document.getElementById('overlayP1').textContent = m.speedKmh.toFixed(1);
+  document.getElementById('overlayP2').textContent = Math.max(18, m.speedKmh - 3.2).toFixed(1);
+  document.getElementById('teamAvgSpeed').textContent = m.teamAvgSpeedKmh.toFixed(1) + ' קמ\"ש';
+  document.getElementById('teamAvgRun').textContent = m.teamAvgRunKm.toFixed(1) + ' ק\"מ';
+  document.getElementById('teamAvgPass').textContent = m.teamPassAccuracyPct + '%';
+  document.getElementById('teamAvgTouches').textContent = String(m.teamAvgTouches);
+  document.getElementById('sessionEvents').textContent = String(currentFixture.timelineEvents.length);
+  buildTimeline();
+}
 
 // ── FIELD CANVAS ──
 let fieldW, fieldH;
@@ -711,7 +731,8 @@ function animate() {
 function buildTimeline() {
   const el = document.getElementById('timelineEvents');
   el.innerHTML = '';
-  TIMELINE_EVENTS.forEach(ev => {
+  const events = (currentFixture && currentFixture.timelineEvents) || [];
+  events.forEach(ev => {
     const d = document.createElement('div');
     d.className = `t-event ${ev.type}`;
     d.style.right = ev.pct+'%';
@@ -839,30 +860,38 @@ function showScoutPricing() {
 }
 
 // ── EXPORT ──
-let pdfClickCount = 0;
 function exportReport() {
-  pdfClickCount++;
-  if (pdfClickCount > 3) {
-    document.getElementById('pdfUpgradePrompt').classList.add('show');
-    return;
-  }
-  showToast('📄 דוח PDF נשלח למייל המגייס — aviran@scoutai.co.il');
-  if (pdfClickCount === 3) {
-    setTimeout(() => document.getElementById('pdfUpgradePrompt').classList.add('show'), 2000);
-  }
+  track('feature_unavailable', {feature:'pdf_email_export'});
+  showToast('🚫 PDF/Email חיצוני אינם זמינים בדמו מקומי');
+  document.getElementById('pdfUpgradePrompt').classList.add('show');
 }
 
 // ── DRAG DROP ──
 function showDropOverlay() { document.getElementById('dropOverlay').classList.add('active'); }
 function hideDropOverlay() { document.getElementById('dropOverlay').classList.remove('active'); }
-function startDemoFromDrop() { simulateDemo(); }
+function startDemoFromDrop(evt) {
+  const file = (evt && evt.dataTransfer && evt.dataTransfer.files && evt.dataTransfer.files[0]) || null;
+  if (file) {
+    updateFixtureFromSeed(`${file.name}:${file.size}:${file.lastModified}`);
+    const reader = new FileReader();
+    reader.onload = () => {
+      showToast(`📁 LOCAL_VIDEO נקרא מקומית בלבד: ${file.name}`);
+      simulateDemo();
+    };
+    reader.onerror = () => {
+      showToast('⚠️ קריאת LOCAL_VIDEO נכשלה בדפדפן המקומי');
+    };
+    reader.readAsArrayBuffer(file.slice(0, 64));
+    return;
+  }
+  simulateDemo();
+}
 
 // ── ANALYSIS STAGES ──
 const STAGES = [
-  {text:'🎬 מעבד פריימים...', pct:18, dur:2000},
-  {text:'🔍 מזהה שחקנים...', pct:45, dur:2000},
-  {text:'📊 מחשב מדדים...', pct:75, dur:1500},
-  {text:'✅ מוכן!',           pct:100, dur:700},
+  {text:'🎬 LOCAL_VIDEO נקרא בדפדפן...', pct:25, dur:1200},
+  {text:'🧮 טוען DEMO_METRIC לפי seed...', pct:65, dur:1200},
+  {text:'✅ Fixture דטרמיניסטי מוכן',     pct:100, dur:700},
 ];
 
 function runStages(cb) {
@@ -904,11 +933,12 @@ function simulateDemo() {
   cancelAnimationFrame(animId);
   animT=0; frameN=0;
   runStages(() => {
-    showToast('✅ ניתוח הושלם — שחקן #7 כהן vs #11 לוי');
-    animateMetric('mSpeed', 28.4, true);
-    animateMetric('mDist',  6.8,  true);
-    animateMetric('mPass',  87,   false, '%');
-    animateMetric('mTouch', 34,   false);
+    const m = currentFixture.metrics;
+    showToast(`✅ Fixture דטרמיניסטי מוכן (seed: ${currentFixture.seed})`);
+    animateMetric('mSpeed', m.speedKmh, true);
+    animateMetric('mDist',  m.distanceKm,  true);
+    animateMetric('mPass',  m.passAccuracyPct,   false, '%');
+    animateMetric('mTouch', m.touches,   false);
   });
   animate();
 }
@@ -949,7 +979,7 @@ function setAuthTab(mode) {
   document.getElementById('authTabLogin').classList.toggle('active', mode === 'login');
   document.getElementById('authTabRegister').classList.toggle('active', mode === 'register');
   document.getElementById('authNameField').style.display = mode === 'register' ? 'block' : 'none';
-  document.getElementById('authSubmitBtn').textContent = mode === 'register' ? 'צור חשבון' : 'התחבר';
+  document.getElementById('authSubmitBtn').textContent = mode === 'register' ? 'צור פרופיל מקומי' : 'התחבר מקומית';
 }
 function submitAuth() {
   const email = document.getElementById('aEmail').value.trim();
@@ -958,12 +988,12 @@ function submitAuth() {
   if (!email || !email.includes('@')) { showToast('⚠️ נא להזין כתובת מייל תקינה'); return; }
   if (!pass || pass.length < 4) { showToast('⚠️ סיסמה קצרה מדי (לפחות 4 תווים)'); return; }
   if (authMode === 'register' && !name) { showToast('⚠️ נא להזין שם מלא'); return; }
-  const user = {name: name || email.split('@')[0], email, joined: Date.now()};
+  const user = {name: name || email.split('@')[0], email, joined: Date.now(), mode:'LOCAL_ONLY_PROFILE'};
   localStorage.setItem('scout_user', JSON.stringify(user));
   track(authMode === 'register' ? 'signup' : 'login', {email});
   document.getElementById('authModal').classList.remove('show');
   renderAuthArea();
-  showToast(authMode === 'register' ? '🎉 החשבון נוצר! ברוך הבא ל-ScoutAI' : '✅ התחברת בהצלחה, ' + user.name);
+  showToast(authMode === 'register' ? 'ℹ️ נוצר פרופיל מקומי בלבד (ללא חשבון שירות)' : 'ℹ️ התחברות מקומית בלבד: ' + user.name);
   if (pendingAction) { const fn = pendingAction; pendingAction = null; setTimeout(fn, 300); }
 }
 function logout() {
@@ -993,7 +1023,7 @@ function renderAuthArea() {
 function requireAuth(fn) {
   if (getUser()) return true;
   pendingAction = fn;
-  openAuth('register', '✨ צור חשבון חינם כדי להמשיך');
+  openAuth('register', '✨ צור פרופיל מקומי בלבד כדי להמשיך');
   return false;
 }
 document.addEventListener('click', e => {
@@ -1003,9 +1033,9 @@ document.addEventListener('click', e => {
 
 /* ══ ONBOARDING ══ */
 const ONBOARD_STEPS = [
-  {icon:'🎯', title:'ברוכים הבאים ל-ScoutAI', text:'פלטפורמת ניתוח ביצועי ספורטאים מבוססת AI. העלו וידאו של משחק או אימון — והמערכת מזהה שחקנים, מודדת מהירויות, מסירות וספרינטים אוטומטית.'},
-  {icon:'📹', title:'איך משתמשים?', text:'גררו קובץ וידאו למסך המרכזי או לחצו על ⚡ דמו לדוגמה מיידית. בפאנל הימני תמצאו פרופיל ביצועים, רשימת שחקנים ומדדים קבוצתיים. ציר הזמן מציג גולים, מסירות וספרינטים.'},
-  {icon:'📄', title:'תוכנית Club — הכלים המלאים', text:'בתוכנית בתשלום תקבלו: ניתוחים ללא הגבלה, עד 25 שחקנים, ייצוא דוחות PDF, השוואת שחקנים מלאה ותמיכה מועדפת. התחילו ניסיון חינמי מתפריט התוכניות.'},
+  {icon:'🎯', title:'ברוכים הבאים ל-ScoutAI', text:'זהו דמו מקומי ודטרמיניסטי. הווידאו נשאר בדפדפן (LOCAL_VIDEO), והמדדים מוצגים כ-DEMO_METRIC.'},
+  {icon:'📹', title:'איך משתמשים?', text:'גררו קובץ וידאו מקומי או לחצו ⚡ דמו. אין upload, אין עיבוד שרת, ואין ניתוח AI מאומת.'},
+  {icon:'🔌', title:'מה לא זמין?', text:'VERIFIED_ANALYSIS_SERVICE לא זמין בדמו. גם PDF/Email/מכירות/שיתוף חיצוני אינם פעילים.'},
 ];
 let obStep = 0;
 function renderOnboard() {
@@ -1032,19 +1062,19 @@ if (!localStorage.getItem('scout_onboarded')) {
 /* ══ LEGAL ══ */
 const LEGAL = {
   terms: {title:'📄 תנאי שימוש', body:`
-<p><strong>1. כללי.</strong> ScoutAI היא פלטפורמת תוכנה לניתוח ביצועי ספורטאים באמצעות בינה מלאכותית. השימוש בשירות, לרבות העלאת סרטוני וידאו וצפייה בדוחות, כפוף לתנאים אלה ומהווה הסכמה מלאה להם.</p>
-<p><strong>2. תוכן שמועלה לשירות.</strong> באחריות המשתמש לוודא שברשותו הזכויות וההסכמות הנדרשות להעלאת סרטוני וידאו, לרבות הסכמת השחקנים המצולמים או האפוטרופוסים שלהם כאשר מדובר בקטינים. חל איסור להעלות תוכן הפוגע בפרטיות או בזכויות צדדים שלישיים.</p>
-<p><strong>3. דיוק הניתוח.</strong> מדדי הביצועים, הדירוגים והדוחות מופקים על ידי מודלים סטטיסטיים ואינם מהווים חוות דעת מקצועית. אין לקבל החלטות גיוס, רפואיות או חוזיות על סמך הנתונים בלבד, ו-ScoutAI אינה אחראית להחלטות שיתקבלו בהסתמך עליהם.</p>
-<p><strong>4. מנויים וחיובים.</strong> תוכנית Free מוגבלת בכמות הניתוחים והשחקנים. תוכניות בתשלום מתחדשות חודשית וניתנות לביטול בכל עת; הביטול ייכנס לתוקף בסוף תקופת החיוב הנוכחית. מחירים עשויים להתעדכן בהודעה מוקדמת של 30 יום.</p>
-<p><strong>5. קניין רוחני.</strong> אלגוריתמי הניתוח, הממשק והדוחות בפורמט שלהם הם קניינה של ScoutAI. הנתונים הגולמיים והסרטונים שהעלית נותרים בבעלותך, ואתה מעניק לנו רישיון מוגבל לעבדם לצורך מתן השירות בלבד.</p>
-<p><strong>6. דין וסמכות שיפוט.</strong> על תנאים אלה יחולו דיני מדינת ישראל, וסמכות השיפוט הבלעדית נתונה לבתי המשפט המוסמכים במחוז תל אביב.</p>`},
+<p><strong>1. סיווג הדמו.</strong> זהו דמו מקומי בלבד. כל קובץ וידאו מסווג כ-LOCAL_VIDEO ונקרא בדפדפן המקומי בלבד.</p>
+<p><strong>2. מדדים.</strong> כל המדדים והאירועים מסווגים כ-DEMO_METRIC ונוצרים מ-fixture דטרמיניסטי על בסיס seed. הם אינם מדידה מהווידאו.</p>
+<p><strong>3. שירות מאומת.</strong> VERIFIED_ANALYSIS_SERVICE אינו זמין בדמו זה. אין אינטגרציית backend, API או עיבוד AI חיצוני.</p>
+<p><strong>4. פעולות לא זמינות.</strong> פתיחת ניסיון, פנייה למכירות, יצוא PDF, שליחת אימייל, ושיתוף חיצוני אינם זמינים בדמו.</p>
+<p><strong>5. הגבלת הסתמכות.</strong> אין לראות בפלט הדמו המלצה רפואית, גיוסית, חוזית או מקצועית מכל סוג.</p>
+<p><strong>6. שימוש מקומי.</strong> הנתונים המקומיים נשמרים רק בדפדפן המשתמש (localStorage) לצורך חוויית הדמו.</p>`},
   privacy: {title:'🔒 מדיניות פרטיות', body:`
-<p><strong>1. איסוף מידע.</strong> בעת ההרשמה נאספים שם, כתובת מייל ופרטי המועדון או הארגון. בעת שימוש בשירות נאספים סרטוני הווידאו שהועלו, נתוני הביצועים המופקים מהם ונתוני שימוש בסיסיים.</p>
-<p><strong>2. נתוני ספורטאים.</strong> ניתוח וידאו מפיק מידע על אנשים מזוהים (מהירות, מיקום, דירוג). מידע זה נגיש רק לחשבון שהעלה את הווידאו ולמשתמשים שהוא שיתף במפורש. איננו משתמשים בנתוני ספורטאים לאימון מודלים ללא הסכמה מפורשת.</p>
-<p><strong>3. שיתוף עם צדדים שלישיים.</strong> איננו מוכרים מידע אישי. שיתוף נתונים עם ספקי ענן נעשה לצורך תפעול השירות בלבד, בכפוף להסכמי סודיות ואבטחה מחייבים.</p>
-<p><strong>4. אחסון מקומי (Cookies).</strong> האפליקציה שומרת בדפדפן (localStorage) פרטי התחברות, העדפות ונתוני שימוש אנונימיים לצורך שיפור המוצר. ניתן למחוק נתונים אלה בכל עת דרך הגדרות הדפדפן.</p>
-<p><strong>5. אבטחה ושמירת מידע.</strong> סרטונים ונתונים נשמרים באחסון מוצפן. עם סגירת החשבון יימחקו הסרטונים והנתונים בתוך 30 יום, למעט מידע שחובה לשמרו על פי דין.</p>
-<p><strong>6. זכויותיך.</strong> בהתאם לחוק הגנת הפרטיות, התשמ"א-1981, באפשרותך לעיין במידע השמור עליך, לתקנו או לבקש את מחיקתו. לפניות: privacy@scoutai.co.il.</p>`},
+<p><strong>1. LOCAL_VIDEO.</strong> קובץ וידאו שנבחר/נגרר נשאר בדפדפן המקומי בלבד ואינו נשלח לשרת.</p>
+<p><strong>2. DEMO_METRIC.</strong> המדדים אינם מחושבים מהווידאו אלא מ-fixture דטרמיניסטי מקומי.</p>
+<p><strong>3. אין שירות חיצוני.</strong> אין API, אין העלאה לענן, אין שליחת אימייל, ואין שיתוף עם צדדים שלישיים.</p>
+<p><strong>4. localStorage בלבד.</strong> האפליקציה עשויה לשמור העדפות/פרופיל מקומי ב-localStorage של הדפדפן.</p>
+<p><strong>5. שליטה במידע.</strong> ניתן למחוק נתונים מקומיים דרך הגדרות הדפדפן בכל עת.</p>
+<p><strong>6. מגבלת דמו.</strong> זהו דמו UI מקומי ללא הבטחת שירות תפעולי.</p>`},
 };
 function openLegal(kind) {
   const l = LEGAL[kind];
@@ -1079,6 +1109,7 @@ function sendFeedback() {
 // ── INIT ──
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+updateFixtureFromSeed(currentSeed);
 buildTimeline();
 buildRoster();
 drawRadar();
