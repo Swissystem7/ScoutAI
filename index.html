@@ -952,6 +952,12 @@ function showToast(msg) {
   t._timer = setTimeout(()=>t.classList.remove('show'),4000);
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, function (ch) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+  });
+}
+
 /* ══ ANALYTICS STUB ══ */
 function track(event, props) {
   try {
@@ -1007,11 +1013,14 @@ function renderAuthArea() {
   const area = document.getElementById('authArea');
   const u = getUser();
   if (u) {
+    const rawName = String(u.name || '?');
+    const safeName = escapeHtml(rawName);
+    const safeInitial = escapeHtml((rawName.charAt(0) || '?').toUpperCase());
     area.innerHTML = `
       <div class="user-menu">
-        <div class="user-avatar" onclick="toggleUserMenu()">${(u.name || '?').charAt(0).toUpperCase()}</div>
+        <div class="user-avatar" onclick="toggleUserMenu()">${safeInitial}</div>
         <div class="user-dropdown" id="userDropdown">
-          <div class="ud-name">👤 ${u.name}</div>
+          <div class="ud-name">👤 ${safeName}</div>
           <button onclick="toggleUserMenu();showToast('⚙️ החשבון שלי — בקרוב')">החשבון שלי</button>
           <button onclick="logout()">התנתק</button>
         </div>

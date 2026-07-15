@@ -71,3 +71,10 @@ test('readme and runtime legal/privacy copy describe local-only behavior', () =>
   assert.match(html, /אין API, אין העלאה לענן, אין שליחת אימייל/);
   assert.match(html, /אין לראות בפלט הדמו המלצה רפואית, גיוסית, חוזית או מקצועית/);
 });
+
+test('auth profile rendering escapes local user names before innerHTML', () => {
+  assert.match(html, /function escapeHtml\(value\)/);
+  assert.match(html, /const safeName = escapeHtml\(rawName\)/);
+  assert.match(html, /const safeInitial = escapeHtml\(\(rawName\.charAt\(0\) \|\| '\?'\)\.toUpperCase\(\)\)/);
+  assert.match(html, /<div class="ud-name">👤 \$\{safeName\}<\/div>/);
+});
