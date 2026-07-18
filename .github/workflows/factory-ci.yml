@@ -1,0 +1,20 @@
+name: factory-ci
+on: [push, workflow_dispatch]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: run lib tests
+        run: |
+          shopt -s nullglob
+          fails=0
+          for t in lib/*.test.js; do
+            echo "== $t"
+            node "$t" || { echo "FAIL $t"; fails=$((fails+1)); }
+          done
+          echo "done, failures: $fails"
+          exit $fails
