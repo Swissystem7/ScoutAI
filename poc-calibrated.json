@@ -1,0 +1,406 @@
+{
+ "men": [
+  {
+   "rank": 1,
+   "id": "10595",
+   "name": "Raphael Dias Belloli",
+   "team": "Brazil",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 583,
+   "index": 53.6
+  },
+  {
+   "rank": 2,
+   "id": "5456",
+   "name": "Mateo Kovačić",
+   "team": "Croatia",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 649,
+   "index": 48.58
+  },
+  {
+   "rank": 3,
+   "id": "8804",
+   "name": "Jonas Hofmann",
+   "team": "Germany",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 2279,
+   "index": 47.88
+  },
+  {
+   "rank": 4,
+   "id": "25104",
+   "name": "Rodrygo Silva de Goes",
+   "team": "Brazil",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 528,
+   "index": 47.12
+  },
+  {
+   "rank": 5,
+   "id": "11187",
+   "name": "Stephen Antunes Eustáquio",
+   "team": "Canada",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 607,
+   "index": 44.4
+  },
+  {
+   "rank": 6,
+   "id": "7797",
+   "name": "Rodrigo Javier De Paul",
+   "team": "Argentina",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 1120,
+   "index": 44.36
+  },
+  {
+   "rank": 7,
+   "id": "44703",
+   "name": "Alistair Johnston",
+   "team": "Canada",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 810,
+   "index": 43.92
+  },
+  {
+   "rank": 8,
+   "id": "5507",
+   "name": "Nicolás Alejandro Tagliafico",
+   "team": "Argentina",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 852,
+   "index": 43.32
+  },
+  {
+   "rank": 9,
+   "id": "3500",
+   "name": "Granit Xhaka",
+   "team": "Switzerland",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 3268,
+   "index": 43
+  },
+  {
+   "rank": 10,
+   "id": "2995",
+   "name": "Ángel Fabián Di María Hernández",
+   "team": "Argentina",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 656,
+   "index": 42.58
+  },
+  {
+   "rank": 11,
+   "id": "38004",
+   "name": "Piero Martín Hincapié Reyna",
+   "team": "Ecuador",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 2201,
+   "index": 42.28
+  },
+  {
+   "rank": 12,
+   "id": "7104",
+   "name": "Mathías Olivera Miramontes",
+   "team": "Uruguay",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 650,
+   "index": 42.09
+  },
+  {
+   "rank": 13,
+   "id": "46258",
+   "name": "Azzedine Ounahi",
+   "team": "Morocco",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 585,
+   "index": 41.81
+  },
+  {
+   "rank": 14,
+   "id": "8526",
+   "name": "Weston McKennie",
+   "team": "United States",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 539,
+   "index": 41.03
+  },
+  {
+   "rank": 15,
+   "id": "37726",
+   "name": "Moisés Isaac Caicedo Corozo",
+   "team": "Ecuador",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 659,
+   "index": 40.5
+  },
+  {
+   "rank": 16,
+   "id": "30606",
+   "name": "Edmond Fayçal Tapsoba",
+   "team": "Bayer Leverkusen",
+   "comp": "Bundesliga_2023_24",
+   "category": "men",
+   "minutes": 2149,
+   "index": 39.9
+  },
+  {
+   "rank": 17,
+   "id": "5463",
+   "name": "Luka Modrić",
+   "team": "Croatia",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 665,
+   "index": 39.53
+  },
+  {
+   "rank": 18,
+   "id": "27133",
+   "name": "Odilon Kossonou",
+   "team": "Bayer Leverkusen",
+   "comp": "Bundesliga_2023_24",
+   "category": "men",
+   "minutes": 1871,
+   "index": 38.78
+  },
+  {
+   "rank": 19,
+   "id": "5234",
+   "name": "Sofyan Amrabat",
+   "team": "Morocco",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 681,
+   "index": 38.45
+  },
+  {
+   "rank": 20,
+   "id": "38718",
+   "name": "Enzo Fernandez",
+   "team": "Argentina",
+   "comp": "WorldCup2022",
+   "category": "men",
+   "minutes": 955,
+   "index": 38.26
+  }
+ ],
+ "women": [
+  {
+   "rank": 1,
+   "id": "4641",
+   "name": "Francesca Kirby",
+   "team": "Chelsea FCW",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 978,
+   "index": 54.18
+  },
+  {
+   "rank": 2,
+   "id": "62666",
+   "name": "Ingrid Filippa Angeldal",
+   "team": "Manchester City WFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 712,
+   "index": 50.16
+  },
+  {
+   "rank": 3,
+   "id": "31532",
+   "name": "Kirsty Hanson",
+   "team": "Aston Villa W",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1207,
+   "index": 50.08
+  },
+  {
+   "rank": 4,
+   "id": "16382",
+   "name": "Heather Payne",
+   "team": "Everton LFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1383,
+   "index": 49.12
+  },
+  {
+   "rank": 5,
+   "id": "322322",
+   "name": "Jessica Ziu",
+   "team": "West Ham United LFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 906,
+   "index": 48.35
+  },
+  {
+   "rank": 6,
+   "id": "25543",
+   "name": "Geyse da Silva Ferreira",
+   "team": "Manchester United W",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1162,
+   "index": 47.57
+  },
+  {
+   "rank": 7,
+   "id": "4979",
+   "name": "Katrina Gorry",
+   "team": "West Ham United LFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 583,
+   "index": 46.1
+  },
+  {
+   "rank": 8,
+   "id": "15421",
+   "name": "Kenza Dali",
+   "team": "Aston Villa W",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1493,
+   "index": 45.52
+  },
+  {
+   "rank": 9,
+   "id": "10229",
+   "name": "Emma Stina Blackstenius",
+   "team": "Arsenal WFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 767,
+   "index": 45.41
+  },
+  {
+   "rank": 10,
+   "id": "31551",
+   "name": "Kit Graham",
+   "team": "Tottenham Hotspur Women",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 702,
+   "index": 44.33
+  },
+  {
+   "rank": 11,
+   "id": "4848",
+   "name": "Ashleigh Neville",
+   "team": "Tottenham Hotspur Women",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1710,
+   "index": 44.19
+  },
+  {
+   "rank": 12,
+   "id": "33675",
+   "name": "Laura Madison Blindkilde Brown",
+   "team": "Aston Villa W",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 861,
+   "index": 44.13
+  },
+  {
+   "rank": 13,
+   "id": "46635",
+   "name": "Emma Harries",
+   "team": "West Ham United LFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 704,
+   "index": 43.92
+  },
+  {
+   "rank": 14,
+   "id": "135759",
+   "name": "Shannon O’Brien",
+   "team": "Leicester City WFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 534,
+   "index": 43.82
+  },
+  {
+   "rank": 15,
+   "id": "4660",
+   "name": "Erin Cuthbert",
+   "team": "Chelsea FCW",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1558,
+   "index": 43.24
+  },
+  {
+   "rank": 16,
+   "id": "10418",
+   "name": "Eve Perisset",
+   "team": "Chelsea FCW",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 938,
+   "index": 43.22
+  },
+  {
+   "rank": 17,
+   "id": "10274",
+   "name": "Nicoline Sørensen",
+   "team": "Everton LFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 663,
+   "index": 43.12
+  },
+  {
+   "rank": 18,
+   "id": "25601",
+   "name": "Deanne Cynthia Rose",
+   "team": "Leicester City WFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 655,
+   "index": 42.96
+  },
+  {
+   "rank": 19,
+   "id": "87194",
+   "name": "Celin Bizet Ildhusøy",
+   "team": "Tottenham Hotspur Women",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1486,
+   "index": 42.62
+  },
+  {
+   "rank": 20,
+   "id": "25662",
+   "name": "Catherine Joan Bott",
+   "team": "Leicester City WFC",
+   "comp": "FA_WSL_2023_24",
+   "category": "women",
+   "minutes": 1388,
+   "index": 42.5
+  }
+ ]
+}
