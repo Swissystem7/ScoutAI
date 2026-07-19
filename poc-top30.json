@@ -1,0 +1,662 @@
+[
+ {
+  "rank": 1,
+  "id": "4320",
+  "index": 49.52,
+  "tier": "watch",
+  "confidence": 0.47,
+  "valueGap": 49.52,
+  "breakdown": {
+   "stat": {
+    "value": 49.52,
+    "weight": 1,
+    "confidence": 0.47
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ },
+ {
+  "rank": 2,
+  "id": "3961",
+  "index": 42.75,
+  "tier": "watch",
+  "confidence": 0.62,
+  "valueGap": 42.75,
+  "breakdown": {
+   "stat": {
+    "value": 42.75,
+    "weight": 1,
+    "confidence": 0.62
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 3,
+  "id": "20004",
+  "index": 38.55,
+  "tier": "watch",
+  "confidence": 0.57,
+  "valueGap": 38.55,
+  "breakdown": {
+   "stat": {
+    "value": 38.55,
+    "weight": 1,
+    "confidence": 0.57
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 4,
+  "id": "3089",
+  "index": 38.09,
+  "tier": "watch",
+  "confidence": 0.57,
+  "valueGap": 38.09,
+  "breakdown": {
+   "stat": {
+    "value": 38.09,
+    "weight": 1,
+    "confidence": 0.57
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 5,
+  "id": "3202",
+  "index": 37.97,
+  "tier": "watch",
+  "confidence": 0.41,
+  "valueGap": 37.97,
+  "breakdown": {
+   "stat": {
+    "value": 37.97,
+    "weight": 1,
+    "confidence": 0.41
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and pressing_intensity (weight 1)."
+ },
+ {
+  "rank": 6,
+  "id": "5642",
+  "index": 37.94,
+  "tier": "watch",
+  "confidence": 0.57,
+  "valueGap": 37.94,
+  "breakdown": {
+   "stat": {
+    "value": 37.94,
+    "weight": 1,
+    "confidence": 0.57
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 7,
+  "id": "5248",
+  "index": 37.67,
+  "tier": "watch",
+  "confidence": 0.46,
+  "valueGap": 37.67,
+  "breakdown": {
+   "stat": {
+    "value": 37.67,
+    "weight": 1,
+    "confidence": 0.46
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ },
+ {
+  "rank": 8,
+  "id": "3293",
+  "index": 36.98,
+  "tier": "watch",
+  "confidence": 0.55,
+  "valueGap": 36.98,
+  "breakdown": {
+   "stat": {
+    "value": 36.98,
+    "weight": 1,
+    "confidence": 0.55
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 9,
+  "id": "3308",
+  "index": 35.98,
+  "tier": "watch",
+  "confidence": 0.61,
+  "valueGap": 35.98,
+  "breakdown": {
+   "stat": {
+    "value": 35.98,
+    "weight": 1,
+    "confidence": 0.61
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 10,
+  "id": "11098",
+  "index": 35.87,
+  "tier": "watch",
+  "confidence": 0.42,
+  "valueGap": 35.87,
+  "breakdown": {
+   "stat": {
+    "value": 35.87,
+    "weight": 1,
+    "confidence": 0.42
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and pressing_intensity (weight 1)."
+ },
+ {
+  "rank": 11,
+  "id": "5465",
+  "index": 35.8,
+  "tier": "watch",
+  "confidence": 0.54,
+  "valueGap": 35.8,
+  "breakdown": {
+   "stat": {
+    "value": 35.8,
+    "weight": 1,
+    "confidence": 0.54
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ },
+ {
+  "rank": 12,
+  "id": "3604",
+  "index": 35.46,
+  "tier": "watch",
+  "confidence": 0.57,
+  "valueGap": 35.46,
+  "breakdown": {
+   "stat": {
+    "value": 35.46,
+    "weight": 1,
+    "confidence": 0.57
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and pressing_intensity (weight 1)."
+ },
+ {
+  "rank": 13,
+  "id": "3471",
+  "index": 35.1,
+  "tier": "watch",
+  "confidence": 0.62,
+  "valueGap": 35.1,
+  "breakdown": {
+   "stat": {
+    "value": 35.1,
+    "weight": 1,
+    "confidence": 0.62
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 14,
+  "id": "3233",
+  "index": 33.88,
+  "tier": "fringe",
+  "confidence": 0.46,
+  "valueGap": 33.88,
+  "breakdown": {
+   "stat": {
+    "value": 33.88,
+    "weight": 1,
+    "confidence": 0.46
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ },
+ {
+  "rank": 15,
+  "id": "5470",
+  "index": 33.56,
+  "tier": "fringe",
+  "confidence": 0.62,
+  "valueGap": 33.56,
+  "breakdown": {
+   "stat": {
+    "value": 33.56,
+    "weight": 1,
+    "confidence": 0.62
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 16,
+  "id": "3621",
+  "index": 33.56,
+  "tier": "fringe",
+  "confidence": 0.54,
+  "valueGap": 33.56,
+  "breakdown": {
+   "stat": {
+    "value": 33.56,
+    "weight": 1,
+    "confidence": 0.54
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and npxg_vs_reputation (weight 1)."
+ },
+ {
+  "rank": 17,
+  "id": "4926",
+  "index": 33.54,
+  "tier": "fringe",
+  "confidence": 0.4,
+  "valueGap": 33.54,
+  "breakdown": {
+   "stat": {
+    "value": 33.54,
+    "weight": 1,
+    "confidence": 0.4
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ },
+ {
+  "rank": 18,
+  "id": "3532",
+  "index": 33.51,
+  "tier": "fringe",
+  "confidence": 0.5,
+  "valueGap": 33.51,
+  "breakdown": {
+   "stat": {
+    "value": 33.51,
+    "weight": 1,
+    "confidence": 0.5
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 19,
+  "id": "5613",
+  "index": 32.69,
+  "tier": "fringe",
+  "confidence": 0.44,
+  "valueGap": 32.69,
+  "breakdown": {
+   "stat": {
+    "value": 32.69,
+    "weight": 1,
+    "confidence": 0.44
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ },
+ {
+  "rank": 20,
+  "id": "5171",
+  "index": 32.52,
+  "tier": "fringe",
+  "confidence": 0.52,
+  "valueGap": 32.52,
+  "breakdown": {
+   "stat": {
+    "value": 32.52,
+    "weight": 1,
+    "confidence": 0.52
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 21,
+  "id": "5457",
+  "index": 31.95,
+  "tier": "fringe",
+  "confidence": 0.52,
+  "valueGap": 31.95,
+  "breakdown": {
+   "stat": {
+    "value": 31.95,
+    "weight": 1,
+    "confidence": 0.52
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 22,
+  "id": "5461",
+  "index": 31.79,
+  "tier": "fringe",
+  "confidence": 0.62,
+  "valueGap": 31.79,
+  "breakdown": {
+   "stat": {
+    "value": 31.79,
+    "weight": 1,
+    "confidence": 0.62
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 23,
+  "id": "3244",
+  "index": 31.53,
+  "tier": "fringe",
+  "confidence": 0.62,
+  "valueGap": 31.53,
+  "breakdown": {
+   "stat": {
+    "value": 31.53,
+    "weight": 1,
+    "confidence": 0.62
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 24,
+  "id": "3064",
+  "index": 31.34,
+  "tier": "fringe",
+  "confidence": 0.32,
+  "valueGap": 31.34,
+  "breakdown": {
+   "stat": {
+    "value": 31.34,
+    "weight": 1,
+    "confidence": 0.32
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ },
+ {
+  "rank": 25,
+  "id": "5474",
+  "index": 31.1,
+  "tier": "fringe",
+  "confidence": 0.62,
+  "valueGap": 31.1,
+  "breakdown": {
+   "stat": {
+    "value": 31.1,
+    "weight": 1,
+    "confidence": 0.62
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and pressing_intensity (weight 1)."
+ },
+ {
+  "rank": 26,
+  "id": "5249",
+  "index": 30.44,
+  "tier": "fringe",
+  "confidence": 0.47,
+  "valueGap": 30.44,
+  "breakdown": {
+   "stat": {
+    "value": 30.44,
+    "weight": 1,
+    "confidence": 0.47
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 27,
+  "id": "3009",
+  "index": 30.4,
+  "tier": "fringe",
+  "confidence": 0.56,
+  "valueGap": 30.4,
+  "breakdown": {
+   "stat": {
+    "value": 30.4,
+    "weight": 1,
+    "confidence": 0.56
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and carries_into_box (weight 1)."
+ },
+ {
+  "rank": 28,
+  "id": "5484",
+  "index": 30.36,
+  "tier": "fringe",
+  "confidence": 0.62,
+  "valueGap": 30.36,
+  "breakdown": {
+   "stat": {
+    "value": 30.36,
+    "weight": 1,
+    "confidence": 0.62
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and pressing_intensity (weight 1)."
+ },
+ {
+  "rank": 29,
+  "id": "5624",
+  "index": 30.1,
+  "tier": "fringe",
+  "confidence": 0.42,
+  "valueGap": 30.1,
+  "breakdown": {
+   "stat": {
+    "value": 30.1,
+    "weight": 1,
+    "confidence": 0.42
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by progression_pre_peak and xg_underperformance_good_process (weight 1)."
+ },
+ {
+  "rank": 30,
+  "id": "5560",
+  "index": 29.92,
+  "tier": "fringe",
+  "confidence": 0.31,
+  "valueGap": 29.92,
+  "breakdown": {
+   "stat": {
+    "value": 29.92,
+    "weight": 1,
+    "confidence": 0.31
+   },
+   "genetic": {
+    "value": null,
+    "weight": 0,
+    "confidence": 0
+   },
+   "narrative": null
+  },
+  "explanation": "Primary statistical signature driven by xg_underperformance_good_process and progression_pre_peak (weight 1)."
+ }
+]
