@@ -1,5 +1,18 @@
 ﻿# ScoutAI
 
-ScoutAI — פלטפורמת ניתוח ביצועים ספורטאים מבוססת AI: העלאת וידאו ומדדי מהירות, דיוק מסירות ודוחות סקאוטינג. (דמו — קובץ HTML יחיד)
+ScoutAI הוא **דמו מקומי ודטרמיניסטי** (HTML יחיד + fixture לוגי).
 
-הועלה מהמחשב של אבירן — יולי 2026.
+## מה הדמו כן עושה
+- מציג UI מקומי לדוגמת זרימת ניתוח.
+- מסווג קלט וידאו כ-`LOCAL_VIDEO` (בחירה/קריאה בדפדפן בלבד).
+- מציג מדדים כ-`DEMO_METRIC` (fixture דטרמיניסטי לפי seed, לא מדידה מהווידאו).
+
+## מה הדמו לא עושה
+- `VERIFIED_ANALYSIS_SERVICE` אינו זמין.
+- אין backend, אין upload, אין fetch/XHR/beacon.
+- אין פתיחת ניסיון, אין מכירות, אין שליחת PDF/Email, אין OAuth/תשלום.
+- אין פלט מקצועי/רפואי/גיוסי/חוזי.
+
+## בדיקות
+- הרצת בדיקות אוטומטיות: `node --test /home/runner/work/ScoutAI/ScoutAI/tests/*.test.js`
+- תיעוד תוצאות: `/home/runner/work/ScoutAI/ScoutAI/TEST_EVIDENCE.md`
