@@ -343,5 +343,15 @@
     "mtime": 1784217854.34626,
     "ast_hash": "f36899fd767baa275667dae9bb2002c7",
     "semantic_hash": "f36899fd767baa275667dae9bb2002c7"
+  },
+  ".github/workflows/factory-ci.yml": {
+    "mtime": 1784400888.0169861,
+    "ast_hash": "647973c28026a520b63b016894b8d97c",
+    "semantic_hash": ""
+  },
+  ".github/workflows/validate.yml": {
+    "mtime": 1784200865.3955503,
+    "ast_hash": "9da0300cccee1a345810e1b85468cee0",
+    "semantic_hash": ""
   }
 }
