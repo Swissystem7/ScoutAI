@@ -1,6 +1,72 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ScoutAI | מעבדת סקאוטינג</title><style>
-:root{--ink:#17211b;--muted:#637168;--paper:#f3f6f1;--card:#fff;--accent:#176b48;--line:#dbe4dc}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#d9eee1,transparent 32%),var(--paper);color:var(--ink);font-family:Arial,sans-serif;min-height:100vh}.shell{max-width:1060px;margin:auto;padding:38px 20px 60px}header{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:24px}.eyebrow{color:var(--accent);font-size:.82rem;font-weight:800;letter-spacing:.12em}h1{font-size:clamp(2.2rem,6vw,4.5rem);line-height:.95;margin:8px 0}header p{max-width:520px;color:var(--muted);line-height:1.6}.grid{display:grid;grid-template-columns:340px 1fr;gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 12px 35px #213b2910}h2{margin:0 0 16px;font-size:1.1rem}label{display:block;margin:13px 0 6px;color:var(--muted);font-size:.86rem}input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fbfcfa}button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:12px;background:var(--accent);color:white;font-weight:800;cursor:pointer}.score{display:flex;align-items:center;gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}.dial{width:104px;height:104px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--accent) calc(var(--score)*1%),#e5ebe6 0);position:relative}.dial:after{content:"";position:absolute;inset:9px;border-radius:50%;background:white}.dial strong{z-index:1;font-size:1.7rem}.components{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:15px}.metric,.player{padding:12px;background:#f5f8f4;border-radius:12px}.metric span,.muted{font-size:.78rem;color:var(--muted)}.metric b{display:block;margin-top:5px}.ranking{margin-top:18px}.player{display:grid;grid-template-columns:38px 1fr auto;align-items:center;margin:8px 0}.rank{color:var(--accent);font-weight:900}.tag{padding:5px 8px;border-radius:99px;background:#e3f2e8;color:var(--accent);font-size:.74rem}.error{color:#a33131;background:#fff1f1;padding:12px;border-radius:10px}@media(max-width:760px){header{display:block}.grid{grid-template-columns:1fr}.components{grid-template-columns:1fr 1fr}}
-</style></head><body><main class="shell"><header><div><div class="eyebrow">SCOUTAI / LIVE LAB</div><h1>לראות מעבר לסטטיסטיקה.</h1></div><p>מדד השפעה שקוף וסריקת פרוספקטים על בסיס מנועי הדירוג האמיתיים של ScoutAI. הנתונים בדמו הם להמחשה בלבד.</p></header><section class="grid"><form class="card" id="form"><h2>פרופיל למשחק</h2><label>שם שחקן</label><input id="name" value="נועם לוי"><label>לחצים ל־90 דקות</label><input id="pressures" type="number" value="10" min="0"><label>פעולות הגנה (תיקולים + חטיפות)</label><input id="defense" type="number" value="50" min="0"><label>מסירות + נשיאות מקדמות</label><input id="progressive" type="number" value="160" min="0"><label>פעולות יוצרות בעיטה ל־90</label><input id="sca" type="number" step="0.1" value="5"><button>חשב והשווה</button></form><div class="card"><div id="result"></div></div></section></main><script>
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ScoutAI | מעבדת סקאוטינג</title>
+<style>
+:root{color-scheme:light dark;--ink:#17211b;--muted:#637168;--paper:#f3f6f1;--card:#fff;--accent:#176b48;--accent-soft:#e3f2e8;--line:#dbe4dc;--hero:#10281d;--hero-ink:#f4fff8}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#d9eee1,transparent 32%),var(--paper);color:var(--ink);font-family:Arial,sans-serif;min-height:100vh}.shell{max-width:1060px;margin:auto;padding:28px 20px 60px}.proof{overflow:hidden;background:linear-gradient(135deg,var(--hero),#1d563c);color:var(--hero-ink);border-radius:28px;padding:clamp(24px,5vw,52px);box-shadow:0 24px 60px #10281d2b;margin-bottom:38px}.proof .eyebrow{color:#8ce3b5}.proof h1{max-width:850px;font-size:clamp(2.25rem,6vw,4.8rem);line-height:1.02;margin:10px 0 16px}.lead{max-width:720px;font-size:clamp(1rem,2vw,1.25rem);line-height:1.65;color:#d6eadf}.proof-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:28px}.proof-card{background:#ffffff12;border:1px solid #ffffff25;border-radius:20px;padding:22px}.proof-card h2{font-size:clamp(1.15rem,2.5vw,1.55rem);line-height:1.5}.top-five{list-style:none;padding:0;margin:16px 0 0;counter-reset:rank}.top-five li{counter-increment:rank;display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #ffffff1f}.top-five li:before{content:"#" counter(rank);font-weight:900;color:#8ce3b5}.top-five span{margin-inline-start:auto}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.kpi{background:#ffffff12;border-radius:15px;padding:16px;text-align:center}.kpi strong{display:block;font-size:clamp(1.4rem,3vw,2rem)}.cta{display:inline-block;background:#f0c75e;color:#17211b;text-decoration:none;border-radius:12px;padding:14px 22px;font-weight:900}.attribution{margin:14px 0 0;color:#bdd2c5;font-size:.78rem;direction:ltr;text-align:right}.lab-head{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:24px}.eyebrow{color:var(--accent);font-size:.82rem;font-weight:800;letter-spacing:.12em}.lab-head h2{font-size:clamp(1.8rem,4vw,3rem);margin:7px 0}.lab-head p{max-width:520px;color:var(--muted);line-height:1.6}.grid{display:grid;grid-template-columns:340px 1fr;gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 12px 35px #213b2910}h2{margin:0 0 16px;font-size:1.1rem}label{display:block;margin:13px 0 6px;color:var(--muted);font-size:.86rem}input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink)}button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:12px;background:var(--accent);color:white;font-weight:800;cursor:pointer}.score{display:flex;align-items:center;gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}.dial{width:104px;height:104px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--accent) calc(var(--score)*1%),#e5ebe6 0);position:relative}.dial:after{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--card)}.dial strong{z-index:1;font-size:1.7rem}.components{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:15px}.metric,.player{padding:12px;background:var(--paper);border-radius:12px}.metric span,.muted{font-size:.78rem;color:var(--muted)}.metric b{display:block;margin-top:5px}.ranking{margin-top:18px}.player{display:grid;grid-template-columns:38px 1fr auto;align-items:center;margin:8px 0}.rank{color:var(--accent);font-weight:900}.tag{padding:5px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:.74rem}.error{color:#a33131;background:#fff1f1;padding:12px;border-radius:10px}@media(prefers-color-scheme:dark){:root{--ink:#edf5ef;--muted:#a9baae;--paper:#101713;--card:#19231d;--accent:#6fd39b;--accent-soft:#203d2d;--line:#304238;--hero:#153523;--hero-ink:#f4fff8}body{background:radial-gradient(circle at 85% 0,#173a28,transparent 32%),var(--paper)}}@media(max-width:760px){.proof-grid{grid-template-columns:1fr}.lab-head{display:block}.grid{grid-template-columns:1fr}.components,.kpis{grid-template-columns:1fr 1fr}.kpi:last-child{grid-column:1/-1}}@media(max-width:430px){.components,.kpis{grid-template-columns:1fr}.kpi:last-child{grid-column:auto}.proof{border-radius:20px}.top-five li{font-size:.9rem}}
+</style>
+</head>
+<body>
+<main class="shell">
+<section class="proof" aria-labelledby="proof-title">
+  <div class="eyebrow">SCOUTAI / IMPACT SCORE</div>
+  <h1 id="proof-title">מדד ההשפעה חושף את הכישרון שהסטטיסטיקה הרגילה מפספסת.</h1>
+  <p class="lead">מספר אחד, שקוף וברור, שמחבר נחישות, מעורבות וקלאץ׳ — כדי שמועדונים וסוכנים יזהו שחקנים משני־משחק לפני כולם.</p>
+  <div class="proof-grid">
+    <div class="proof-card">
+      <h2>המנוע דירג את N'Golo Kanté #2 מתוך 436 שחקני מונדיאל 2018 — על דאטה אמיתית (StatsBomb)</h2>
+      <p class="lead">הפרופיל הקלאסי של שחקן אנדר־רייטד עלה לצמרת בזכות התרומה שמעבר לשערים ובישולים.</p>
+      <div class="kpis">
+        <div class="kpi"><strong>1,022</strong>שחקנים נותחו</div>
+        <div class="kpi"><strong>5</strong>ליגות</div>
+        <div class="kpi"><strong>245</strong>מודולים</div>
+      </div>
+      <a class="cta" href="mailto:aviran2606@gmail.com?subject=ScoutAI%20%D7%A4%D7%99%D7%99%D7%9C%D7%95%D7%98">בואו נריץ פיילוט</a>
+      <p class="attribution">Data: StatsBomb Open Data</p>
+    </div>
+    <div class="proof-card">
+      <h2>Top 5 · Impact Score</h2>
+      <ol class="top-five">
+        <li><b>Hirving Lozano</b><span>79.3</span></li>
+        <li><b>Neymar</b><span>78.0</span></li>
+        <li><b>Eden Hazard</b><span>76.4</span></li>
+        <li><b>Gylfi Sigurðsson</b><span>74.3</span></li>
+        <li><b>Philippe Coutinho</b><span>70.7</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+<header class="lab-head">
+<div>
+<div class="eyebrow">SCOUTAI / LIVE LAB</div>
+<h1>לראות מעבר לסטטיסטיקה.</h1>
+</div>
+<p>מדד השפעה שקוף וסריקת פרוספקטים על בסיס מנועי הדירוג האמיתיים של ScoutAI. הנתונים בדמו הם להמחשה בלבד.</p>
+</header>
+<section class="grid">
+<form class="card" id="form">
+<h2>פרופיל למשחק</h2>
+<label>שם שחקן</label>
+<input id="name" value="נועם לוי">
+<label>לחצים ל־90 דקות</label>
+<input id="pressures" type="number" value="10" min="0">
+<label>פעולות הגנה (תיקולים + חטיפות)</label>
+<input id="defense" type="number" value="50" min="0">
+<label>מסירות + נשיאות מקדמות</label>
+<input id="progressive" type="number" value="160" min="0">
+<label>פעולות יוצרות בעיטה ל־90</label>
+<input id="sca" type="number" step="0.1" value="5">
+<button>חשב והשווה</button>
+</form>
+<div class="card">
+<div id="result">
+</div>
+</div>
+</section>
+</main>
+<script>
 const __modules={"lib/impactScore.js":function(require,module,exports){
 'use strict';
 // NEW STATISTIC — Impact Score (מדד ההשפעה): quantifies a player's game-changing impact BEYOND the box score.
@@ -1205,5 +1271,29 @@ module.exports = { computePlayerValueIndex };
 }};const __cache={};function __require(id,from){if(id.startsWith('.')){id=(from.slice(0,from.lastIndexOf('/')+1)+id).split('/').reduce((a,p)=>p==='..'?(a.pop(),a):p==='.'?a:(a.push(p),a),[]).join('/')}if(!id.endsWith('.js'))id+='.js';if(__cache[id])return __cache[id].exports;const fn=__modules[id];if(!fn)throw new Error('Module not bundled: '+id);const module={exports:{}};__cache[id]=module;const localRequire=req=>__require(req,id);localRequire.main=null;fn(localRequire,module,module.exports);return module.exports}
 const Scout={...__require('lib/impactScore.js'),...__require('lib/rankProspects.js')};
 const demoProspects=[{id:'tal-9',sport:'football',position:'FW',age:19,minutes:900,stats:{pressures90:8,tackles:18,interceptions:9,progPasses:85,progCarries:110,sca90:4.9,carriesIntoBox90:4.2,gca90:.55,npxG90:.42},subject:{heightCm:181,weightKg:74,sprint30mSec:4.02,verticalJumpCm:56}},{id:'maya-6',sport:'football',position:'CM',age:20,minutes:900,stats:{pressures90:11,tackles:31,interceptions:38,progPasses:155,progCarries:72,sca90:5.5,carriesIntoBox90:2.1,gca90:.42,npxG90:.18},subject:{heightCm:169,weightKg:62,sprint30mSec:4.2,verticalJumpCm:48}},{id:'ron-4',sport:'football',position:'CB',age:18,minutes:900,stats:{pressures90:7,tackles:45,interceptions:52,progPasses:120,progCarries:28,sca90:1.4,carriesIntoBox90:.3,gca90:.08,npxG90:.04},subject:{heightCm:188,weightKg:82,sprint30mSec:4.35,verticalJumpCm:61}}];
-const $=id=>document.getElementById(id),n=id=>Number($(id).value)||0,esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));function run(e){if(e)e.preventDefault();try{const player={minutes:900,stats:{pressures90:n('pressures'),tackles:n('defense')*.58,interceptions:n('defense')*.42,progPasses:n('progressive')*.62,progCarries:n('progressive')*.38,sca90:n('sca'),carriesIntoBox90:3,gca90:.4,npxG90:.28}};const impact=Scout.impactScore(player);const ranked=Scout.rankProspects(demoProspects,{limit:3});$('result').innerHTML=`<div class="score"><div class="dial" style="--score:${impact.score}"><strong>${impact.score}</strong></div><div><div class="muted">IMPACT SCORE</div><h2>${esc($('name').value)}</h2><div class="muted">מתוך 100 · שכבת האנרגיה כבויה ללא נתוני CV</div></div></div><div class="components">${[['נחישות',impact.components.grit],['מעורבות',impact.components.involvement],['קלאץ׳',impact.components.clutch]].map(x=>`<div class="metric"><span>${x[0]}</span><b>${x[1]}</b></div>`).join('')}</div><div class="ranking"><h2>דירוג פרוספקטים לדוגמה</h2>${ranked.map(p=>`<div class="player"><div class="rank">#${p.rank}</div><div><b>${p.id}</b><div class="muted">ביטחון ${Math.round(p.confidence*100)}% · פער ערך ${p.valueGap}</div></div><span class="tag">${p.tier} · ${p.index}</span></div>`).join('')}</div>`}catch(err){$('result').innerHTML=`<div class="error">${esc(err.message)}</div>`}}$('form').addEventListener('submit',run);run();
-</script></body></html>
+const $=id=>document.getElementById(id),n=id=>Number($(id).value)||0,esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));function run(e){if(e)e.preventDefault();try{const player={minutes:900,stats:{pressures90:n('pressures'),tackles:n('defense')*.58,interceptions:n('defense')*.42,progPasses:n('progressive')*.62,progCarries:n('progressive')*.38,sca90:n('sca'),carriesIntoBox90:3,gca90:.4,npxG90:.28}};const impact=Scout.impactScore(player);const ranked=Scout.rankProspects(demoProspects,{limit:3});$('result').innerHTML=`<div class="score">
+<div class="dial" style="--score:${impact.score}">
+<strong>${impact.score}</strong>
+</div>
+<div>
+<div class="muted">IMPACT SCORE</div>
+<h2>${esc($('name').value)}</h2>
+<div class="muted">מתוך 100 · שכבת האנרגיה כבויה ללא נתוני CV</div>
+</div>
+</div>
+<div class="components">${[['נחישות',impact.components.grit],['מעורבות',impact.components.involvement],['קלאץ׳',impact.components.clutch]].map(x=>`<div class="metric">
+<span>${x[0]}</span>
+<b>${x[1]}</b>
+</div>`).join('')}</div>
+<div class="ranking">
+<h2>דירוג פרוספקטים לדוגמה</h2>${ranked.map(p=>`<div class="player">
+<div class="rank">#${p.rank}</div>
+<div>
+<b>${p.id}</b>
+<div class="muted">ביטחון ${Math.round(p.confidence*100)}% · פער ערך ${p.valueGap}</div>
+</div>
+<span class="tag">${p.tier} · ${p.index}</span>
+</div>`).join('')}</div>`}catch(err){$('result').innerHTML=`<div class="error">${esc(err.message)}</div>`}}$('form').addEventListener('submit',run);run();
+</script>
+</body>
+</html>
