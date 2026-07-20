@@ -1,7 +1,1208 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ScoutAI | מעבדת סקאוטינג</title><style>
 :root{--ink:#17211b;--muted:#637168;--paper:#f3f6f1;--card:#fff;--accent:#176b48;--line:#dbe4dc}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#d9eee1,transparent 32%),var(--paper);color:var(--ink);font-family:Arial,sans-serif;min-height:100vh}.shell{max-width:1060px;margin:auto;padding:38px 20px 60px}header{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:24px}.eyebrow{color:var(--accent);font-size:.82rem;font-weight:800;letter-spacing:.12em}h1{font-size:clamp(2.2rem,6vw,4.5rem);line-height:.95;margin:8px 0}header p{max-width:520px;color:var(--muted);line-height:1.6}.grid{display:grid;grid-template-columns:340px 1fr;gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 12px 35px #213b2910}h2{margin:0 0 16px;font-size:1.1rem}label{display:block;margin:13px 0 6px;color:var(--muted);font-size:.86rem}input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fbfcfa}button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:12px;background:var(--accent);color:white;font-weight:800;cursor:pointer}.score{display:flex;align-items:center;gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}.dial{width:104px;height:104px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--accent) calc(var(--score)*1%),#e5ebe6 0);position:relative}.dial:after{content:"";position:absolute;inset:9px;border-radius:50%;background:white}.dial strong{z-index:1;font-size:1.7rem}.components{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:15px}.metric,.player{padding:12px;background:#f5f8f4;border-radius:12px}.metric span,.muted{font-size:.78rem;color:var(--muted)}.metric b{display:block;margin-top:5px}.ranking{margin-top:18px}.player{display:grid;grid-template-columns:38px 1fr auto;align-items:center;margin:8px 0}.rank{color:var(--accent);font-weight:900}.tag{padding:5px 8px;border-radius:99px;background:#e3f2e8;color:var(--accent);font-size:.74rem}.error{color:#a33131;background:#fff1f1;padding:12px;border-radius:10px}@media(max-width:760px){header{display:block}.grid{grid-template-columns:1fr}.components{grid-template-columns:1fr 1fr}}
 </style></head><body><main class="shell"><header><div><div class="eyebrow">SCOUTAI / LIVE LAB</div><h1>לראות מעבר לסטטיסטיקה.</h1></div><p>מדד השפעה שקוף וסריקת פרוספקטים על בסיס מנועי הדירוג האמיתיים של ScoutAI. הנתונים בדמו הם להמחשה בלבד.</p></header><section class="grid"><form class="card" id="form"><h2>פרופיל למשחק</h2><label>שם שחקן</label><input id="name" value="נועם לוי"><label>לחצים ל־90 דקות</label><input id="pressures" type="number" value="10" min="0"><label>פעולות הגנה (תיקולים + חטיפות)</label><input id="defense" type="number" value="50" min="0"><label>מסירות + נשיאות מקדמות</label><input id="progressive" type="number" value="160" min="0"><label>פעולות יוצרות בעיטה ל־90</label><input id="sca" type="number" step="0.1" value="5"><button>חשב והשווה</button></form><div class="card"><div id="result"></div></div></section></main><script>
-/*__LIB_BUNDLE__*/
+const __modules={"lib/impactScore.js":function(require,module,exports){
+'use strict';
+// NEW STATISTIC — Impact Score (מדד ההשפעה): quantifies a player's game-changing impact BEYOND the box score.
+// One 0-100 number from transparent components. v1 computes from event-derived BEHAVIOR (real, no CV):
+//   Grit (effort/defensive work), Involvement (progressive volume), Clutch (high-leverage contribution).
+//   Energy (body-language) is an OPTIONAL v2 layer (CV upstream) — default off, weight 0 until data exists.
+// This is the product's headline metric — the thing competitors' xG-radars don't measure.
+const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+const r1 = (x) => Math.round(x * 10) / 10;
+// scale a per-90 value to 0-100 vs a soft cap (documented, tunable per role)
+const sc = (v, cap) => clamp((Number(v) || 0) / cap, 0, 1) * 100;
+
+const WEIGHTS = { grit: 0.34, involvement: 0.33, clutch: 0.33, energy: 0 }; // energy off until CV exists
+
+function impactScore(p, opts = {}) {
+  if (!p || typeof p !== 'object') throw new TypeError('impactScore: player object required');
+  const s = p.stats || {};
+  const w = { ...WEIGHTS, ...(opts.weights || {}) };
+  // Grit: defensive effort per 90
+  const grit = r1((sc(s.pressures90, 12) * 0.5) + (sc((s.tackles + s.interceptions) / (p.minutes || 90) * 90, 4) * 0.5));
+  // Involvement: progressive + creative volume per 90
+  const prog90 = ((s.progPasses + s.progCarries) / (p.minutes || 90)) * 90;
+  const involvement = r1((sc(prog90, 12) * 0.6) + (sc(s.sca90, 6) * 0.4));
+  // Clutch: high-leverage output (carries into box + goal-creating) — proxy for changing games
+  const clutch = r1((sc(s.carriesIntoBox90, 4) * 0.5) + (sc(s.gca90 * 10, 6) * 0.3) + (sc(s.npxG90 * 100, 60) * 0.2));
+  // Energy: body-language (optional; only if provided). 50 = neutral so it never helps/hurts at weight 0.
+  const energy = Number.isFinite(opts.energy) ? clamp(opts.energy, 0, 100) : 50;
+
+  const score = r1(clamp(grit * w.grit + involvement * w.involvement + clutch * w.clutch + energy * w.energy, 0, 100));
+  return { score, components: { grit, involvement, clutch, energy }, note: w.energy === 0 ? 'energy layer off (no CV data yet)' : 'energy layer active' };
+}
+module.exports = { impactScore, WEIGHTS };
+
+if (require.main === module && process.argv.includes('--selftest')) {
+  const a = require('assert');
+  const worker = { minutes: 900, stats: { pressures90: 10, tackles: 30, interceptions: 20, progPasses: 100, progCarries: 60, sca90: 5, carriesIntoBox90: 3, gca90: 0.5, npxG90: 0.3 } };
+  const passenger = { minutes: 900, stats: { pressures90: 1, tackles: 2, interceptions: 1, progPasses: 5, progCarries: 3, sca90: 0.5, carriesIntoBox90: 0.2, gca90: 0.05, npxG90: 0.05 } };
+  a.ok(impactScore(worker).score > impactScore(passenger).score, 'worker must beat passenger');
+  a.ok(impactScore(worker).score >= 0 && impactScore(worker).score <= 100);
+  a.throws(() => impactScore(null));
+  console.log('OK', impactScore(worker).score, 'vs', impactScore(passenger).score);
+}
+
+},
+"lib/rankProspects.js":function(require,module,exports){
+'use strict';
+// ScoutAI/lib/rankProspects.js — spec 4, the scan engine.
+//
+// HONESTY / PHENOTYPE NOTE: the "genetic" layer that flows through each row's
+// `breakdown.genetic` (produced upstream by geneticPropensityScore via
+// scientificUpsideIndex) is a *phenotype-proxy propensity* estimate from
+// measurable anthro/physical fields — it is NOT DNA, NOT genetic data, NOT
+// deterministic selection. Stat signature dominates the fused index by design.
+// See DISCLAIMER export below.
+//
+// Pure Node built-ins, zero deps, deterministic (no Date/Math.random/I/O).
+// Composes sibling scorers by filename; does NOT reimplement them.
+
+const DISCLAIMER =
+  'Rankings fuse a statistical signature (primary) with a phenotype-proxy ' +
+  'propensity layer (secondary, NOT DNA/genetic selection) and an optional ' +
+  'non-scientific narrative layer. Use the measured stats, not the propensity ' +
+  'inference, for decisions.';
+
+const round2 = (x) => Math.round(x * 100) / 100;
+const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+
+// elite > high > notable > watch > fringe
+const TIER_ORDER = { fringe: 0, watch: 1, notable: 2, high: 3, elite: 4 };
+
+// --- deterministic ranking core (testable without sibling scorers) -----------
+// Takes already-scored rows, applies filter/undervalued/limit, total-order sort,
+// assigns rank. This is spec-4's own undervalued+total-order logic (the sibling
+// rankByUndervaluedUpside is the same gap logic; the 4-key tie-break that
+// guarantees input-order-independent output is owned and proven here).
+function rankScored(scored, opts = {}) {
+  const { filter, undervaluedOnly, limit } = opts;
+  let rows = scored;
+
+  if (undervaluedOnly) rows = rows.filter((s) => s.valueGap > 0);
+
+  if (filter) {
+    if (filter.minTier !== undefined && TIER_ORDER[filter.minTier] === undefined)
+      throw new TypeError('unknown filter.minTier: ' + filter.minTier);
+    rows = rows.filter((s) => {
+      if (filter.sport && s.sport !== filter.sport) return false;
+      if (filter.position && s.position !== filter.position) return false;
+      if (filter.minTier !== undefined &&
+          TIER_ORDER[s.tier] < TIER_ORDER[filter.minTier]) return false;
+      if (filter.maxAge !== undefined &&
+          typeof s.age === 'number' && s.age > filter.maxAge) return false;
+      return true;
+    });
+  }
+
+  // index desc -> valueGap desc -> confidence desc -> id asc (total order)
+  rows = rows.slice().sort((a, b) =>
+    b.index - a.index ||
+    b.valueGap - a.valueGap ||
+    b.confidence - a.confidence ||
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  if (typeof limit === 'number' && limit > 0) rows = rows.slice(0, limit);
+
+  return rows.map((s, i) => {
+    const out = {
+      id: s.id, rank: i + 1, index: s.index, tier: s.tier,
+      confidence: s.confidence, valueGap: s.valueGap,
+      breakdown: s.breakdown, explanation: s.explanation,
+    };
+    if (s.error) out.error = s.error;
+    return out;
+  });
+}
+
+function rankProspects(players, opts = {}) {
+  if (!Array.isArray(players)) throw new TypeError('players must be an array');
+  if (players.length === 0) return [];
+
+  const { leagueStrength, includeNarrative } = opts;
+
+  // validate everything cheap BEFORE loading sibling scorers, so container/id
+  // guards fail fast and stay testable in isolation.
+  for (const p of players) {
+    if (!p || typeof p !== 'object' || typeof p.id !== 'string' || p.id === '')
+      throw new TypeError('each player requires a non-empty string id');
+  }
+  if (opts.filter && opts.filter.minTier !== undefined &&
+      TIER_ORDER[opts.filter.minTier] === undefined)
+    throw new TypeError('unknown filter.minTier: ' + opts.filter.minTier);
+
+  // lazy require: co-located siblings in ScoutAI/lib.
+  const { scientificUpsideIndex } = require('./scientificUpsideIndex.js');
+  const { computePlayerValueIndex } = require('./computePlayerValueIndex.js');
+
+  const resolveLeague = (p) => {
+    if (leagueStrength && typeof leagueStrength === 'object')
+      return leagueStrength[p.leagueId] != null ? leagueStrength[p.leagueId] : 1.0;
+    return leagueStrength != null ? leagueStrength : 1.0;
+  };
+
+  // single O(n) scoring pass; one bad row is captured, never aborts the scan.
+  const scored = players.map((p) => {
+    let index = 0, tier = 'fringe', confidence = 0, breakdown = null,
+        explanation = '', error;
+    try {
+      const r = scientificUpsideIndex(p, {
+        leagueStrength: resolveLeague(p),
+        includeNarrative: !!includeNarrative,
+      });
+      index = r.index; tier = r.tier; confidence = r.confidence;
+      breakdown = r.breakdown; explanation = r.explanation;
+    } catch (e) {
+      // ponytail: per-row error capture, not fail-fast — batch scans need it.
+      error = e && e.message ? e.message : String(e);
+    }
+    let conv = null;
+    try {
+      const v = computePlayerValueIndex(p);
+      if (typeof v === 'number' && isFinite(v)) conv = v;
+    } catch (_) { /* absent conventional value -> lowest percentile */ }
+    return {
+      id: p.id, sport: p.sport, position: p.position, age: p.age,
+      index, tier, confidence, breakdown, explanation, error, _conv: conv,
+    };
+  });
+
+  // conventional-value percentile computed ONCE over the roster (one sort),
+  // not per-player. valueGap = index - conventionalPercentile.
+  const vals = scored.map((s) => s._conv).filter((v) => v != null)
+    .sort((a, b) => a - b);
+  const pct = (v) => {
+    if (v == null || vals.length === 0) return 0;
+    // fraction of roster at-or-below v, via binary search (count of vals <= v)
+    let lo = 0, hi = vals.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (vals[m] <= v) lo = m + 1; else hi = m; }
+    return round2((lo / vals.length) * 100);
+  };
+  for (const s of scored) s.valueGap = round2(s.index - pct(s._conv));
+
+  // ponytail: O(n) scoring + O(n log n) sort, fine to ~10^6 rows in-memory;
+  // shard if roster exceeds RAM.
+  return rankScored(scored, opts);
+}
+
+// --------------------------------- self-test ---------------------------------
+function selftest() {
+  const assert = (c, m) => { if (!c) throw new Error('FAIL: ' + m); };
+  const row = (id, index, valueGap, confidence, extra) => Object.assign(
+    { id, index, tier: 'notable', confidence, valueGap,
+      sport: 'football', position: 'FW', age: 22, breakdown: {}, explanation: '' },
+    extra);
+
+  // PROOF: undervalued signatures (LOW) outrank flashy tally (FLASH), and LOW
+  // is flagged more undervalued (bigger positive valueGap).
+  const LOW = row('LOW', 78, 40, 0.7);   // high index, market hasn't priced it
+  const FLASH = row('FLASH', 60, -20, 0.9); // lower index, already overvalued
+  const fillers = [];
+  for (let i = 0; i < 20; i++) fillers.push(row('f' + String(i).padStart(3, '0'), 40 + i, 5, 0.5));
+  const roster = fillers.concat([FLASH, LOW]);
+  const ranked = rankScored(roster);
+  const rLow = ranked.find((r) => r.id === 'LOW').rank;
+  const rFlash = ranked.find((r) => r.id === 'FLASH').rank;
+  assert(rLow < rFlash, 'LOW must outrank FLASH');
+  assert(LOW.valueGap > FLASH.valueGap, 'LOW must be flagged more undervalued');
+
+  // determinism: shuffled input -> identical rank list
+  const shuffled = roster.slice().reverse();
+  const a = rankScored(roster).map((r) => r.id + '#' + r.rank).join(',');
+  const b = rankScored(shuffled).map((r) => r.id + '#' + r.rank).join(',');
+  assert(a === b, 'ranking must be order-independent (id tie-break)');
+
+  // total-order tie-break: equal index -> valueGap -> confidence -> id asc
+  const ties = [
+    row('zzz', 50, 10, 0.5), row('aaa', 50, 10, 0.5), row('mmm', 50, 10, 0.9),
+  ];
+  const to = rankScored(ties).map((r) => r.id);
+  assert(to[0] === 'mmm' && to[1] === 'aaa' && to[2] === 'zzz',
+    'tie-break confidence desc then id asc, got ' + to.join(','));
+
+  // filter: minTier ordinal + undervaluedOnly
+  const mixed = [
+    row('elite1', 90, 30, 0.8, { tier: 'elite' }),
+    row('fringe1', 20, -5, 0.3, { tier: 'fringe' }),
+  ];
+  const kept = rankScored(mixed, { filter: { minTier: 'high' }, undervaluedOnly: true });
+  assert(kept.length === 1 && kept[0].id === 'elite1', 'minTier+undervaluedOnly filter');
+
+  // container / id guards (fail fast, before sibling require)
+  let threw = false;
+  try { rankProspects('nope'); } catch (e) { threw = e instanceof TypeError; }
+  assert(threw, 'non-array players -> TypeError');
+  assert(rankProspects([]).length === 0, 'empty roster -> []');
+  threw = false;
+  try { rankProspects([{ sport: 'football', stats: {} }]); } catch (e) { threw = e instanceof TypeError; }
+  assert(threw, 'missing id -> TypeError');
+  threw = false;
+  try { rankProspects([{ id: 'x' }], { filter: { minTier: 'legendary' } }); }
+  catch (e) { threw = e instanceof TypeError; }
+  assert(threw, 'unknown minTier -> TypeError');
+
+  return 'OK';
+}
+
+if (require.main === module && process.argv.includes('--selftest')) {
+  console.log(selftest());
+}
+
+module.exports = { rankProspects, DISCLAIMER };
+
+},
+"lib/scientificUpsideIndex.js":function(require,module,exports){
+'use strict';
+// scientificUpsideIndex — Spec 3: fuse three layers with the honesty hierarchy.
+// HONESTY: the "genetic" layer is a phenotype-proxy PROPENSITY estimate derived
+// from measurable anthro/physical proxies. It is NOT DNA, NOT genetic data, NOT
+// deterministic selection. It is capped BELOW the statistical layer by design
+// (stat 0.72-0.80 vs genetic 0.18-0.20) and the face-energy narrative is a
+// low-weight (<=0.10), explicitly non-scientific layer. Weighting is enforced
+// numerically, not just by label (see fuse()). Pure Node built-ins, deterministic.
+
+const round2 = (x) => Math.round(x * 100) / 100;
+const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+const num = (x) => (typeof x === 'number' && isFinite(x) ? x : null);
+
+const DISCLAIMER =
+  'Genetic layer is a trait-PROPENSITY estimate from measurable phenotype proxies ' +
+  'only. NOT DNA, NOT genetic selection, NOT diagnostic. Statistical signature is ' +
+  'primary and dominates the index by design; face-energy is a non-scientific, ' +
+  'low-weight narrative layer. Use measured stats, not inferences, for decisions.';
+
+const BASE_WITH_NARR = { stat: 0.72, genetic: 0.18, narrative: 0.10 };
+const BASE_NO_NARR = { stat: 0.80, genetic: 0.20 };
+
+function tierOf(index) {
+  if (index >= 80) return 'elite';
+  if (index >= 65) return 'high';
+  if (index >= 50) return 'notable';
+  if (index >= 35) return 'watch';
+  return 'fringe';
+}
+
+// Pure numeric fusion — the load-bearing honesty logic, tested standalone.
+// layers: { stat:{value,confidence}, genetic:{value,confidence}|null, narrative:{value,confidence}|null }
+// Effective weight = baseWeight * layerConfidence, then renormalized over present
+// layers so a low-confidence genetic/narrative layer cannot drag a strong stat.
+function fuse(layers, useNarr) {
+  const base = useNarr ? BASE_WITH_NARR : BASE_NO_NARR;
+  const present = {};
+  for (const k of Object.keys(base)) {
+    const L = layers[k];
+    const v = L ? num(L.value) : null;
+    if (v !== null) present[k] = clamp(L.confidence, 0, 1);
+  }
+  const statPresent = present.stat !== undefined;
+  // honesty: the face-energy narrative is non-scientific — it never acts without the stat primary.
+  if (!statPresent) delete present.narrative;
+
+  const weights = {};
+  if (statPresent) {
+    // stat keeps its FULL base share as a floor -> the scientific layer can NEVER be out-weighted
+    // by genetic/narrative, even when stat confidence is low. Secondaries split the remainder.
+    let secSum = 0;
+    for (const k of Object.keys(present)) if (k !== 'stat') secSum += base[k] * present[k];
+    weights.stat = secSum > 0 ? base.stat : 1;
+    const remainder = 1 - weights.stat;
+    for (const k of Object.keys(present)) if (k !== 'stat') weights[k] = remainder * (base[k] * present[k]) / secSum;
+  } else {
+    // no stat: fall back to whatever secondary layers exist (genetic only) — inherently low trust
+    let sum = 0; const eff = {};
+    for (const k of Object.keys(present)) { eff[k] = base[k] * present[k]; sum += eff[k]; }
+    for (const k of Object.keys(present)) weights[k] = sum > 0 ? eff[k] / sum : 0;
+  }
+
+  let index = 0;
+  let conf = 0;
+  for (const k of Object.keys(weights)) {
+    index += layers[k].value * weights[k];
+    conf += clamp(layers[k].confidence, 0, 1) * weights[k];
+  }
+  // a result with no scientific stat layer is inherently non-primary -> cap its confidence
+  if (!statPresent) conf = Math.min(conf, 0.4);
+  return { index, confidence: conf, weights };
+}
+
+function collapseGenetic(g) {
+  if (!g || !g.vector) return { value: null, confidence: 0 };
+  let vn = 0;
+  let vd = 0;
+  for (const t of Object.values(g.vector)) {
+    const v = t ? num(t.value) : null;
+    if (v !== null) {
+      vn += v * clamp(t.confidence || 0, 0, 1);
+      vd += clamp(t.confidence || 0, 0, 1);
+    }
+  }
+  return { value: vd > 0 ? vn / vd : null, confidence: clamp(g.overallConfidence || 0, 0, 1) };
+}
+
+function scientificUpsideIndex(player, opts = {}) {
+  if (player === null || typeof player !== 'object' || Array.isArray(player)) {
+    throw new TypeError('scientificUpsideIndex: player must be an object');
+  }
+  // Lazy sibling requires: co-located in ScoutAI/lib. Loaded on the real path only
+  // so --selftest can exercise fuse() before the siblings exist on disk.
+  const { statSignatureScore } = require('./statSignatureScore.js');
+  const { geneticPropensityScore } = require('./geneticPropensityScore.js');
+
+  const includeNarrative = opts.includeNarrative === true;
+
+  // 1. Statistical signature — PRIMARY (propagates TypeError on bad sport/stats).
+  const statRes = statSignatureScore(player, { leagueStrength: opts.leagueStrength });
+  const statLayer = { value: num(statRes.score), confidence: clamp(statRes.confidence || 0, 0, 1) };
+
+  // 2. Genetic propensity — SECONDARY, phenotype-proxy only.
+  const genRes = geneticPropensityScore(player.subject || {});
+  const genLayer = collapseGenetic(genRes);
+
+  // 3. Optional face-energy narrative — never present unless asked AND face given.
+  let narrLayer = null;
+  let useNarr = false;
+  if (includeNarrative && player.face != null) {
+    // ponytail: faceEnergyProfile shape unspecified — read score||value, default conf 0.5.
+    const { faceEnergyProfile } = require('./faceEnergyProfile.js');
+    const nr = faceEnergyProfile(player.face) || {};
+    const nv = num(nr.value != null ? nr.value : nr.score);
+    if (nv !== null) {
+      narrLayer = { value: nv, confidence: clamp(nr.confidence != null ? nr.confidence : 0.5, 0, 1) };
+      useNarr = true;
+    }
+  }
+
+  const fused = fuse({ stat: statLayer, genetic: genLayer, narrative: narrLayer }, useNarr);
+
+  const breakdown = {
+    stat: { value: statLayer.value === null ? null : round2(statLayer.value), weight: round2(fused.weights.stat || 0), confidence: round2(statLayer.confidence) },
+    genetic: { value: genLayer.value === null ? null : round2(genLayer.value), weight: round2(fused.weights.genetic || 0), confidence: round2(genLayer.confidence) },
+    narrative: narrLayer ? { value: round2(narrLayer.value), weight: round2(fused.weights.narrative || 0), confidence: round2(narrLayer.confidence) } : null,
+  };
+
+  const index = round2(clamp(fused.index, 0, 100));
+  const confidence = round2(clamp(fused.confidence, 0, 1));
+
+  // Explanation: name top-2 stat signals; flag genetic as propensity-only + narrative non-scientific.
+  const topSignals = Array.isArray(statRes.signals)
+    ? statRes.signals.slice().sort((a, b) => (b.contribution || 0) - (a.contribution || 0)).slice(0, 2).map((s) => s.name)
+    : [];
+  let explanation;
+  if (fused.weights.stat === undefined && fused.weights.genetic === undefined) {
+    explanation = 'Insufficient data: no scoreable layer present; index defaults low.';
+  } else {
+    const parts = [];
+    parts.push(topSignals.length
+      ? `Primary statistical signature driven by ${topSignals.join(' and ')} (weight ${round2(fused.weights.stat || 0)}).`
+      : `Primary statistical signature (weight ${round2(fused.weights.stat || 0)}).`);
+    if (breakdown.genetic.value !== null && (fused.weights.genetic || 0) > 0) {
+      parts.push(`Genetic layer is phenotype-proxy propensity only (weight ${breakdown.genetic.weight}); see DISCLAIMER.`);
+    }
+    if (narrLayer) {
+      parts.push(`Face-energy is a non-scientific narrative layer (weight ${breakdown.narrative.weight}).`);
+    }
+    explanation = parts.join(' ');
+  }
+
+  return { index, tier: tierOf(index), confidence, breakdown, explanation };
+}
+
+// ---- self-check ---------------------------------------------------------
+// Tests the honesty hierarchy + fusion invariants via fuse() directly, so it
+// runs before sibling lib modules exist. Real-path integration is covered by
+// ScoutAI/lib/test_scoutai.js once siblings land.
+function selftest() {
+  const assert = require('assert');
+
+  // PROOF: stat favors LOW; genetic + narrative favor FLASH. LOW must still win —
+  // stat weight (0.72) swamps genetic (0.18) + narrative (0.10).
+  const LOW = fuse({ stat: { value: 78, confidence: 0.9 }, genetic: { value: 45, confidence: 1 }, narrative: { value: 45, confidence: 1 } }, true);
+  const FLASH = fuse({ stat: { value: 52, confidence: 0.9 }, genetic: { value: 90, confidence: 1 }, narrative: { value: 90, confidence: 1 } }, true);
+  assert(LOW.index > FLASH.index, `PROOF failed: LOW ${LOW.index} !> FLASH ${FLASH.index}`);
+
+  // Genetic can never out-weigh stat, even at full genetic confidence + low stat confidence.
+  const w = fuse({ stat: { value: 50, confidence: 0.3 }, genetic: { value: 50, confidence: 1 }, narrative: null }, false).weights;
+  assert(w.stat > w.genetic, `stat weight ${w.stat} must exceed genetic ${w.genetic}`);
+
+  // Missing genetic → weight renormalizes away; index rides on stat only.
+  const g0 = fuse({ stat: { value: 60, confidence: 0.8 }, genetic: { value: null, confidence: 0 }, narrative: null }, false);
+  assert(Math.abs(g0.index - 60) < 1e-9 && g0.weights.genetic === undefined, 'absent genetic must renormalize away');
+
+  // All layers empty → index 0, confidence 0, tier fringe.
+  const empty = fuse({ stat: { value: null, confidence: 0 }, genetic: { value: null, confidence: 0 }, narrative: null }, false);
+  assert(empty.index === 0 && empty.confidence === 0 && tierOf(empty.index) === 'fringe', 'empty must be 0/fringe');
+
+  // Tier boundaries.
+  assert(tierOf(80) === 'elite' && tierOf(65) === 'high' && tierOf(50) === 'notable' && tierOf(35) === 'watch' && tierOf(34.99) === 'fringe', 'tier boundaries');
+
+  // Confidence is a weighted mean of present layer confidences (in [0,1]).
+  assert(g0.confidence >= 0 && g0.confidence <= 1 && Math.abs(g0.confidence - 0.8) < 1e-9, 'confidence weighted mean');
+
+  console.log('OK');
+}
+
+if (require.main === module && process.argv.includes('--selftest')) selftest();
+
+module.exports = { scientificUpsideIndex, DISCLAIMER, _fuse: fuse, _tierOf: tierOf };
+
+},
+"lib/statSignatureScore.js":function(require,module,exports){
+'use strict';
+// ScoutAI/lib/statSignatureScore.js — SCIENTIFIC CORE (Spec 2)
+//
+// HONESTY / phenotype-proxy note: this module scores measurable ON-FIELD stat
+// signatures only. Any "genetic"/propensity layer lives in geneticPropensityScore
+// and is a PHENOTYPE-PROXY PROPENSITY estimate (anthro/physical measurements),
+// NOT DNA, NOT genetic selection, NOT diagnostic. This file contains no genetic
+// inference; it consumes measured stats. See DISCLAIMER export.
+//
+// Pure Node built-ins, deterministic (no Date/Math.random/I/O), scales O(1) per
+// player. Composes shared lib helpers normalizeMetrics + computeStatComposite;
+// when run standalone (selftest, before lib is populated) it falls back to local
+// implementations matching the documented contract below.
+
+// ---- shared-lib contract (fallbacks used only if the co-located module absent)
+// normalizeMetrics(value, min, max, invert=false) -> 0..100 clamped linear scale.
+// computeStatComposite(signals) -> sum of signal.contribution (weighted blend).
+function req(path, name, fallback) {
+  try { const m = require(path); if (m && typeof m[name] === 'function') return m[name]; }
+  catch (_) {}
+  return fallback;
+}
+// NOTE: repo normalizeMetrics is a BATCH cross-player normalizer (players[] -> incompatible
+// signature), so we use this scalar min-max normalize directly rather than req()-reusing it.
+const normalizeMetrics =
+  function (value, min, max, invert) {
+    if (!Number.isFinite(value)) return null;
+    if (max === min) return 50;
+    let p = ((value - min) / (max - min)) * 100;
+    if (invert) p = 100 - p;
+    return clamp(p, 0, 100);
+  };
+// NOTE: repo computeStatComposite has an incompatible signature (weighted metric objects,
+// not our {contribution} signals) — reusing it via req() zeroed the score. Sum locally.
+const computeStatComposite =
+  function (signals) {
+    let s = 0;
+    for (const sig of signals) s += Number.isFinite(sig.contribution) ? sig.contribution : 0;
+    return s;
+  };
+
+const round2 = (x) => Math.round(x * 100) / 100;
+const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+const DISCLAIMER =
+  'statSignatureScore reflects measured on-field stat signatures only (validated ' +
+  'undervalued/high-upside patterns), age- and league-adjusted. It carries no ' +
+  'genetic/DNA inference. Any propensity layer elsewhere is a phenotype-proxy ' +
+  'estimate, not a decision on any individual.';
+
+// ---------------------------------------------------------------------------
+// Signal tables. weight columns sum to 1.00 per sport.
+// Each signal: raw(g,ctx) -> number|null (null = no constituent field present),
+// bounds [min,max,invert] for normalizeMetrics, flags league/leagueFloor/age/rate.
+// bounds are documented TUNING KNOBS (population-plausible), refine on a real
+// corpus. // ponytail: static bounds stand in for percentile tables; swap when a
+// real player corpus + empirical percentiles are loaded.
+// ---------------------------------------------------------------------------
+const SIGNALS = {
+  football: [
+    { name: 'xg_underperformance_good_process', weight: 0.20, league: true, rate: true,
+      fields: ['npxG', 'npxA', 'G', 'A'], bounds: [-3, 3, false],
+      raw: (g, c) => {
+        const npxG = g('npxG'), npxA = g('npxA'), G = g('G'), A = g('A');
+        if ([npxG, npxA, G, A].every((x) => x === undefined)) return null;
+        const proc = (npxG || 0) + (npxA || 0), out = (G || 0) + (A || 0);
+        return (proc - out) * (900 / c.minutes);
+      } },
+    { name: 'npxg_vs_reputation', weight: 0.14, league: true, rate: true,
+      fields: ['npxG90', 'npxGperShot'], bounds: [0, 0.8, false],
+      raw: (g) => { const v = g('npxG90'); return v === undefined ? null : v; } },
+    { name: 'progression_pre_peak', weight: 0.14, age: true, rate: true,
+      fields: ['progPasses', 'progCarries'], bounds: [0, 15, false],
+      raw: (g, c) => {
+        const p = g('progPasses'), cr = g('progCarries');
+        if (p === undefined && cr === undefined) return null;
+        return ((p || 0) + (cr || 0)) * (90 / c.minutes);
+      } },
+    { name: 'padj_defense', weight: 0.12, league: true, rate: true,
+      fields: ['tackles', 'interceptions', 'teamPossPct'], bounds: [0, 20, false],
+      raw: (g, c) => {
+        const t = g('tackles'), i = g('interceptions'), poss = g('teamPossPct');
+        if (t === undefined && i === undefined) return null;
+        const per90 = ((t || 0) + (i || 0)) * (90 / c.minutes);
+        return per90 * (50 / (poss || 50));
+      } },
+    { name: 'pressing_intensity', weight: 0.10, league: true, rate: true,
+      fields: ['pressures90', 'pressRegainPct'], bounds: [0, 10, false],
+      raw: (g) => {
+        const v = g('pressures90'), s = g('pressRegainPct');
+        if (v === undefined) return null;
+        return v * ((s === undefined ? 30 : s) / 100);
+      } },
+    { name: 'sca_gca_decoupled', weight: 0.10, rate: true,
+      fields: ['sca90', 'gca90', 'keyPasses', 'G', 'A'], bounds: [-50, 50, false],
+      raw: (g, c) => {
+        const sca = g('sca90'), gca = g('gca90');
+        if (sca === undefined && gca === undefined) return null;
+        const creation = normalizeMetrics((sca || 0) + (gca || 0), 0, 12, false);
+        const out = normalizeMetrics(((g('G') || 0) + (g('A') || 0)) * (90 / c.minutes), 0, 1.2, false);
+        return (creation || 0) - (out || 0);
+      } },
+    { name: 'open_play_stripped', weight: 0.08, league: true, rate: true,
+      fields: ['openPlay_xGxA'], bounds: [0, 1.2, false],
+      raw: (g) => { const v = g('openPlay_xGxA'); return v === undefined ? null : v; } },
+    { name: 'carries_into_box', weight: 0.06, rate: true,
+      fields: ['carriesIntoBox90', 'progCarryDist'], bounds: [0, 5, false],
+      raw: (g) => {
+        const v = g('carriesIntoBox90'), d = g('progCarryDist');
+        if (v === undefined && d === undefined) return null;
+        return (v || 0) + (d || 0) / 1000;
+      } },
+    { name: 'output_through_team_weakness', weight: 0.06,
+      fields: ['playerPer90pct', 'teamXgRank'], bounds: [0, 100, false],
+      raw: (g) => {
+        const p = g('playerPer90pct'), rank = g('teamXgRank');
+        if (p === undefined) return null;
+        return p * ((rank === undefined ? 10 : rank) / 20); // weak team (high rank#) -> boost
+      } },
+  ],
+  basketball: [
+    { name: 'age_adjusted_bpm', weight: 0.20, age: true,
+      fields: ['bpm'], bounds: [-4, 12, false],
+      raw: (g, c) => {
+        const bpm = g('bpm'); if (bpm === undefined) return null;
+        const a = c.age;
+        const cohort = a === undefined ? 0 : a < 23 ? -2 : a < 28 ? 0 : 1;
+        return bpm - cohort;
+      } },
+    { name: 'usage_efficiency_divergence', weight: 0.14,
+      fields: ['usagePct', 'tsPct'], bounds: [40, 80, false],
+      raw: (g) => {
+        const ts = g('tsPct'), usg = g('usagePct');
+        if (ts === undefined) return null;
+        return ts * 100 + ((usg === undefined ? 20 : usg) - 20) * 0.5;
+      } },
+    { name: 'stocks_per36', weight: 0.14, rate: true,
+      fields: ['stl', 'blk', 'min'], bounds: [0, 6, false],
+      raw: (g, c) => {
+        const stl = g('stl'), blk = g('blk');
+        if (stl === undefined && blk === undefined) return null;
+        return ((stl || 0) + (blk || 0)) * 36 / c.minutes;
+      } },
+    { name: 'per36_low_minute', weight: 0.10, rate: true,
+      fields: ['anyBox', 'min'], bounds: [0, 40, false],
+      raw: (g, c) => { const b = g('anyBox'); return b === undefined ? null : b * 36 / c.minutes; } },
+    { name: 'length_wing_minus_height', weight: 0.10,
+      fields: ['wingspan', 'height'], bounds: [0, 20, false],
+      raw: (g) => {
+        const w = g('wingspan'), h = g('height');
+        if (w === undefined || h === undefined) return null;
+        return w - h;
+      } },
+    { name: 'steal_rate_processing', weight: 0.10,
+      fields: ['stlPct'], bounds: [0, 4, false],
+      raw: (g) => { const v = g('stlPct'); return v === undefined ? null : v; } },
+    { name: 'euroleague_shooting_translation', weight: 0.08, leagueFloor: 0.9,
+      fields: ['euro_3pPct', 'euro_tsPct', 'ftr'], bounds: [20, 65, false],
+      raw: (g) => {
+        const t3 = g('euro_3pPct'), ts = g('euro_tsPct');
+        if (t3 === undefined && ts === undefined) return null;
+        const parts = [t3, ts].filter((x) => x !== undefined);
+        return parts.reduce((a, b) => a + b, 0) / parts.length;
+      } },
+    { name: 'reb_ast_dual_threat', weight: 0.08,
+      fields: ['rebPct', 'astPct', 'position'], bounds: [0, 40, false],
+      raw: (g) => {
+        const r = g('rebPct'), a = g('astPct');
+        if (r === undefined && a === undefined) return null;
+        return (r || 0) + (a || 0);
+      } },
+    { name: 'sos_adjusted_bpm', weight: 0.06,
+      fields: ['bpm', 'sos'], bounds: [-4, 12, false],
+      raw: (g) => {
+        const bpm = g('bpm'); if (bpm === undefined) return null;
+        return bpm + (g('sos') || 0);
+      } },
+  ],
+};
+
+function peakAgeFor(sport, position) {
+  if (sport === 'basketball') return 26;
+  const p = String(position || '').toUpperCase();
+  if (/GK|CB|DEF|DF/.test(p)) return 27;
+  return 25; // attacking / default
+}
+
+function statSignatureScore(player, opts) {
+  if (player === null || typeof player !== 'object' || Array.isArray(player)) {
+    throw new TypeError('statSignatureScore: player must be an object');
+  }
+  const sport = player.sport;
+  const table = SIGNALS[sport];
+  if (!table) throw new TypeError("statSignatureScore: player.sport must be 'football' | 'basketball'");
+  if (player.stats === null || typeof player.stats !== 'object' || Array.isArray(player.stats)) {
+    throw new TypeError('statSignatureScore: player.stats must be an object');
+  }
+  opts = opts || {};
+
+  const stats = player.stats;
+  const g = (k) => num(stats[k]);
+
+  const minSample = num(opts.minSample) !== undefined
+    ? opts.minSample : (sport === 'football' ? 600 : 500);
+  const minutesGiven = num(player.minutes);
+  const minutes = minutesGiven !== undefined ? minutesGiven : minSample; // absent -> no discount
+  const sampleFactor = clamp(minutes / minSample, 0, 1);
+
+  const league = num(opts.leagueStrength) !== undefined
+    ? clamp(opts.leagueStrength, 0.3, 1.0) : 1.0;
+
+  const ageGiven = num(player.age);
+  const peak = peakAgeFor(sport, player.position);
+  const ageBonus = ageGiven !== undefined
+    ? clamp(1 + (peak - ageGiven) * 0.03, 0.85, 1.30) : 1;
+
+  const ctx = { minutes, minSample, age: ageGiven };
+
+  const signals = [];
+  for (const sig of table) {
+    const raw = sig.raw(g, ctx);
+    if (raw === null) { signals.push({ name: sig.name, contribution: 0, raw: null }); continue; }
+    const norm = normalizeMetrics(raw, sig.bounds[0], sig.bounds[1], sig.bounds[2]);
+    let scaler = 1;
+    if (sig.league) scaler *= league;
+    if (sig.leagueFloor) scaler *= Math.max(league, sig.leagueFloor);
+    if (sig.age) scaler *= ageBonus;
+    if (sig.rate) scaler *= sampleFactor;
+    const contribution = round2((norm || 0) * sig.weight * scaler);
+    signals.push({ name: sig.name, contribution, raw: round2(raw) });
+  }
+
+  const score = round2(clamp(computeStatComposite(signals), 0, 100));
+
+  // confidence = (fields present / fields expected for sport) * sampleFactor, minus
+  // small penalties for absent age/minutes (spec-1 philosophy: absent != worst).
+  const union = new Set();
+  for (const sig of table) for (const f of sig.fields) union.add(f);
+  let present = 0;
+  for (const f of union) if (num(stats[f]) !== undefined) present++;
+  let conf = (present / union.size) * sampleFactor;
+  if (ageGiven === undefined) conf -= 0.05;
+  if (minutesGiven === undefined) conf -= 0.10;
+  const confidence = round2(clamp(conf, 0, 1));
+
+  return { score, signals, confidence, sport, DISCLAIMER };
+}
+
+statSignatureScore.DISCLAIMER = DISCLAIMER;
+
+// ---------------------------------------------------------------------------
+function selftest() {
+  const assert = (c, m) => { if (!c) throw new Error('SELFTEST FAIL: ' + m); };
+
+  // PROOF (football): signatures beat surface tally.
+  const LOW = {
+    id: 'low', sport: 'football', age: 21, position: 'MF', minutes: 2000,
+    stats: {
+      npxG: 6, npxA: 5, G: 2, A: 1, npxG90: 0.55,
+      progPasses: 180, progCarries: 140, tackles: 55, interceptions: 40, teamPossPct: 40,
+      pressures90: 6, pressRegainPct: 32, sca90: 6, gca90: 0.9,
+      openPlay_xGxA: 0.8, carriesIntoBox90: 3, progCarryDist: 4000,
+      playerPer90pct: 85, teamXgRank: 17,
+    },
+  };
+  const FLASH = {
+    id: 'flash', sport: 'football', age: 29, position: 'FW', minutes: 2000,
+    stats: {
+      npxG: 7, npxA: 2, G: 12, A: 3, npxG90: 0.32,
+      progPasses: 40, progCarries: 30, tackles: 8, interceptions: 5, teamPossPct: 62,
+      pressures90: 2, pressRegainPct: 22, sca90: 2.5, gca90: 0.3,
+      openPlay_xGxA: 0.35, carriesIntoBox90: 1, progCarryDist: 900,
+      playerPer90pct: 70, teamXgRank: 3,
+    },
+  };
+  const low = statSignatureScore(LOW, { leagueStrength: 0.7 });
+  const flash = statSignatureScore(FLASH, { leagueStrength: 1.0 });
+  assert(low.score > flash.score, `LOW(${low.score}) should beat FLASH(${flash.score})`);
+  assert(Math.abs(low.signals.reduce((a, s) => a + s.contribution, 0) - low.score) < 0.5,
+    'contributions must sum to score');
+
+  // PROOF (basketball mirror): young elite BPM + stocks on bench minutes > volume scorer.
+  const YOUNG = {
+    id: 'young', sport: 'basketball', age: 22, minutes: 800,
+    stats: { bpm: 6, stl: 45, blk: 30, usagePct: 22, tsPct: 0.60, anyBox: 400,
+      wingspan: 214, height: 198, stlPct: 2.8, rebPct: 9, astPct: 16, sos: 0.05 },
+  };
+  const VOLUME = {
+    id: 'volume', sport: 'basketball', age: 30, minutes: 2500,
+    stats: { bpm: 0.5, stl: 40, blk: 8, usagePct: 30, tsPct: 0.52, anyBox: 1400,
+      wingspan: 201, height: 201, stlPct: 1.0, rebPct: 5, astPct: 11, sos: -0.02 },
+  };
+  const young = statSignatureScore(YOUNG);
+  const volume = statSignatureScore(VOLUME);
+  assert(young.score > volume.score, `YOUNG(${young.score}) should beat VOLUME(${volume.score})`);
+
+  // Edge: invalid sport -> TypeError.
+  let threw = false;
+  try { statSignatureScore({ id: 'x', sport: 'cricket', stats: {} }); } catch (e) { threw = e instanceof TypeError; }
+  assert(threw, 'invalid sport must throw TypeError');
+
+  // Edge: missing stats -> TypeError.
+  threw = false;
+  try { statSignatureScore({ id: 'x', sport: 'football' }); } catch (e) { threw = e instanceof TypeError; }
+  assert(threw, 'missing stats must throw TypeError');
+
+  // Edge: sparse data -> low-confidence result, NO throw, absent != worst.
+  const sparse = statSignatureScore({ id: 's', sport: 'football', stats: { npxG90: 0.5 } });
+  assert(sparse.confidence < 0.3, 'sparse data should be low confidence');
+  assert(sparse.score >= 0 && sparse.score <= 100, 'sparse score in range');
+
+  // Determinism: identical input -> identical output.
+  const a = statSignatureScore(LOW, { leagueStrength: 0.7 });
+  const b = statSignatureScore(LOW, { leagueStrength: 0.7 });
+  assert(JSON.stringify(a) === JSON.stringify(b), 'must be deterministic');
+
+  console.log('OK');
+}
+
+if (require.main === module && process.argv.includes('--selftest')) selftest();
+
+module.exports = { statSignatureScore };
+
+},
+"lib/geneticPropensityScore.js":function(require,module,exports){
+'use strict';
+// ScoutAI/lib/geneticPropensityScore.js
+// PHENOTYPE-PROXY PROPENSITY LAYER — NOT DNA, NOT genetic data, NOT diagnostic.
+// Maps measurable anthro/physical phenotype proxies -> a probabilistic trait-propensity
+// vector. Polygenic, tiny per-variant effects, training/environment-confounded. Always
+// prefer the measured stat over this inference for any decision. See DISCLAIMER export.
+//
+// Pure Node built-ins, zero deps, fully deterministic (no Date/Math.random/IO).
+//
+// ponytail: normalizeMetrics not on disk yet; the 0-100 linear+invert scaling this spec
+// needs is a 3-line local helper, so implemented inline rather than blocking on a require
+// of a non-existent module. Swap to require('./normalizeMetrics.js') once it lands and its
+// signature is fixed.
+
+const DISCLAIMER =
+  'Trait-propensity estimate from measurable phenotype proxies only. NOT genetic data, ' +
+  'NOT DNA-based selection, NOT diagnostic for any individual. Polygenic traits, tiny ' +
+  'per-variant effects, heavily training/environment-dependent and population-confounded. ' +
+  'Use the measured stat, not this inference, for decisions.';
+
+const round2 = (x) => Math.round(x * 100) / 100;
+const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+
+// Default normalization bounds. `inv:true` => lower raw is better (higher score).
+const NORM = {
+  heightCm: { min: 155, max: 205 },
+  wingspanCm: { min: 160, max: 220 },
+  standingReachCm: { min: 200, max: 290 },
+  bodyFatPct: { min: 5, max: 25, inv: true },
+  topSpeedKmh: { min: 24, max: 38 },
+  accel10mS: { min: 1.5, max: 2.6, inv: true },
+  verticalJumpCm: { min: 40, max: 95 },
+  laneAgilityS: { min: 10, max: 13, inv: true },
+  distanceCoveredKm: { min: 6, max: 14 },
+  hrRecovery60s: { min: 10, max: 45 },
+  fitnessDeltaPerMonth: { min: 0, max: 4 },
+  injuryDaysPerSeason: { min: 0, max: 120, inv: true },
+  softTissueIncidentCount: { min: 0, max: 8, inv: true },
+};
+
+// trait -> [ [field, evidenceWeight], ... ]  (strong=1.0, moderate=0.6, weak=0.3)
+const TRAITS = {
+  power: [['verticalJumpCm', 1.0], ['accel10mS', 0.6], ['bodyFatPct', 0.3]],
+  speed: [['topSpeedKmh', 0.6], ['accel10mS', 0.6], ['laneAgilityS', 0.3]],
+  endurance: [['distanceCoveredKm', 0.6], ['hrRecovery60s', 0.6], ['fitnessDeltaPerMonth', 0.6]],
+  stature: [['heightCm', 1.0], ['wingspanCm', 1.0], ['standingReachCm', 0.6]],
+  recovery: [['hrRecovery60s', 0.6], ['fitnessDeltaPerMonth', 0.6]],
+  durability: [['injuryDaysPerSeason', 0.6], ['softTissueIncidentCount', 0.6]],
+};
+
+const TOTAL_POSSIBLE_PROXIES = Object.values(TRAITS)
+  .reduce((n, ps) => n + ps.length, 0); // 16
+
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+const isPlainObject = (o) =>
+  o !== null && typeof o === 'object' && !Array.isArray(o);
+
+// Linear scale to 0-100, clamped, inverted for `inv` fields.
+function normField(field, raw, override) {
+  const base = NORM[field];
+  const bounds = override && override[field] ? override[field] : base;
+  const min = bounds.min, max = bounds.max, inv = base.inv;
+  const span = max - min;
+  if (span === 0) return 0;
+  const t = clamp((raw - min) / span, 0, 1);
+  return round2((inv ? 1 - t : t) * 100);
+}
+
+function geneticPropensityScore(subject, opts) {
+  if (!isPlainObject(subject)) {
+    throw new TypeError('geneticPropensityScore: subject must be a plain object');
+  }
+  const options = isPlainObject(opts) ? opts : {};
+  const override = isPlainObject(options.norm) ? options.norm : null;
+
+  const anthro = isPlainObject(subject.anthro) ? subject.anthro : {};
+  const phys = isPlainObject(subject.phys) ? subject.phys : {};
+  const flat = Object.assign({}, anthro, phys); // phys wins if overlap (none in spec)
+
+  const vector = {};
+  let proxiesUsed = 0;
+  const confs = [];
+
+  for (const trait of Object.keys(TRAITS)) {
+    let wSum = 0;   // Σ weight of present proxies
+    let wAll = 0;   // Σ weight of all defined proxies for trait
+    let acc = 0;    // Σ (norm · weight) of present proxies
+    for (const [field, w] of TRAITS[trait]) {
+      wAll += w;
+      const raw = flat[field];
+      if (!isNum(raw)) continue; // NaN/Infinity/absent => absent, not 0
+      const norm = normField(field, raw, override);
+      acc += norm * w;
+      wSum += w;
+      proxiesUsed += 1;
+    }
+    if (wSum === 0) {
+      vector[trait] = { value: null, confidence: 0 };
+    } else {
+      const confidence = clamp(wSum / wAll, 0, 1);
+      vector[trait] = { value: round2(acc / wSum), confidence: round2(confidence) };
+      confs.push(confidence);
+    }
+  }
+
+  // overallConfidence = mean of non-zero trait confidences, scaled by coverage.
+  const meanConf = confs.length ? confs.reduce((a, b) => a + b, 0) / confs.length : 0;
+  const overallConfidence = round2(meanConf * (proxiesUsed / TOTAL_POSSIBLE_PROXIES));
+
+  return { vector, overallConfidence, proxiesUsed, DISCLAIMER };
+}
+
+geneticPropensityScore.DISCLAIMER = DISCLAIMER;
+
+// ---- self-test -------------------------------------------------------------
+function selftest() {
+  const assert = (c, m) => { if (!c) throw new Error('FAIL: ' + m); };
+
+  // 1) PROOF: value and confidence move INDEPENDENTLY.
+  const A = geneticPropensityScore({
+    anthro: { heightCm: 198, wingspanCm: 212 },
+    phys: { verticalJumpCm: 88 },
+  });
+  // strong single-proxy stature -> high value, partial confidence (2 of 3 proxies)
+  assert(A.vector.stature.value > 80, 'A.stature.value high');
+  assert(A.vector.stature.confidence < 1, 'A.stature.confidence partial');
+  // single strong power proxy -> high value BUT low confidence (1 of 3)
+  assert(A.vector.power.value > 80, 'A.power.value high on lone strong proxy');
+  assert(A.vector.power.confidence < 1, 'A.power.confidence < 1 (only 1/3 proxies)');
+  assert(A.vector.stature.confidence > A.vector.power.confidence,
+    'more-covered trait has higher confidence');
+
+  // subject B: all 3 power proxies present at mid values -> full confidence, mid value
+  const B = geneticPropensityScore({
+    phys: { verticalJumpCm: 67, accel10mS: 2.05, bodyFatPct: 15 },
+  });
+  assert(B.vector.power.confidence === 1, 'B.power.confidence == 1 (all proxies present)');
+  assert(B.vector.power.value < A.vector.power.value,
+    'mid full-confidence value < elite partial-confidence value (independence)');
+
+  // 2) empty subject -> all null, zero confidence, still returns DISCLAIMER
+  const E = geneticPropensityScore({});
+  assert(E.proxiesUsed === 0 && E.overallConfidence === 0, 'empty -> zero coverage');
+  assert(E.vector.speed.value === null && E.vector.speed.confidence === 0, 'empty trait null');
+  assert(E.DISCLAIMER === DISCLAIMER, 'empty still carries DISCLAIMER');
+
+  // 3) NaN / Infinity treated as absent
+  const N = geneticPropensityScore({ anthro: { heightCm: NaN, wingspanCm: Infinity, standingReachCm: 245 } });
+  assert(N.vector.stature.value !== null, 'valid proxy survives');
+  assert(N.vector.stature.confidence === 0.23,
+    'only standingReach(0.6)/2.6 counts, NaN+Inf absent'); // round2(0.6/2.6)
+
+  // 4) out-of-range clamped by normalization, not rejected
+  const C = geneticPropensityScore({ anthro: { heightCm: 300 } }); // > max
+  assert(C.vector.stature.value === 100, 'over-max height clamps to 100');
+
+  // 5) opts.norm override changes scaling
+  const O = geneticPropensityScore(
+    { anthro: { heightCm: 180 } },
+    { norm: { heightCm: { min: 175, max: 185 } } },
+  );
+  assert(O.vector.stature.value === 50, 'override bounds map 180 -> 50');
+
+  // 6) TypeError on non-object subject
+  let threw = false;
+  try { geneticPropensityScore(null); } catch (e) { threw = e instanceof TypeError; }
+  assert(threw, 'non-object subject throws TypeError');
+
+  console.log('OK');
+}
+
+if (require.main === module && process.argv.includes('--selftest')) selftest();
+
+module.exports = { geneticPropensityScore, DISCLAIMER };
+
+},
+"lib/normalizeMetrics.js":function(require,module,exports){
+function normalizeMetrics(players) {
+  if (!players || players.length === 0) return [];
+  const metricCount = players[0].rawMetrics.length;
+  const mins = new Array(metricCount).fill(Infinity);
+  const maxs = new Array(metricCount).fill(-Infinity);
+  for (const player of players) {
+    for (let i = 0; i < metricCount; i++) {
+      const val = player.rawMetrics[i];
+      if (val < mins[i]) mins[i] = val;
+      if (val > maxs[i]) maxs[i] = val;
+    }
+  }
+  return players.map(player => {
+    const normalizedMetrics = new Array(metricCount);
+    for (let i = 0; i < metricCount; i++) {
+      if (mins[i] === maxs[i]) {
+        normalizedMetrics[i] = 50;
+      } else {
+        normalizedMetrics[i] = ((player.rawMetrics[i] - mins[i]) / (maxs[i] - mins[i])) * 100;
+      }
+    }
+    return { id: player.id, normalizedMetrics };
+  });
+}
+module.exports = { normalizeMetrics };
+},
+"lib/faceEnergyProfile.js":function(require,module,exports){
+// faceEnergyProfile.js — ScoutAI narrative layer
+//
+// HEURISTIC / NARRATIVE LAYER — NOT VALIDATED PREDICTION.
+// The chochmat-panim mappings below are folk/modern physiognomy loosely
+// derived from Kabbalistic sources (Zohar / Idra Rabba themes). They are a
+// storytelling/tuning layer with hand-picked, TUNABLE weights — not a
+// validated model of ability or character. sourceTag on each row is honest
+// about provenance: "classical" = traceable to Zohar/Idra themes,
+// "modern" = contemporary Hebrew popularizations, "folk" = Western
+// personology wearing a Kabbalah label. Do not treat any output as science.
+//
+// Node >=18, zero deps, pure & deterministic (no Date/random/IO).
+
+'use strict';
+
+const DISCLAIMER =
+  'HEURISTIC: chochmat-panim narrative layer. Mappings are folk/modern physiognomy loosely derived from Kabbalistic sources; NOT validated science, NOT a prediction of ability or character.';
+
+// Fixed dim order — used for tie-breaking dominant and neutral iteration.
+const DIMS = ['drive', 'resilience', 'leadership', 'intensity', 'discipline', 'composure'];
+
+// Each feature: { <dim>: weight, ... , sourceTag }
+const WEIGHTS = {
+  foreheadHeight:   { drive: 0.35, discipline: 0.10, sourceTag: 'modern' },
+  foreheadWidth:    { composure: 0.30, sourceTag: 'modern' },
+  foreheadLines:    { discipline: 0.35, sourceTag: 'modern' },
+  eyeSize:          { intensity: 0.30, sourceTag: 'modern' },
+  eyeSpacing:       { composure: 0.35, sourceTag: 'modern' },
+  eyeProtrusion:    { intensity: 0.25, sourceTag: 'modern' },
+  browDensity:      { leadership: 0.40, sourceTag: 'folk' },
+  browTilt:         { composure: -0.25, sourceTag: 'folk' },
+  noseWidth:        { intensity: 0.25, sourceTag: 'modern' },
+  noseBridgeConvex: { drive: 0.30, sourceTag: 'modern' },
+  noseLength:       { discipline: -0.15, sourceTag: 'modern' },
+  lipFullness:      { composure: 0.20, sourceTag: 'classical' },
+  jawSquareness:    { resilience: 0.60, sourceTag: 'classical' },
+  chinProjection:   { resilience: 0.40, leadership: 0.35, sourceTag: 'classical' },
+  faceAspect:       { leadership: 0.25, drive: -0.15, sourceTag: 'modern' },
+  earTilt:          { leadership: 0.20, sourceTag: 'folk' },
+  hairCurl:         { intensity: 0.20, sourceTag: 'classical' },
+};
+
+function isPlainObject(o) {
+  return typeof o === 'object' && o !== null && !Array.isArray(o);
+}
+
+// Deep-merge opts.weights over defaults, one level of feature -> {dim/sourceTag}.
+function mergeWeights(override) {
+  if (override === undefined) return WEIGHTS;
+  if (!isPlainObject(override)) throw new TypeError('opts.weights must be a plain object');
+  const merged = {};
+  for (const f of Object.keys(WEIGHTS)) merged[f] = { ...WEIGHTS[f] };
+  for (const f of Object.keys(override)) {
+    const row = override[f];
+    if (!isPlainObject(row)) throw new TypeError(`opts.weights.${f} must be a plain object`);
+    merged[f] = { ...(merged[f] || {}), ...row };
+    // Validate numeric dim weights in the (possibly new) row.
+    for (const k of Object.keys(row)) {
+      if (k === 'sourceTag') continue;
+      if (typeof row[k] !== 'number' || !Number.isFinite(row[k])) {
+        throw new RangeError(`opts.weights.${f}.${k} must be a finite number`);
+      }
+    }
+  }
+  return merged;
+}
+
+function round1(n) {
+  return Math.round(n * 10) / 10;
+}
+
+function faceEnergyProfile(features, opts = {}) {
+  if (!isPlainObject(features)) throw new TypeError('features must be a plain object');
+  if (!isPlainObject(opts)) throw new TypeError('opts must be a plain object');
+
+  const weights = mergeWeights(opts.weights);
+
+  // Validate present, known features.
+  for (const k of Object.keys(features)) {
+    if (!(k in weights)) continue; // unknown keys ignored silently
+    const v = features[k];
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) {
+      throw new RangeError(`feature ${k} out of [0,1]`);
+    }
+  }
+
+  const energy = {};
+  const notes = [DISCLAIMER];
+
+  // Accumulate per-dim weighted sums over present features only.
+  const num = {}; // Σ(w*s)
+  const den = {}; // Σ|w|
+  for (const d of DIMS) { num[d] = 0; den[d] = 0; }
+
+  const usedFeatures = [];
+  for (const k of Object.keys(weights)) {
+    if (!(k in features)) continue;
+    usedFeatures.push(k);
+    const f = features[k];
+    const s = 2 * f - 1;
+    const row = weights[k];
+    for (const d of Object.keys(row)) {
+      if (d === 'sourceTag') continue;
+      const w = row[d];
+      if (!(d in num)) continue; // ignore unknown dims from overrides
+      num[d] += w * s;
+      den[d] += Math.abs(w);
+    }
+  }
+
+  const neutralNotes = [];
+  for (const d of DIMS) {
+    if (den[d] === 0) {
+      energy[d] = 50;
+      neutralNotes.push(`${d}: no input features, neutral 50`);
+      continue;
+    }
+    let score = 50 + 50 * (num[d] / den[d]);
+    if (score < 0) score = 0;
+    if (score > 100) score = 100;
+    energy[d] = round1(score);
+  }
+
+  // Provenance notes for used non-classical features (in fixed feature order).
+  for (const k of Object.keys(weights)) {
+    if (!usedFeatures.includes(k)) continue;
+    if (weights[k].sourceTag === 'classical') continue;
+    notes.push(`${k}: modern/folk mapping, not classical text`);
+  }
+  for (const n of neutralNotes) notes.push(n);
+
+  // Dominant: highest score, tie -> first in DIMS order.
+  let dominant = null;
+  if (usedFeatures.length > 0 && den && DIMS.some((d) => den[d] > 0)) {
+    let best = -Infinity;
+    for (const d of DIMS) {
+      if (energy[d] > best) { best = energy[d]; dominant = d; }
+    }
+  }
+
+  return { energy, dominant, notes, disclaimer: DISCLAIMER };
+}
+
+module.exports = { faceEnergyProfile, WEIGHTS, DISCLAIMER };
+
+// ---- self-check ----
+if (require.main === module && process.argv.includes('--selftest')) {
+  const assert = require('node:assert');
+
+  // PROOF: jawSquareness=1 alone -> resilience > 90.
+  const r1 = faceEnergyProfile({ jawSquareness: 1 });
+  assert(r1.energy.resilience > 90, `resilience should be >90, got ${r1.energy.resilience}`);
+  assert.strictEqual(r1.dominant, 'resilience');
+
+  // jawSquareness=0 -> resilience < 10.
+  const r2 = faceEnergyProfile({ jawSquareness: 0 });
+  assert(r2.energy.resilience < 10, `resilience should be <10, got ${r2.energy.resilience}`);
+
+  // empty -> all 50, dominant null.
+  const r3 = faceEnergyProfile({});
+  for (const d of DIMS) assert.strictEqual(r3.energy[d], 50);
+  assert.strictEqual(r3.dominant, null);
+  assert.strictEqual(r3.notes[0], DISCLAIMER);
+
+  // out-of-range -> RangeError.
+  assert.throws(() => faceEnergyProfile({ eyeSize: 1.5 }), RangeError);
+
+  // non-object -> TypeError; unknown keys ignored.
+  assert.throws(() => faceEnergyProfile(null), TypeError);
+  const r4 = faceEnergyProfile({ bogusKey: 0.9, jawSquareness: 0.75 });
+  assert.strictEqual(r4.dominant, 'resilience');
+
+  // Determinism: byte-identical output.
+  const inp = { jawSquareness: 0.75, chinProjection: 0.7, foreheadHeight: 0.65 };
+  assert.strictEqual(JSON.stringify(faceEnergyProfile(inp)), JSON.stringify(faceEnergyProfile(inp)));
+
+  console.log('OK');
+}
+
+},
+"lib/computePlayerValueIndex.js":function(require,module,exports){
+function computePlayerValueIndex(playerStats, benchmarks, ageGroup) {
+  const validAgeGroups = ['U12', 'U14', 'U16', 'U18', 'U20'];
+  if (!validAgeGroups.includes(ageGroup)) {
+    throw new Error('Invalid ageGroup');
+  }
+  const stats = {
+    goals: Number.isFinite(playerStats.goals) ? playerStats.goals : 0,
+    assists: Number.isFinite(playerStats.assists) ? playerStats.assists : 0,
+    passesCompleted: Number.isFinite(playerStats.passesCompleted) ? playerStats.passesCompleted : 0,
+    keyPasses: Number.isFinite(playerStats.keyPasses) ? playerStats.keyPasses : 0,
+    dribbles: Number.isFinite(playerStats.dribbles) ? playerStats.dribbles : 0,
+    speed90thPercentile: Number.isFinite(playerStats.speed90thPercentile) ? playerStats.speed90thPercentile : 0,
+    defensiveActions: Number.isFinite(playerStats.defensiveActions) ? playerStats.defensiveActions : 0
+  };
+  const bench = {
+    goalsAvg: benchmarks.goalsAvg,
+    assistsAvg: benchmarks.assistsAvg,
+    passesCompletedAvg: benchmarks.passesCompletedAvg,
+    keyPassesAvg: benchmarks.keyPassesAvg,
+    dribblesAvg: benchmarks.dribblesAvg,
+    speed90thPercentileAvg: benchmarks.speed90thPercentileAvg,
+    defensiveActionsAvg: benchmarks.defensiveActionsAvg
+  };
+  for (const key in bench) {
+    if (!Number.isFinite(bench[key]) || bench[key] <= 0) {
+      throw new Error('Benchmark cannot be zero');
+    }
+  }
+  const ratios = [
+    stats.goals / bench.goalsAvg,
+    stats.assists / bench.assistsAvg,
+    stats.passesCompleted / bench.passesCompletedAvg,
+    stats.keyPasses / bench.keyPassesAvg,
+    stats.dribbles / bench.dribblesAvg,
+    stats.speed90thPercentile / bench.speed90thPercentileAvg,
+    stats.defensiveActions / bench.defensiveActionsAvg
+  ];
+  const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+  const index = Math.min(100, Math.max(0, avgRatio * 50));
+  return Math.round(index * 100) / 100;
+}
+module.exports = { computePlayerValueIndex };
+
+}};const __cache={};function __require(id,from){if(id.startsWith('.')){id=(from.slice(0,from.lastIndexOf('/')+1)+id).split('/').reduce((a,p)=>p==='..'?(a.pop(),a):p==='.'?a:(a.push(p),a),[]).join('/')}if(!id.endsWith('.js'))id+='.js';if(__cache[id])return __cache[id].exports;const fn=__modules[id];if(!fn)throw new Error('Module not bundled: '+id);const module={exports:{}};__cache[id]=module;const localRequire=req=>__require(req,id);localRequire.main=null;fn(localRequire,module,module.exports);return module.exports}
 const Scout={...__require('lib/impactScore.js'),...__require('lib/rankProspects.js')};
 const demoProspects=[{id:'tal-9',sport:'football',position:'FW',age:19,minutes:900,stats:{pressures90:8,tackles:18,interceptions:9,progPasses:85,progCarries:110,sca90:4.9,carriesIntoBox90:4.2,gca90:.55,npxG90:.42},subject:{heightCm:181,weightKg:74,sprint30mSec:4.02,verticalJumpCm:56}},{id:'maya-6',sport:'football',position:'CM',age:20,minutes:900,stats:{pressures90:11,tackles:31,interceptions:38,progPasses:155,progCarries:72,sca90:5.5,carriesIntoBox90:2.1,gca90:.42,npxG90:.18},subject:{heightCm:169,weightKg:62,sprint30mSec:4.2,verticalJumpCm:48}},{id:'ron-4',sport:'football',position:'CB',age:18,minutes:900,stats:{pressures90:7,tackles:45,interceptions:52,progPasses:120,progCarries:28,sca90:1.4,carriesIntoBox90:.3,gca90:.08,npxG90:.04},subject:{heightCm:188,weightKg:82,sprint30mSec:4.35,verticalJumpCm:61}}];
 const $=id=>document.getElementById(id),n=id=>Number($(id).value)||0,esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));function run(e){if(e)e.preventDefault();try{const player={minutes:900,stats:{pressures90:n('pressures'),tackles:n('defense')*.58,interceptions:n('defense')*.42,progPasses:n('progressive')*.62,progCarries:n('progressive')*.38,sca90:n('sca'),carriesIntoBox90:3,gca90:.4,npxG90:.28}};const impact=Scout.impactScore(player);const ranked=Scout.rankProspects(demoProspects,{limit:3});$('result').innerHTML=`<div class="score"><div class="dial" style="--score:${impact.score}"><strong>${impact.score}</strong></div><div><div class="muted">IMPACT SCORE</div><h2>${esc($('name').value)}</h2><div class="muted">מתוך 100 · שכבת האנרגיה כבויה ללא נתוני CV</div></div></div><div class="components">${[['נחישות',impact.components.grit],['מעורבות',impact.components.involvement],['קלאץ׳',impact.components.clutch]].map(x=>`<div class="metric"><span>${x[0]}</span><b>${x[1]}</b></div>`).join('')}</div><div class="ranking"><h2>דירוג פרוספקטים לדוגמה</h2>${ranked.map(p=>`<div class="player"><div class="rank">#${p.rank}</div><div><b>${p.id}</b><div class="muted">ביטחון ${Math.round(p.confidence*100)}% · פער ערך ${p.valueGap}</div></div><span class="tag">${p.tier} · ${p.index}</span></div>`).join('')}</div>`}catch(err){$('result').innerHTML=`<div class="error">${esc(err.message)}</div>`}}$('form').addEventListener('submit',run);run();
