@@ -1,16 +1,15 @@
-# Graph Report - ScoutAI  (2026-07-21)
+# Graph Report - .  (2026-07-20)
 
 ## Corpus Check
-- 69 files · ~34,644 words
-- Verdict: corpus is large enough that graph structure adds value.
+- cluster-only mode — file stats not available
 
 ## Summary
-- 327 nodes · 346 edges · 66 communities (51 shown, 15 thin omitted)
+- 319 nodes · 339 edges · 65 communities (50 shown, 15 thin omitted)
 - Extraction: 84% EXTRACTED · 16% INFERRED · 0% AMBIGUOUS · INFERRED: 55 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `68021c53`
+- Built from commit: `bbcb917d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -53,7 +52,6 @@
 - DISCLAIMER
 - lib/scientificUpsideIndex.js
 - Narrative Face Energy
-- ScoutAI – דף אימות שוק (מקסימום 350 מילים)
 
 ## God Nodes (most connected - your core abstractions)
 1. `Scientific Upside Index` - 19 edges
@@ -63,9 +61,9 @@
 5. `geneticPropensityScore()` - 7 edges
 6. `scientificUpsideIndex()` - 7 edges
 7. `convertExternalEventLog()` - 6 edges
-8. `ScoutAI – דף אימות שוק (מקסימום 350 מילים)` - 6 edges
-9. `parseOptaJson()` - 5 edges
-10. `parseTimestamp()` - 5 edges
+8. `parseOptaJson()` - 5 edges
+9. `parseTimestamp()` - 5 edges
+10. `normalizeLocation()` - 5 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Neymar` --conceptually_related_to--> `Scientific Upside Index`  [EXTRACTED]
@@ -87,7 +85,7 @@
 - **Top 12 Impact Score 2018** — player_lozano, player_neymar, player_hazard, player_sigurdsson, player_coutinho, player_de_bruyne, player_messi, player_vela, player_iniesta, player_golovin, player_mbappe, player_inui [EXTRACTED 1.00]
 - **Scientific Upside Index Layers** — lib_statSignatureScore_statSignatureScore, lib_geneticPropensityScore_geneticPropensityScore, narrative_face_energy [INFERRED 0.75]
 
-## Communities (66 total, 15 thin omitted)
+## Communities (65 total, 15 thin omitted)
 
 ### Community 0 - "convertExternalEventLog.test.js"
 Cohesion: 0.08
@@ -181,12 +179,8 @@ Nodes (3): detectScoutBias(), getCriticalZ(), normalCDF()
 Cohesion: 0.83
 Nodes (3): computeIoU(), cosineSimilarity(), verifyPlayerIdentityConsistency()
 
-### Community 65 - "ScoutAI – דף אימות שוק (מקסימום 350 מילים)"
-Cohesion: 0.25
-Nodes (7): 1. ICP מדויק (ישראל), 2. מחיר + מודל, 3. זווית מול המתחרה המרכזי, 4. תוכנית 100 המשתמשים הראשונים (תקציב 0, ישראל), 5. קריטריון המשך/פיבוט/הריגה (30 יום), ScoutAI — Market Validation (auto, DeepSeek 2026-07-20), ScoutAI – דף אימות שוק (מקסימום 350 מילים)
-
 ## Knowledge Gaps
-- **139 isolated node(s):** `a`, `{avgRating}`, `assert`, `{ calculatePlayerPercentile }`, `player` (+134 more)
+- **133 isolated node(s):** `a`, `{avgRating}`, `assert`, `{ calculatePlayerPercentile }`, `player` (+128 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -194,13 +188,13 @@ Nodes (7): 1. ICP מדויק (ישראל), 2. מחיר + מודל, 3. זווית
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Scientific Upside Index` connect `Scientific Upside Index` to `Impact Score`?**
-  _High betweenness centrality (0.011) - this node is a cross-community bridge._
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **Why does `Impact Score` connect `Impact Score` to `Scientific Upside Index`?**
   _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **Why does `Neymar` connect `Impact Score` to `Scientific Upside Index`?**
   _High betweenness centrality (0.004) - this node is a cross-community bridge._
 - **What connects `a`, `{avgRating}`, `assert` to the rest of the system?**
-  _139 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _133 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `convertExternalEventLog.test.js` be split into smaller, more focused modules?**
   _Cohesion score 0.08 - nodes in this community are weakly interconnected._
 - **Should `Scientific Upside Index` be split into smaller, more focused modules?**

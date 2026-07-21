@@ -335,9 +335,9 @@
     "semantic_hash": "cbcbaf0763302b8cca853c2b04793d23"
   },
   "index.html": {
-    "mtime": 1784581925.5900996,
-    "ast_hash": "6749d7b54234ea15af8bcb3d1be863ef",
-    "semantic_hash": ""
+    "mtime": 1784569748.2701237,
+    "ast_hash": "9aa0baad13a4431c8e08ea6a85ff86f7",
+    "semantic_hash": "9aa0baad13a4431c8e08ea6a85ff86f7"
   },
   "lib/README.md": {
     "mtime": 1784217854.34626,
@@ -352,11 +352,6 @@
   ".github/workflows/validate.yml": {
     "mtime": 1784200865.3955503,
     "ast_hash": "9da0300cccee1a345810e1b85468cee0",
-    "semantic_hash": ""
-  },
-  "VALIDATION.md": {
-    "mtime": 1784581403.888708,
-    "ast_hash": "3c180232b9da547b11925723a91f167a",
     "semantic_hash": ""
   }
 }
