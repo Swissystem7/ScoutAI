@@ -6,6 +6,7 @@
 <title>ScoutAI | מעבדת סקאוטינג</title>
 <style>
 :root{color-scheme:light dark;--ink:#17211b;--muted:#637168;--paper:#f3f6f1;--card:#fff;--accent:#176b48;--accent-soft:#e3f2e8;--line:#dbe4dc;--hero:#10281d;--hero-ink:#f4fff8}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 85% 0,#d9eee1,transparent 32%),var(--paper);color:var(--ink);font-family:Arial,sans-serif;min-height:100vh}.shell{max-width:1060px;margin:auto;padding:28px 20px 60px}.proof{overflow:hidden;background:linear-gradient(135deg,var(--hero),#1d563c);color:var(--hero-ink);border-radius:28px;padding:clamp(24px,5vw,52px);box-shadow:0 24px 60px #10281d2b;margin-bottom:38px}.proof .eyebrow{color:#8ce3b5}.proof h1{max-width:850px;font-size:clamp(2.25rem,6vw,4.8rem);line-height:1.02;margin:10px 0 16px}.lead{max-width:720px;font-size:clamp(1rem,2vw,1.25rem);line-height:1.65;color:#d6eadf}.proof-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:28px}.proof-card{background:#ffffff12;border:1px solid #ffffff25;border-radius:20px;padding:22px}.proof-card h2{font-size:clamp(1.15rem,2.5vw,1.55rem);line-height:1.5}.top-five{list-style:none;padding:0;margin:16px 0 0;counter-reset:rank}.top-five li{counter-increment:rank;display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #ffffff1f}.top-five li:before{content:"#" counter(rank);font-weight:900;color:#8ce3b5}.top-five span{margin-inline-start:auto}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.kpi{background:#ffffff12;border-radius:15px;padding:16px;text-align:center}.kpi strong{display:block;font-size:clamp(1.4rem,3vw,2rem)}.cta{display:inline-block;background:#f0c75e;color:#17211b;text-decoration:none;border-radius:12px;padding:14px 22px;font-weight:900}.attribution{margin:14px 0 0;color:#bdd2c5;font-size:.78rem;direction:ltr;text-align:right}.lab-head{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:24px}.eyebrow{color:var(--accent);font-size:.82rem;font-weight:800;letter-spacing:.12em}.lab-head h2{font-size:clamp(1.8rem,4vw,3rem);margin:7px 0}.lab-head p{max-width:520px;color:var(--muted);line-height:1.6}.grid{display:grid;grid-template-columns:340px 1fr;gap:18px}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 12px 35px #213b2910}h2{margin:0 0 16px;font-size:1.1rem}label{display:block;margin:13px 0 6px;color:var(--muted);font-size:.86rem}input{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--card);color:var(--ink)}button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:12px;background:var(--accent);color:white;font-weight:800;cursor:pointer}.score{display:flex;align-items:center;gap:18px;padding-bottom:18px;border-bottom:1px solid var(--line)}.dial{width:104px;height:104px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--accent) calc(var(--score)*1%),#e5ebe6 0);position:relative}.dial:after{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--card)}.dial strong{z-index:1;font-size:1.7rem}.components{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:15px}.metric,.player{padding:12px;background:var(--paper);border-radius:12px}.metric span,.muted{font-size:.78rem;color:var(--muted)}.metric b{display:block;margin-top:5px}.ranking{margin-top:18px}.player{display:grid;grid-template-columns:38px 1fr auto;align-items:center;margin:8px 0}.rank{color:var(--accent);font-weight:900}.tag{padding:5px 8px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font-size:.74rem}.error{color:#a33131;background:#fff1f1;padding:12px;border-radius:10px}@media(prefers-color-scheme:dark){:root{--ink:#edf5ef;--muted:#a9baae;--paper:#101713;--card:#19231d;--accent:#6fd39b;--accent-soft:#203d2d;--line:#304238;--hero:#153523;--hero-ink:#f4fff8}body{background:radial-gradient(circle at 85% 0,#173a28,transparent 32%),var(--paper)}}@media(max-width:760px){.proof-grid{grid-template-columns:1fr}.lab-head{display:block}.grid{grid-template-columns:1fr}.components,.kpis{grid-template-columns:1fr 1fr}.kpi:last-child{grid-column:1/-1}}@media(max-width:430px){.components,.kpis{grid-template-columns:1fr}.kpi:last-child{grid-column:auto}.proof{border-radius:20px}.top-five li{font-size:.9rem}}
+.scan-section{margin-top:34px}.scan-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}.scan-toolbar button{width:auto;margin:0;background:var(--accent-soft);color:var(--accent);border:1px solid var(--line)}.scan-toolbar button.active{background:var(--accent);color:#fff}.scan-note{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--paper);line-height:1.6}.scan-board{display:grid;gap:9px;margin-top:16px}.scan-row{display:grid;grid-template-columns:45px minmax(120px,1fr) 90px 90px;gap:10px;align-items:center;padding:12px;background:var(--paper);border-radius:12px}.evidence{font-size:.72rem;padding:3px 7px;border-radius:99px;display:inline-block}.measured{background:#dff4e7;color:#18633a}.inferred{background:#fff0cc;color:#855b00}.scan-score{font-size:1.2rem;font-weight:900;color:var(--accent)}@media(max-width:600px){.scan-row{grid-template-columns:35px 1fr 70px}.scan-row>div:last-child{grid-column:2/-1}}
 </style>
 </head>
 <body>
@@ -64,6 +65,15 @@
 <div id="result">
 </div>
 </div>
+</section>
+<section class="card scan-section" aria-labelledby="scan-title">
+<div class="eyebrow">TALENT SCAN / BATCH</div>
+<h2 id="scan-title">סריקת דאטה מאוחדת</h2>
+<p class="muted">אות סטטיסטי מדיד הוא השכבה הראשית. וידאו, אנרגיה ושפת גוף הם אותות משניים המסומנים תמיד כהסקת AI.</p>
+<div class="scan-toolbar" id="scanModes">
+<button type="button" data-mode="prove">הוכחה</button><button type="button" data-mode="rank" class="active">דירוג מלא</button><button type="button" data-mode="scout">סקאוט נסתר</button><button type="button" data-mode="check">בדיקת כיול</button>
+</div>
+<div id="scanOutput" aria-live="polite"></div>
 </section>
 </main>
 <script>
@@ -1294,6 +1304,25 @@ const $=id=>document.getElementById(id),n=id=>Number($(id).value)||0,esc=s=>Stri
 </div>
 <span class="tag">${p.tier} · ${p.index}</span>
 </div>`).join('')}</div>`}catch(err){$('result').innerHTML=`<div class="error">${esc(err.message)}</div>`}}$('form').addEventListener('submit',run);run();
+
+// Browser-inline contract equivalent of lib/scanPipeline.js: no API, no secrets.
+const scanBatch=[
+ {...demoProspects[0],name:"נועם — גריינדר",leagueStrength:.55,statScore:43,momentum:91,expectedRank:2},
+ {...demoProspects[1],id:'flash-control',name:"כנף נוצץ (control)",leagueStrength:1,statScore:87,momentum:24,expectedRank:3,control:true},
+ {...demoProspects[2],id:'hidden-gem',name:"מאיה — פנינה נסתרת",leagueStrength:.35,statScore:31,momentum:96,expectedRank:1},
+ {...demoProspects[2],id:'stable-cb',name:"רון — בלם יציב",leagueStrength:.8,statScore:68,momentum:61,expectedRank:4}
+];
+function runScan(players,{mode}){
+ const source=new Map(players.map(p=>[p.id,p]));
+ const strengths=Object.fromEntries(players.map(p=>[p.id,p.leagueStrength]));
+ const board=Scout.rankProspects(players,{leagueStrength:strengths}).map(r=>{const p=source.get(r.id);return {...r,...p,intangible:r.breakdown&&r.breakdown.genetic?r.breakdown.genetic.value:null,lowVisibility:p.leagueStrength<=.65||p.statScore<=45}});
+ if(mode==='prove'){const c=board.find(p=>p.control),g=board.filter(p=>!p.control&&p.statScore<c.statScore);return {board,note:`טענה ניתנת להפרכה: ${g.every(p=>p.rank<c.rank)?'עברה':'נכשלה'} — הגריינדרים בעלי הסטט הנמוך אמורים לעקוף את ה-control.`}}
+ if(mode==='scout'){const hidden=board.filter(p=>p.lowVisibility).sort((a,b)=>b.valueGap-a.valueGap);return {board:hidden,note:`פנינה נסתרת: ${hidden[0].name}. סוננו ${hidden.length} שחקנים בעלי חשיפה נמוכה.`}}
+ if(mode==='check'){const bad=board.filter(p=>p.expectedRank!==p.rank);return {board,note:`בדיקת כיול: ${bad.length?'זוהו '+bad.length+' חריגות דירוג':'כל התוויות תואמות'}. זהו regression guard.`}}
+ return {board,note:`דורגו ${board.length} שחקנים באמצעות rankProspects ו-scientificUpsideIndex. משקל הסטט המדיד נשמר על 72% לפחות.`};
+}
+function renderScan(mode){const out=runScan(scanBatch,{mode});$('scanOutput').innerHTML=`<div class="scan-note">${esc(out.note)}</div><div class="scan-board">${out.board.map(p=>`<div class="scan-row"><b>#${p.rank}</b><div><b>${esc(p.name)}</b><br><span class="evidence measured">מדיד · סטט ${p.statScore}</span> <span class="evidence inferred">הסקת AI · ${p.intangible==null?'אין נתון':p.intangible}</span></div><div class="scan-score">${p.index}</div><div class="muted">ליגה ${Math.round(p.leagueStrength*100)}%</div></div>`).join('')}</div>`}
+$('scanModes').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(!b)return;$('scanModes').querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));renderScan(b.dataset.mode)});renderScan('rank');
 </script>
 </body>
 </html>
