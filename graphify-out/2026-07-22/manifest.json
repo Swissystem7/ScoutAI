@@ -270,9 +270,9 @@
     "semantic_hash": "f7ad6e8ca846493d13b42903a64db049"
   },
   "lib/scoutUpsideIndex.js": {
-    "mtime": 1784644454.2234664,
-    "ast_hash": "adf3e5d827c1761fd8edd603472eee75",
-    "semantic_hash": ""
+    "mtime": 1784558034.325835,
+    "ast_hash": "69d8977a41c9f81806b346e1aa9967c8",
+    "semantic_hash": "69d8977a41c9f81806b346e1aa9967c8"
   },
   "lib/statSignatureScore.js": {
     "mtime": 1784422871.9179592,
@@ -357,81 +357,6 @@
   "VALIDATION.md": {
     "mtime": 1784581403.888708,
     "ast_hash": "3c180232b9da547b11925723a91f167a",
-    "semantic_hash": ""
-  },
-  "lib/anonymizePlayerData.js": {
-    "mtime": 1784601963.8297656,
-    "ast_hash": "0ec30129798ddb8b4fd801f0aecfb730",
-    "semantic_hash": ""
-  },
-  "lib/applyReferralDiscount.js": {
-    "mtime": 1784673968.092139,
-    "ast_hash": "02949c0706b4a52b79b4ecbd253cd2fc",
-    "semantic_hash": ""
-  },
-  "lib/autoAssignPlayersToRoster.js": {
-    "mtime": 1784630763.5142932,
-    "ast_hash": "b8a259ff855ce7577997b9c1d725f218",
-    "semantic_hash": ""
-  },
-  "lib/bulkImportPlayers.js": {
-    "mtime": 1784616365.063734,
-    "ast_hash": "3f87a9f7e9b3003dbc8b6c1cd6119c93",
-    "semantic_hash": ""
-  },
-  "lib/calculateScoutReliabilityScore.js": {
-    "mtime": 1784601964.4703891,
-    "ast_hash": "d27eb3735cf344c75bb9445b0bbfe694",
-    "semantic_hash": ""
-  },
-  "lib/computeVideoIntegrityHash.js": {
-    "mtime": 1784601962.5883586,
-    "ast_hash": "1f595511267f2add27ab3c082e12aeb2",
-    "semantic_hash": ""
-  },
-  "lib/createPlayerHighlightClip.js": {
-    "mtime": 1784673966.8092318,
-    "ast_hash": "1077b2e9aea2d04d318eb5823996f29f",
-    "semantic_hash": ""
-  },
-  "lib/estimateTransferValue.js": {
-    "mtime": 1784645167.9617105,
-    "ast_hash": "2d759803498eaf8b40cd3ae98310f003",
-    "semantic_hash": ""
-  },
-  "lib/exportEventClip.js": {
-    "mtime": 1784659570.8261406,
-    "ast_hash": "3d0dd2ffe8597a7476e3112f596e09a9",
-    "semantic_hash": ""
-  },
-  "lib/exportPlayerComparisonReport.js": {
-    "mtime": 1784645168.5206606,
-    "ast_hash": "267f997beab198f11ed2946fcfef0ebf",
-    "semantic_hash": ""
-  },
-  "lib/extractPlayerClips.js": {
-    "mtime": 1784616363.7468112,
-    "ast_hash": "7633b38854e81eaf947880d0ba2ca39e",
-    "semantic_hash": ""
-  },
-  "lib/scanningScore.js": {
-    "mtime": 1784639622.9756818,
-    "ast_hash": "b04245a5d24cdcd0bd8a830a4f0458ef",
-    "semantic_hash": ""
-  },
-  "lib/scrubPII.js": {
-    "mtime": 1784637965.76443,
-    "ast_hash": "02fa5c392ce86fc8a2803fbc4b93593c",
-    "semantic_hash": ""
-  },
-  "lib/signReport.js": {
-    "mtime": 1784637964.116006,
-    "ast_hash": "a2ba82d1e4397b42d76cfea15463b652",
-    "semantic_hash": ""
-  },
-  "lib/synchronizeMatchVideos.js": {
-    "mtime": 1784645167.2352839,
-    "ast_hash": "5391d34d9104f61a22094054310d58be",
     "semantic_hash": ""
   }
 }

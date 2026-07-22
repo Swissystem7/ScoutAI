@@ -64,20 +64,5 @@
   "62": "lib/scientificUpsideIndex.js",
   "63": "Narrative Face Energy",
   "64": "README.md",
-  "65": "ScoutAI – דף אימות שוק (מקסימום 350 מילים)",
-  "66": "estimateTransferValue.js",
-  "67": "exportEventClip.js",
-  "68": "applyReferralDiscount.js",
-  "69": "extractPlayerClips.js",
-  "70": "synchronizeMatchVideos.js",
-  "71": "createPlayerHighlightClip.js",
-  "72": "exportPlayerComparisonReport.js",
-  "73": "scanningScore.js",
-  "74": "autoAssignPlayersToRoster.js",
-  "75": "computeVideoIntegrityHash.js",
-  "76": "signReport.js",
-  "77": "anonymizePlayerData.js",
-  "78": "bulkImportPlayers.js",
-  "79": "calculateScoutReliabilityScore.js",
-  "80": "scrubPII.js"
+  "65": "ScoutAI – דף אימות שוק (מקסימום 350 מילים)"
 }

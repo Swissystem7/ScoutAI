@@ -1,16 +1,16 @@
-# Graph Report - ScoutAI  (2026-07-22)
+# Graph Report - ScoutAI  (2026-07-21)
 
 ## Corpus Check
-- 84 files · ~38,857 words
+- 69 files · ~34,644 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 389 nodes · 405 edges · 81 communities (62 shown, 19 thin omitted)
-- Extraction: 82% EXTRACTED · 18% INFERRED · 0% AMBIGUOUS · INFERRED: 71 edges (avg confidence: 0.5)
+- 327 nodes · 346 edges · 66 communities (51 shown, 15 thin omitted)
+- Extraction: 84% EXTRACTED · 16% INFERRED · 0% AMBIGUOUS · INFERRED: 55 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4c336e94`
+- Built from commit: `68021c53`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -54,17 +54,6 @@
 - lib/scientificUpsideIndex.js
 - Narrative Face Energy
 - ScoutAI – דף אימות שוק (מקסימום 350 מילים)
-- estimateTransferValue.js
-- exportEventClip.js
-- applyReferralDiscount.js
-- extractPlayerClips.js
-- synchronizeMatchVideos.js
-- createPlayerHighlightClip.js
-- exportPlayerComparisonReport.js
-- scanningScore.js
-- autoAssignPlayersToRoster.js
-- computeVideoIntegrityHash.js
-- signReport.js
 
 ## God Nodes (most connected - your core abstractions)
 1. `Scientific Upside Index` - 19 edges
@@ -98,7 +87,7 @@
 - **Top 12 Impact Score 2018** — player_lozano, player_neymar, player_hazard, player_sigurdsson, player_coutinho, player_de_bruyne, player_messi, player_vela, player_iniesta, player_golovin, player_mbappe, player_inui [EXTRACTED 1.00]
 - **Scientific Upside Index Layers** — lib_statSignatureScore_statSignatureScore, lib_geneticPropensityScore_geneticPropensityScore, narrative_face_energy [INFERRED 0.75]
 
-## Communities (81 total, 19 thin omitted)
+## Communities (66 total, 15 thin omitted)
 
 ### Community 0 - "convertExternalEventLog.test.js"
 Cohesion: 0.08
@@ -196,50 +185,22 @@ Nodes (3): computeIoU(), cosineSimilarity(), verifyPlayerIdentityConsistency()
 Cohesion: 0.25
 Nodes (7): 1. ICP מדויק (ישראל), 2. מחיר + מודל, 3. זווית מול המתחרה המרכזי, 4. תוכנית 100 המשתמשים הראשונים (תקציב 0, ישראל), 5. קריטריון המשך/פיבוט/הריגה (30 יום), ScoutAI — Market Validation (auto, DeepSeek 2026-07-20), ScoutAI – דף אימות שוק (מקסימום 350 מילים)
 
-### Community 66 - "estimateTransferValue.js"
-Cohesion: 0.36
-Nodes (7): convertToEUR(), estimateTransferValue(), euclideanSimilarity(), exchangeRates, fs, loadStoredComparables(), path
-
-### Community 67 - "exportEventClip.js"
-Cohesion: 0.33
-Nodes (6): { execFile }, execFilePromise, exportEventClip(), fs, path, util
-
-### Community 68 - "applyReferralDiscount.js"
-Cohesion: 0.33
-Nodes (4): discountedClubs, paidClubs, referralEpoch, referrals
-
-### Community 69 - "extractPlayerClips.js"
-Cohesion: 0.47
-Nodes (5): allowedEventTypes, clampTime(), extractPlayerClips(), matchDatabase, parseTimestamp()
-
-### Community 70 - "synchronizeMatchVideos.js"
-Cohesion: 0.33
-Nodes (4): crypto, http, https, storedVideoIds
-
-### Community 71 - "createPlayerHighlightClip.js"
-Cohesion: 0.83
-Nodes (3): createPlayerHighlightClip(), extractClip(), getMatchData()
-
-### Community 73 - "scanningScore.js"
-Cohesion: 0.83
-Nodes (3): clamp(), r2(), scanningScore()
-
 ## Knowledge Gaps
-- **159 isolated node(s):** `referralEpoch`, `referrals`, `discountedClubs`, `paidClubs`, `a` (+154 more)
+- **139 isolated node(s):** `a`, `{avgRating}`, `assert`, `{ calculatePlayerPercentile }`, `player` (+134 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Scientific Upside Index` connect `Scientific Upside Index` to `Impact Score`?**
-  _High betweenness centrality (0.008) - this node is a cross-community bridge._
+  _High betweenness centrality (0.011) - this node is a cross-community bridge._
 - **Why does `Impact Score` connect `Impact Score` to `Scientific Upside Index`?**
-  _High betweenness centrality (0.007) - this node is a cross-community bridge._
+  _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **Why does `Neymar` connect `Impact Score` to `Scientific Upside Index`?**
-  _High betweenness centrality (0.002) - this node is a cross-community bridge._
-- **What connects `referralEpoch`, `referrals`, `discountedClubs` to the rest of the system?**
-  _159 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.004) - this node is a cross-community bridge._
+- **What connects `a`, `{avgRating}`, `assert` to the rest of the system?**
+  _139 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `convertExternalEventLog.test.js` be split into smaller, more focused modules?**
   _Cohesion score 0.08 - nodes in this community are weakly interconnected._
 - **Should `Scientific Upside Index` be split into smaller, more focused modules?**
