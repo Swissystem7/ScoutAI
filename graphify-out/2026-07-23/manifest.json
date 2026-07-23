@@ -335,8 +335,8 @@
     "semantic_hash": "cbcbaf0763302b8cca853c2b04793d23"
   },
   "index.html": {
-    "mtime": 1784769896.416257,
-    "ast_hash": "195ef7807eb43273bd4561873e09bdf1",
+    "mtime": 1784581925.5900996,
+    "ast_hash": "6749d7b54234ea15af8bcb3d1be863ef",
     "semantic_hash": ""
   },
   "lib/README.md": {
@@ -415,8 +415,8 @@
     "semantic_hash": ""
   },
   "lib/scanningScore.js": {
-    "mtime": 1784769896.4142582,
-    "ast_hash": "a321e1ec0accd0f77f5cb601d495e944",
+    "mtime": 1784639622.9756818,
+    "ast_hash": "b04245a5d24cdcd0bd8a830a4f0458ef",
     "semantic_hash": ""
   },
   "lib/scrubPII.js": {
@@ -432,126 +432,6 @@
   "lib/synchronizeMatchVideos.js": {
     "mtime": 1784645167.2352839,
     "ast_hash": "5391d34d9104f61a22094054310d58be",
-    "semantic_hash": ""
-  },
-  "data/fbref_big5_2024-2025.json": {
-    "mtime": 1784769118.8154974,
-    "ast_hash": "60f5da17e6062e833def89a294a8ba8a",
-    "semantic_hash": ""
-  },
-  "data/wc2018_event_aggregates.json": {
-    "mtime": 1784769069.686088,
-    "ast_hash": "257246937230bc0e183c7bd9bd4cbe4d",
-    "semantic_hash": ""
-  },
-  "data/xt_wc2018.json": {
-    "mtime": 1784768427.7302647,
-    "ast_hash": "cce67a2c14bfb9e6d45dbf5291d56ab4",
-    "semantic_hash": ""
-  },
-  "lib/calculatePlayerROI.js": {
-    "mtime": 1784731570.3058825,
-    "ast_hash": "051e6c7134be52bcf24387556b4c6f12",
-    "semantic_hash": ""
-  },
-  "lib/extractMatchMetadataFromFileName.js": {
-    "mtime": 1784760364.2563517,
-    "ast_hash": "71660311ae8e7f8c9192e19d30ba5348",
-    "semantic_hash": ""
-  },
-  "lib/fbrefAdapter.js": {
-    "mtime": 1784769735.4250183,
-    "ast_hash": "bf1611c2b779d85ebe4d22af05160aca",
-    "semantic_hash": ""
-  },
-  "lib/generatePlayerHighlightReel.js": {
-    "mtime": 1784731568.504689,
-    "ast_hash": "7d74d8c5ff7a5b5f3b9535e09b9fc089",
-    "semantic_hash": ""
-  },
-  "lib/importVideoFromCloudStorage.js": {
-    "mtime": 1784760364.903685,
-    "ast_hash": "4909a4f4f2959880eab3bbe9af8efcbb",
-    "semantic_hash": ""
-  },
-  "lib/integrateWithVideoPlatform.js": {
-    "mtime": 1784731569.7095027,
-    "ast_hash": "447e554e5f30efafee6d1ea1b712b4df",
-    "semantic_hash": ""
-  },
-  "lib/linkVideoClips.js": {
-    "mtime": 1784738767.268016,
-    "ast_hash": "e660aaf1583553f41b64b43383b6ecc8",
-    "semantic_hash": ""
-  },
-  "lib/mergeSignals.js": {
-    "mtime": 1784769142.7162423,
-    "ast_hash": "2b4ba400fef3568c4f650fca4c2b0b23",
-    "semantic_hash": ""
-  },
-  "lib/scanPipeline.js": {
-    "mtime": 1784769759.8569608,
-    "ast_hash": "cad80aa65e0e2c0d7bb6a4be718cc59d",
-    "semantic_hash": ""
-  },
-  "lib/seasonAggregate.js": {
-    "mtime": 1784750286.6470902,
-    "ast_hash": "94cce6bb1204adaa35cff7a94fdef123",
-    "semantic_hash": ""
-  },
-  "lib/statsbombMatch.js": {
-    "mtime": 1784749528.1517007,
-    "ast_hash": "8a665e01549f612f3d9d6f5e4a0fff7c",
-    "semantic_hash": ""
-  },
-  "lib/syncClubVideos.js": {
-    "mtime": 1784738765.021804,
-    "ast_hash": "cfe1a4d04111d3f08084cc5dc735a6f7",
-    "semantic_hash": ""
-  },
-  "lib/videoSignal.js": {
-    "mtime": 1784748422.0610783,
-    "ast_hash": "027d167168c8489d6179dec6e0e88124",
-    "semantic_hash": ""
-  },
-  "lib/xtAdapter.js": {
-    "mtime": 1784768577.2532215,
-    "ast_hash": "a8ded938e43bf820403348bbb19e9ac9",
-    "semantic_hash": ""
-  },
-  "proof-big5.js": {
-    "mtime": 1784769759.859159,
-    "ast_hash": "d96f09cb31253f4603190102df30916b",
-    "semantic_hash": ""
-  },
-  "proof-composite.js": {
-    "mtime": 1784769129.2126224,
-    "ast_hash": "07c9ed23ddb283d6c56715a0209b6678",
-    "semantic_hash": ""
-  },
-  "proof-match.js": {
-    "mtime": 1784749445.8059523,
-    "ast_hash": "55551619bdee5cd2e6c786561597eeee",
-    "semantic_hash": ""
-  },
-  "proof-tournament.js": {
-    "mtime": 1784750448.911843,
-    "ast_hash": "e79fa0bcba2ea5f4f223f739e02427ae",
-    "semantic_hash": ""
-  },
-  "proof-xt.js": {
-    "mtime": 1784768577.2953808,
-    "ast_hash": "3d87bb353485e04cf0c32ed6dd4e7c39",
-    "semantic_hash": ""
-  },
-  "VIDEO_PIPELINE_PLAN.md": {
-    "mtime": 1784748782.3723173,
-    "ast_hash": "25e87388410b64446201326d4feded5f",
-    "semantic_hash": ""
-  },
-  "data/FBREF_README.md": {
-    "mtime": 1784769735.484512,
-    "ast_hash": "5018d68a73dcef3a41608a37ed1b4696",
     "semantic_hash": ""
   }
 }

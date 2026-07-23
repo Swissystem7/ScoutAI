@@ -1,16 +1,16 @@
-# Graph Report - ScoutAI  (2026-07-23)
+# Graph Report - ScoutAI  (2026-07-22)
 
 ## Corpus Check
-- 108 files · ~300,277 words
+- 84 files · ~38,857 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 585 nodes · 757 edges · 86 communities (67 shown, 19 thin omitted)
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 99 edges (avg confidence: 0.5)
+- 389 nodes · 405 edges · 81 communities (62 shown, 19 thin omitted)
+- Extraction: 82% EXTRACTED · 18% INFERRED · 0% AMBIGUOUS · INFERRED: 71 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `34b6d174`
+- Built from commit: `4c336e94`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -45,9 +45,6 @@
 - calculateReferralRewards.js
 - generateScoutingReport.js
 - leagueStrength.js
-- computePlayerValueIndex.js
-- findTopProspects.js
-- rankByUndervaluedUpside.js
 - lib/impactScore.js
 - WEIGHTS
 - lib/percentileRank.js
@@ -70,28 +67,28 @@
 - signReport.js
 
 ## God Nodes (most connected - your core abstractions)
-1. `prepare()` - 23 edges
-2. `Scientific Upside Index` - 19 edges
-3. `Impact Score` - 18 edges
-4. `runScan()` - 15 edges
-5. `fbrefToSignals()` - 12 edges
-6. `aggregatePlayers()` - 11 edges
-7. `impactScore()` - 10 edges
-8. `statSignatureScore()` - 10 edges
-9. `faceEnergyProfile()` - 9 edges
-10. `geneticPropensityScore()` - 9 edges
+1. `Scientific Upside Index` - 19 edges
+2. `Impact Score` - 18 edges
+3. `statSignatureScore()` - 8 edges
+4. `faceEnergyProfile()` - 7 edges
+5. `geneticPropensityScore()` - 7 edges
+6. `scientificUpsideIndex()` - 7 edges
+7. `convertExternalEventLog()` - 6 edges
+8. `ScoutAI – דף אימות שוק (מקסימום 350 מילים)` - 6 edges
+9. `parseOptaJson()` - 5 edges
+10. `parseTimestamp()` - 5 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `rankProspects()` --indirect_call--> `breakdown()`  [INFERRED]
-  lib/rankProspects.js → proof-composite.js
-- `run()` --calls--> `runScan()`  [EXTRACTED]
-  proof-match.js → lib/scanPipeline.js
-- `run()` --calls--> `runScan()`  [EXTRACTED]
-  proof-tournament.js → lib/scanPipeline.js
-- `run()` --calls--> `toSeasonSignals()`  [EXTRACTED]
-  proof-tournament.js → lib/seasonAggregate.js
+- `Neymar` --conceptually_related_to--> `Scientific Upside Index`  [EXTRACTED]
+  IMPACT_SCORE.md → POC_REPORT.md
 - `impactScore` --implements--> `Impact Score`  [EXTRACTED]
   index.html → IMPACT_SCORE.md
+- `Filippa Angeldal` --conceptually_related_to--> `Scientific Upside Index`  [EXTRACTED]
+  POC_REPORT_CALIBRATED.md → POC_REPORT.md
+- `Kevin De Bruyne` --conceptually_related_to--> `Scientific Upside Index`  [EXTRACTED]
+  IMPACT_SCORE.md → POC_REPORT.md
+- `Stephen Eustáquio` --conceptually_related_to--> `Scientific Upside Index`  [EXTRACTED]
+  POC_REPORT_CALIBRATED.md → POC_REPORT.md
 
 ## Import Cycles
 - None detected.
@@ -101,19 +98,19 @@
 - **Top 12 Impact Score 2018** — player_lozano, player_neymar, player_hazard, player_sigurdsson, player_coutinho, player_de_bruyne, player_messi, player_vela, player_iniesta, player_golovin, player_mbappe, player_inui [EXTRACTED 1.00]
 - **Scientific Upside Index Layers** — lib_statSignatureScore_statSignatureScore, lib_geneticPropensityScore_geneticPropensityScore, narrative_face_energy [INFERRED 0.75]
 
-## Communities (86 total, 19 thin omitted)
+## Communities (81 total, 19 thin omitted)
 
 ### Community 0 - "convertExternalEventLog.test.js"
 Cohesion: 0.08
-Nodes (32): convertExternalEventLog(), mapOptaEventType(), normalizeLocation(), parseManualCsv(), parseOptaJson(), parseTimestamp(), parseWyscoutCsv(), parseXmlMatch() (+24 more)
+Nodes (24): assert, { convertExternalEventLog }, mapping, optaJsonData, optaJsonWrapper, optaLarge, optaMissing, optaNaN (+16 more)
 
 ### Community 1 - "Scientific Upside Index"
-Cohesion: 0.05
-Nodes (37): Clutch, Energy, Grit, Impact Score, Involvement, computePlayerValueIndex, geneticPropensityScore, impactScore (+29 more)
+Cohesion: 0.09
+Nodes (20): computePlayerValueIndex, geneticPropensityScore, rankProspects, scientificUpsideIndex, statSignatureScore, Filippa Angeldal, Kevin De Bruyne, Stephen Eustáquio (+12 more)
 
 ### Community 2 - "Impact Score"
-Cohesion: 0.09
-Nodes (29): fbrefToSignals(), FIELDS, finiteNonNegative(), loadFbrefDataset(), nullableNumber(), number(), optional(), parseJson() (+21 more)
+Cohesion: 0.11
+Nodes (17): Clutch, Energy, Grit, Impact Score, Involvement, impactScore, Philippe Coutinho, Aleksandr Golovin (+9 more)
 
 ### Community 3 - "proof-demo.js"
 Cohesion: 0.18
@@ -144,16 +141,16 @@ Cohesion: 0.27
 Nodes (9): checkUrlReachable(), computeHash(), { createHash, randomUUID }, { existsSync, statSync }, http, https, ingestClubVideo(), jobStore (+1 more)
 
 ### Community 10 - "convertExternalEventLog.js"
-Cohesion: 0.10
-Nodes (24): componentScores(), { loadXtDataset, xtToSignals }, mergePlayerSignals(), normalizeName(), percentileMap(), { toSeasonSignals }, toSeasonSignals(), finite() (+16 more)
+Cohesion: 0.58
+Nodes (8): convertExternalEventLog(), mapOptaEventType(), normalizeLocation(), parseManualCsv(), parseOptaJson(), parseTimestamp(), parseWyscoutCsv(), parseXmlMatch()
 
 ### Community 11 - "generateReferralLink.js"
 Cohesion: 0.32
 Nodes (7): crypto, DB_PATH, fs, generateReferralLink(), path, readDb(), writeDb()
 
 ### Community 12 - "rankProspects.js"
-Cohesion: 0.39
-Nodes (6): rankProspects(), rankScored(), round2(), selftest(), TIER_ORDER, breakdown()
+Cohesion: 0.48
+Nodes (5): rankProspects(), rankScored(), round2(), selftest(), TIER_ORDER
 
 ### Community 13 - "resolveVideoDirectUrl.js"
 Cohesion: 0.38
@@ -164,12 +161,12 @@ Cohesion: 0.40
 Nodes (4): countByPosition(), assert, { countByPosition }, zeros
 
 ### Community 15 - "detectMomentumShifts.js"
-Cohesion: 0.06
-Nodes (49): computePlayerValueIndex(), clamp(), detectMomentumShifts(), EVENT_VALUES, round4(), findTopProspects(), LEAGUE_TABLE, leagueStrength() (+41 more)
+Cohesion: 0.47
+Nodes (4): clamp(), detectMomentumShifts(), EVENT_VALUES, round4()
 
 ### Community 16 - "impactScore.js"
-Cohesion: 0.06
-Nodes (44): clamp(), impactScore(), r1(), sc(), WEIGHTS, aggregateSeason(), canonicalName(), COUNT_METRICS (+36 more)
+Cohesion: 0.60
+Nodes (5): clamp(), impactScore(), r1(), sc(), WEIGHTS
 
 ### Community 17 - "importTeamRoster.js"
 Cohesion: 0.40
@@ -194,22 +191,6 @@ Nodes (3): detectScoutBias(), getCriticalZ(), normalCDF()
 ### Community 25 - "verifyPlayerIdentityConsistency.js"
 Cohesion: 0.83
 Nodes (3): computeIoU(), cosineSimilarity(), verifyPlayerIdentityConsistency()
-
-### Community 29 - "leagueStrength.js"
-Cohesion: 0.29
-Nodes (14): addToCache(), crypto, dedupCache, fetchHudlVideos(), fetchVeoVideos(), fetchWithRetry(), fetchYoutubeVideos(), generateCacheKey() (+6 more)
-
-### Community 34 - "computePlayerValueIndex.js"
-Cohesion: 0.22
-Nodes (8): Footage matters (Aviran can get both), GPU reality (honest), Honest accuracy expectations, Integration point (already being built), Milestones (parallel to the StatsBomb-event track that works today), Pipeline (4 stages) — output feeds ScoutAI's videoSignal contract, Reality check (why this is a CV build, not "an LLM watching"), ScoutAI — Full-Match Video → Player Ratings Pipeline (honest scope)
-
-### Community 39 - "findTopProspects.js"
-Cohesion: 0.29
-Nodes (4): analyzedUrls, { randomUUID }, supportedPlatforms, ValidationError
-
-### Community 51 - "rankByUndervaluedUpside.js"
-Cohesion: 0.70
-Nodes (4): clamp(), finite(), normalizeVideoSignal(), round4()
 
 ### Community 65 - "ScoutAI – דף אימות שוק (מקסימום 350 מילים)"
 Cohesion: 0.25
@@ -239,25 +220,29 @@ Nodes (4): crypto, http, https, storedVideoIds
 Cohesion: 0.83
 Nodes (3): createPlayerHighlightClip(), extractClip(), getMatchData()
 
+### Community 73 - "scanningScore.js"
+Cohesion: 0.83
+Nodes (3): clamp(), r2(), scanningScore()
+
 ## Knowledge Gaps
-- **240 isolated node(s):** `referralEpoch`, `referrals`, `discountedClubs`, `paidClubs`, `a` (+235 more)
+- **159 isolated node(s):** `referralEpoch`, `referrals`, `discountedClubs`, `paidClubs`, `a` (+154 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `runScan()` connect `detectMomentumShifts.js` to `impactScore.js`, `Impact Score`, `convertExternalEventLog.js`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
-- **Why does `impactScore()` connect `impactScore.js` to `convertExternalEventLog.js`, `detectMomentumShifts.js`?**
-  _High betweenness centrality (0.006) - this node is a cross-community bridge._
-- **Are the 2 inferred relationships involving `fbrefToSignals()` (e.g. with `fbrefAdapter.js` and `performanceRate()`) actually correct?**
-  _`fbrefToSignals()` has 2 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `Scientific Upside Index` connect `Scientific Upside Index` to `Impact Score`?**
+  _High betweenness centrality (0.008) - this node is a cross-community bridge._
+- **Why does `Impact Score` connect `Impact Score` to `Scientific Upside Index`?**
+  _High betweenness centrality (0.007) - this node is a cross-community bridge._
+- **Why does `Neymar` connect `Impact Score` to `Scientific Upside Index`?**
+  _High betweenness centrality (0.002) - this node is a cross-community bridge._
 - **What connects `referralEpoch`, `referrals`, `discountedClubs` to the rest of the system?**
-  _240 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _159 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `convertExternalEventLog.test.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.08377896613190731 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
 - **Should `Scientific Upside Index` be split into smaller, more focused modules?**
-  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08695652173913043 - nodes in this community are weakly interconnected._
 - **Should `Impact Score` be split into smaller, more focused modules?**
-  _Cohesion score 0.09274193548387097 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.1111111111111111 - nodes in this community are weakly interconnected._

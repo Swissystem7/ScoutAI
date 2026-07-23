@@ -79,10 +79,5 @@
   "77": "anonymizePlayerData.js",
   "78": "bulkImportPlayers.js",
   "79": "calculateScoutReliabilityScore.js",
-  "80": "scrubPII.js",
-  "81": "calculatePlayerROI.js",
-  "82": "extractMatchMetadataFromFileName.js",
-  "83": "generatePlayerHighlightReel.js",
-  "84": "importVideoFromCloudStorage.js",
-  "85": "linkVideoClips.js"
+  "80": "scrubPII.js"
 }
