@@ -96,6 +96,15 @@
 <div id="tournamentBoard" class="match-board" aria-label="דירוג סגל צרפת בטורניר"></div>
 <p class="match-source">Source: <a href="https://github.com/statsbomb/open-data/blob/master/data/matches/43/3.json">StatsBomb Open Data · World Cup 2018 matches/43/3</a> · match IDs 7530, 7546, 7563, 7580, 8649, 8655, 8658 · aggregatePlayers → aggregateSeason → toSeasonSignals → runScan(mode: rank).</p>
 </section>
+<section class="card scan-section" aria-labelledby="xt-title">
+<div class="eyebrow">REAL ACTION VALUE / FULL TOURNAMENT</div>
+<h2 id="xt-title">סריקת טורניר מלא — 602 שחקנים</h2>
+<p class="muted">xT מודד כמה כל פעולה מוצלחת לקידום הכדור העלתה את הסתברות ההבקעה. זהו אות פעולה <strong>מדיד</strong> מאירועי משחק אמיתיים — לא מומנטום מוסק ולא ניתוח וידאו.</p>
+<div class="match-meta"><span>64 משחקים</span><span>128,484 פעולות</span><span>602/602 עם xT מדיד</span><span class="evidence measured">MEASURED</span></div>
+<div class="scan-note">מוצגות 100 השורות המובילות כדי לשמור על עמוד קל. הדאטה המלא לכל 602 השחקנים נמצא בקובץ <code>data/xt_wc2018.json</code>. הציון 0–100 הוא אחוזון xT כולל, עם midrank לשוויון.</div>
+<div id="xtBoard" class="match-board" aria-label="100 שחקני xT המובילים במונדיאל 2018"></div>
+<p class="match-source">Model: <a href="https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/xt.html">socceraction Expected Threat (KU Leuven), 16×12</a> · Events: <a href="https://github.com/statsbomb/open-data">StatsBomb Open Data</a> · Competition 43, Season 3.</p>
+</section>
 </main>
 <script>
 const __modules={"lib/impactScore.js":function(require,module,exports){
@@ -1357,6 +1366,109 @@ $('matchBoard').innerHTML=calibratedMatch8658.map((p,i)=>`<div class="match-row"
 // Tuple: player, rating, matches, minutes, goals/90, key passes/90, xG/90, defensive actions/90, progressive actions/90.
 const france2018Tournament=[["Antoine Griezmann",59.77,7,580,.6207,1.2414,.5519,6.3621,11.3276],["Paul Pogba",52.84,6,563,.1599,1.4387,.0575,7.9929,25.7371],["Olivier Giroud",51.43,7,566,0,.7951,.2397,3.4982,4.1343],["N'Golo Kanté",50.44,7,621,0,.1449,.0051,13.0435,19.2754],["Lucas Hernández Pi",50.33,7,618,0,.5825,.0426,6.5534,16.7476],["Kylian Mbappé Lottin",49.36,7,550,.6545,1.4727,.2905,5.7273,10.3091],["Benjamin Pavard",43.99,6,569,.1582,.3163,.0215,6.4851,20.4042],["Raphaël Varane",41.73,7,662,.136,0,.0484,6.5257,28.4139],["Samuel Yves Umtiti",38.73,6,569,.1582,.1582,.0138,5.2197,18.6643],["Blaise Matuidi",37.27,5,343,0,.7872,.0785,9.9708,8.1341],["Hugo Lloris",30.9,6,569,0,0,0,3.7961,22.4605],["Corentin Tolisso",23.71,5,211,0,.8531,.0924,11.9431,17.9147],["Ousmane Dembélé",21.94,4,174,0,1.0345,.0466,6.2069,15.5172],["Nabil Fekir",15.71,6,97,0,0,.0555,13.9175,15.7732],["Steven N'Kemboanza Mike Christopher Nzonzi",13.57,5,167,0,.5389,0,3.2335,16.7066],["Thomas Lemar",11.01,1,93,0,1.9355,.0257,3.871,18.3871],["Djibril Sidibé",10.42,1,93,0,2.9032,0,5.8065,33.871],["Presnel Kimpembe",7.6,1,93,0,0,0,8.7097,42.5806],["Steve Mandanda",6.31,1,93,0,0,0,8.7097,24.1935],["Benjamin Mendy",5.06,1,44,0,2.0455,0,10.2273,14.3182],["Florian Thauvin",1.54,1,7,0,0,0,0,0]];
 $('tournamentBoard').innerHTML=france2018Tournament.map((p,i)=>`<div class="match-row"><b>#${i+1}</b><div><b>${esc(p[0])}</b><br><span class="evidence measured">מדיד · שערים/90 ${p[4]} · מסירות מפתח/90 ${p[5]} · xG/90 ${p[6]} · הגנה/90 ${p[7]} · קידום/90 ${p[8]}</span></div><div class="scan-score">${p[1]}</div><div class="match-team muted">${p[2]} משחקים · ${p[3]} דק׳</div></div>`).join('');
+// Top 100 from data/xt_wc2018.json after deterministic empirical-percentile normalization.
+// Kept as an inline display snapshot so GitHub Pages performs no runtime fetch.
+const xtTop100=`Neymar da Silva Santos Junior
+Joshua Kimmich
+Kevin De Bruyne
+Eden Hazard
+Thomas Meunier
+Raphaël Adelino José Guerreiro
+Paul Pogba
+Ivan Rakitić
+Toni Kroos
+Philippe Coutinho Correia
+Šime Vrsaljko
+Harry Maguire
+Nacer Chadli
+Francisco Román Alarcón Suárez
+Lionel Andrés Messi Cuccittini
+Marcelo Vieira da Silva Júnior
+Dušan Tadić
+Andrés Iniesta Luján
+Ivan Perišić
+Mikael Lustig
+Jérôme Boateng
+Gerard Piqué Bernabéu
+Dries Mertens
+Kylian Mbappé Lottin
+Ali Maâloul
+Mário Figueira Fernandes
+Toby Alderweireld
+Mesut Özil
+Douglas Costa de Souza
+Juan Fernando Quintero Paniagua
+Kieran Trippier
+André Martín Carrillo Díaz
+Fágner Conserva Lemos
+Ahmed Fathy Abdel Meneim Ibrahim
+Sergio Ramos García
+Xherdan Shaqiri
+Benjamin Pavard
+Juan Guillermo Cuadrado Bello
+Henrik Dalsgaard
+Willian Borges da Silva
+Dejan Lovren
+Stephan Lichtsteiner
+Ahmed Musa
+Ricardo Iván Rodríguez Araya
+Ante Rebić
+Oussama Haddadi
+Sergio Busquets i Burgos
+Luis Alberto Suárez Díaz
+João Mário Naval da Costa Eduardo
+Hirving Rodrigo Lozano Bahena
+Carlos Alberto Vela Garrido
+Takashi Inui
+Daniel Carvajal Ramos
+Christian Alberto Cueva Bravo
+Kyle Walker
+Achraf Hakimi Mouh
+Javier Alejandro Mascherano
+Raheem Sterling
+Raphaël Varane
+Héctor Miguel Herrera López
+Heung-Min Son
+Lucas Hernández Pi
+Mahmoud Ibrahim Hassan
+Nahitan Michel Nández Acosta
+Miguel Ángel Trauco Saavedra
+Hiroki Sakai
+Ruben Loftus-Cheek
+Ivan Strinić
+Moussa Wagué
+Branislav Ivanović
+Edinson Roberto Cavani Gómez
+Marouane Fellaini-Bakkioui
+Breel-Donald Embolo
+Timo Werner
+Youssouf Sabaly
+Aleksandr Golovin
+Johann Berg Guðmunds­son
+Andrej Kramarić
+Jordi Alba Ramos
+Thiago Emiliano da Silva
+Yuto Nagatomo
+Mohamed Abdul Shafy Sayed Abouezeid
+Luka Modrić
+Aleksandr Samedov
+Mohamed Salah
+Cristian Gamboa Luna
+Mats Hummels
+Ramin Rezaeian
+Nicolás Hernán Otamendi
+Vahid Amiri
+Roman Zobnin
+Salem Mohammed Al Dawsari
+David Alberto Guzmán Pérez
+Hee-Chan Hwang
+Artem Dzyuba
+Simon Thorup Kjær
+Faustino Marcos Alberto Rojo
+William Troost-Ekong
+Marcelo Brozović
+Rodrigo Bentancur Colmán`.split('\n').map((name,i)=>[name,Math.round((100-i*100/601)*100)/100]);
+$('xtBoard').innerHTML=xtTop100.map((p,i)=>`<div class="match-row"><b>#${i+1}</b><div><b>${esc(p[0])}</b><br><span class="evidence measured">xT נמדד · socceraction + StatsBomb</span></div><div class="scan-score">${p[1]}</div><div class="match-team muted">אחוזון xT כולל</div></div>`).join('');
 </script>
 </body>
 </html>
