@@ -97,13 +97,15 @@
 <p class="match-source">Source: <a href="https://github.com/statsbomb/open-data/blob/master/data/matches/43/3.json">StatsBomb Open Data · World Cup 2018 matches/43/3</a> · match IDs 7530, 7546, 7563, 7580, 8649, 8655, 8658 · aggregatePlayers → aggregateSeason → toSeasonSignals → runScan(mode: rank).</p>
 </section>
 <section class="card scan-section" aria-labelledby="xt-title">
-<div class="eyebrow">REAL ACTION VALUE / FULL TOURNAMENT</div>
-<h2 id="xt-title">סריקת טורניר מלא — 602 שחקנים</h2>
-<p class="muted">xT מודד כמה כל פעולה מוצלחת לקידום הכדור העלתה את הסתברות ההבקעה. זהו אות פעולה <strong>מדיד</strong> מאירועי משחק אמיתיים — לא מומנטום מוסק ולא ניתוח וידאו.</p>
-<div class="match-meta"><span>64 משחקים</span><span>128,484 פעולות</span><span>602/602 עם xT מדיד</span><span class="evidence measured">MEASURED</span></div>
-<div class="scan-note">מוצגות 100 השורות המובילות כדי לשמור על עמוד קל. הדאטה המלא לכל 602 השחקנים נמצא בקובץ <code>data/xt_wc2018.json</code>. הציון 0–100 הוא אחוזון xT כולל, עם midrank לשוויון.</div>
-<div id="xtBoard" class="match-board" aria-label="100 שחקני xT המובילים במונדיאל 2018"></div>
-<p class="match-source">Model: <a href="https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/xt.html">socceraction Expected Threat (KU Leuven), 16×12</a> · Events: <a href="https://github.com/statsbomb/open-data">StatsBomb Open Data</a> · Competition 43, Season 3.</p>
+<div class="eyebrow">MEASURED MULTI-SIGNAL / FULL TOURNAMENT</div>
+<h2 id="xt-title">סריקת טורניר מלאה — קומפוזיט אמיתי</h2>
+<p class="muted">לוח משולב לכל שחקני מונדיאל 2018: ערך פעולה xT, שערים ו־xG, עבודה הגנתית וקידום כדור. כל הרכיבים נמדדו מאירועי משחק אמיתיים.</p>
+<div class="match-meta"><span>64 משחקים</span><span>602 התאמות מלאות</span><span>3 רשומות אירוע בלבד</span><span class="evidence measured">MEASURED COMPOSITE</span></div>
+<div class="scan-note">מוצגות 100 השורות המובילות. הפירוק מציג תרומה לציון: 20% xT · 50% שערים/xG/יצירה · 15% הגנה · 15% קידום ופעולות אחרות. אין סידור ידני.</div>
+<div id="xtBoard" class="match-board" aria-label="100 שחקני הקומפוזיט המובילים במונדיאל 2018"></div>
+<h2 style="margin-top:22px">כישרון נסתר</h2><p class="muted">חמשת בעלי הקומפוזיט הגבוה ביותר במדגם דקות נמוך מ־180, מתוך פלט מצב scout.</p>
+<div id="gemBoard" class="match-board" aria-label="כישרונות נסתרים"></div>
+<p class="match-source">Action value: <a href="https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/xt.html">socceraction Expected Threat (KU Leuven), 16×12</a> · Events: <a href="https://github.com/statsbomb/open-data">StatsBomb Open Data</a> · Competition 43, Season 3 · caches: data/xt_wc2018.json + data/wc2018_event_aggregates.json.</p>
 </section>
 </main>
 <script>
@@ -1366,109 +1368,11 @@ $('matchBoard').innerHTML=calibratedMatch8658.map((p,i)=>`<div class="match-row"
 // Tuple: player, rating, matches, minutes, goals/90, key passes/90, xG/90, defensive actions/90, progressive actions/90.
 const france2018Tournament=[["Antoine Griezmann",59.77,7,580,.6207,1.2414,.5519,6.3621,11.3276],["Paul Pogba",52.84,6,563,.1599,1.4387,.0575,7.9929,25.7371],["Olivier Giroud",51.43,7,566,0,.7951,.2397,3.4982,4.1343],["N'Golo Kanté",50.44,7,621,0,.1449,.0051,13.0435,19.2754],["Lucas Hernández Pi",50.33,7,618,0,.5825,.0426,6.5534,16.7476],["Kylian Mbappé Lottin",49.36,7,550,.6545,1.4727,.2905,5.7273,10.3091],["Benjamin Pavard",43.99,6,569,.1582,.3163,.0215,6.4851,20.4042],["Raphaël Varane",41.73,7,662,.136,0,.0484,6.5257,28.4139],["Samuel Yves Umtiti",38.73,6,569,.1582,.1582,.0138,5.2197,18.6643],["Blaise Matuidi",37.27,5,343,0,.7872,.0785,9.9708,8.1341],["Hugo Lloris",30.9,6,569,0,0,0,3.7961,22.4605],["Corentin Tolisso",23.71,5,211,0,.8531,.0924,11.9431,17.9147],["Ousmane Dembélé",21.94,4,174,0,1.0345,.0466,6.2069,15.5172],["Nabil Fekir",15.71,6,97,0,0,.0555,13.9175,15.7732],["Steven N'Kemboanza Mike Christopher Nzonzi",13.57,5,167,0,.5389,0,3.2335,16.7066],["Thomas Lemar",11.01,1,93,0,1.9355,.0257,3.871,18.3871],["Djibril Sidibé",10.42,1,93,0,2.9032,0,5.8065,33.871],["Presnel Kimpembe",7.6,1,93,0,0,0,8.7097,42.5806],["Steve Mandanda",6.31,1,93,0,0,0,8.7097,24.1935],["Benjamin Mendy",5.06,1,44,0,2.0455,0,10.2273,14.3182],["Florian Thauvin",1.54,1,7,0,0,0,0,0]];
 $('tournamentBoard').innerHTML=france2018Tournament.map((p,i)=>`<div class="match-row"><b>#${i+1}</b><div><b>${esc(p[0])}</b><br><span class="evidence measured">מדיד · שערים/90 ${p[4]} · מסירות מפתח/90 ${p[5]} · xG/90 ${p[6]} · הגנה/90 ${p[7]} · קידום/90 ${p[8]}</span></div><div class="scan-score">${p[1]}</div><div class="match-team muted">${p[2]} משחקים · ${p[3]} דק׳</div></div>`).join('');
-// Top 100 from data/xt_wc2018.json after deterministic empirical-percentile normalization.
-// Kept as an inline display snapshot so GitHub Pages performs no runtime fetch.
-const xtTop100=`Neymar da Silva Santos Junior
-Joshua Kimmich
-Kevin De Bruyne
-Eden Hazard
-Thomas Meunier
-Raphaël Adelino José Guerreiro
-Paul Pogba
-Ivan Rakitić
-Toni Kroos
-Philippe Coutinho Correia
-Šime Vrsaljko
-Harry Maguire
-Nacer Chadli
-Francisco Román Alarcón Suárez
-Lionel Andrés Messi Cuccittini
-Marcelo Vieira da Silva Júnior
-Dušan Tadić
-Andrés Iniesta Luján
-Ivan Perišić
-Mikael Lustig
-Jérôme Boateng
-Gerard Piqué Bernabéu
-Dries Mertens
-Kylian Mbappé Lottin
-Ali Maâloul
-Mário Figueira Fernandes
-Toby Alderweireld
-Mesut Özil
-Douglas Costa de Souza
-Juan Fernando Quintero Paniagua
-Kieran Trippier
-André Martín Carrillo Díaz
-Fágner Conserva Lemos
-Ahmed Fathy Abdel Meneim Ibrahim
-Sergio Ramos García
-Xherdan Shaqiri
-Benjamin Pavard
-Juan Guillermo Cuadrado Bello
-Henrik Dalsgaard
-Willian Borges da Silva
-Dejan Lovren
-Stephan Lichtsteiner
-Ahmed Musa
-Ricardo Iván Rodríguez Araya
-Ante Rebić
-Oussama Haddadi
-Sergio Busquets i Burgos
-Luis Alberto Suárez Díaz
-João Mário Naval da Costa Eduardo
-Hirving Rodrigo Lozano Bahena
-Carlos Alberto Vela Garrido
-Takashi Inui
-Daniel Carvajal Ramos
-Christian Alberto Cueva Bravo
-Kyle Walker
-Achraf Hakimi Mouh
-Javier Alejandro Mascherano
-Raheem Sterling
-Raphaël Varane
-Héctor Miguel Herrera López
-Heung-Min Son
-Lucas Hernández Pi
-Mahmoud Ibrahim Hassan
-Nahitan Michel Nández Acosta
-Miguel Ángel Trauco Saavedra
-Hiroki Sakai
-Ruben Loftus-Cheek
-Ivan Strinić
-Moussa Wagué
-Branislav Ivanović
-Edinson Roberto Cavani Gómez
-Marouane Fellaini-Bakkioui
-Breel-Donald Embolo
-Timo Werner
-Youssouf Sabaly
-Aleksandr Golovin
-Johann Berg Guðmunds­son
-Andrej Kramarić
-Jordi Alba Ramos
-Thiago Emiliano da Silva
-Yuto Nagatomo
-Mohamed Abdul Shafy Sayed Abouezeid
-Luka Modrić
-Aleksandr Samedov
-Mohamed Salah
-Cristian Gamboa Luna
-Mats Hummels
-Ramin Rezaeian
-Nicolás Hernán Otamendi
-Vahid Amiri
-Roman Zobnin
-Salem Mohammed Al Dawsari
-David Alberto Guzmán Pérez
-Hee-Chan Hwang
-Artem Dzyuba
-Simon Thorup Kjær
-Faustino Marcos Alberto Rojo
-William Troost-Ekong
-Marcelo Brozović
-Rodrigo Bentancur Colmán`.split('\n').map((name,i)=>[name,Math.round((100-i*100/601)*100)/100]);
-$('xtBoard').innerHTML=xtTop100.map((p,i)=>`<div class="match-row"><b>#${i+1}</b><div><b>${esc(p[0])}</b><br><span class="evidence measured">xT נמדד · socceraction + StatsBomb</span></div><div class="scan-score">${p[1]}</div><div class="match-team muted">אחוזון xT כולל</div></div>`).join('');
+// Top 100 measured composite snapshot; generated by proof-composite.js from committed caches.
+const compositeTop100=[["Neymar da Silva Santos Junior",87.07,20,49.67,12.65,14.63,478],["Ivan Rakitić",87.07,19.77,48.84,14.85,14.9,677],["Eden Hazard",86.23,19.9,49.75,14.13,14.68,540],["Kevin De Bruyne",85.79,19.93,48.42,14.9,14.78,566],["Luka Modrić",85.51,17.27,49.91,14.92,15,720],["Kieran Trippier",85.24,19,48.92,14.78,14.25,602],["Ivan Perišić",84.8,19.4,49.09,14.28,13.61,646],["Philippe Coutinho Correia",82.54,19.7,49.01,13.86,14.5,453],["Harry Kane",82.36,16.67,50,13.29,12.94,595],["Harry Maguire",81.86,19.63,46.02,13.71,14.92,675],["Kylian Mbappé Lottin",81.77,19.23,49.42,13.83,13.17,550],["Paul Pogba",81.22,19.8,44.2,14.83,14.55,563],["Thomas Meunier",80.11,19.87,47.6,14.11,13.44,470],["Mário Figueira Fernandes",79.88,19.17,46.36,14.68,13.91,498],["John Stones",79.31,16.54,46.69,14.18,14.85,672],["Lionel Andrés Messi Cuccittini",78.41,19.53,47.77,12.55,13.93,378],["Jesse Lingard",78.1,16.31,46.94,14.47,11.8,547],["Ante Rebić",77.85,18.54,43.71,14.43,12.04,559],["Lucas Hernández Pi",77.81,17.97,43.21,14.63,13.78,618],["Mario Mandžukić",77.73,13.18,49.17,14.38,11.39,620],["Gerard Piqué Bernabéu",77.7,19.3,44.87,11.76,14.83,409],["Marcelo Brozović",76.93,16.74,46.44,14.03,14.38,484],["Francisco Román Alarcón Suárez",76.25,19.57,45.12,11.1,14.8,409],["Aleksandr Golovin",76.07,17.5,48.51,14.36,10.99,414],["Xherdan Shaqiri",75.89,18.84,46.77,13.36,13.13,367],["Luis Alberto Suárez Díaz",75.82,18.44,48.34,12.48,10.99,473],["Domagoj Vida",75.69,12.55,48.02,12.8,14.53,663],["Andreas Granqvist",75.43,16.24,47.52,10.74,13.63,476],["Christian Dannemann Eriksen",74.76,16.47,47.1,13.56,11.19,409],["Šime Vrsaljko",74.68,19.67,38.74,14.01,14.45,631],["Carlos Alberto Vela Garrido",74.68,18.34,47.02,11.65,11.06,323],["Toni Kroos",74.26,19.73,44.13,13.16,14.75,289],["Benjamin Pavard",74.19,18.8,40.23,14.08,14.02,569],["Juan Guillermo Cuadrado Bello",73.86,18.77,48.26,11.61,11.96,345],["Roman Zobnin",73.68,17,38.66,14.97,13.13,535],["Sergio Ramos García",73.38,18.87,43.3,11.25,14.97,409],["Raphaël Varane",73.24,18.07,39.82,13.98,14.88,662],["Thiago Emiliano da Silva",72.87,17.37,41.48,12.8,14.13,478],["Antoine Griezmann",72.5,0.13,49.84,14.75,13.24,580],["Toby Alderweireld",72.37,19.13,36.84,13.63,14.95,566],["Nacer Chadli",72.04,19.6,45.95,12.55,10.26,339],["Sergei Ignashevich",71.66,13.98,47.19,8.85,13.53,535],["Salman Mohammed Al Faraj",71.56,16.11,45.03,13.39,13.49,283],["Gylfi Þór Sigurðsson",71.55,14.78,45.86,13.96,9.81,285],["Andrej Kramarić",71.27,17.44,48.09,8.74,11.11,359],["Denis Cheryshev",71.24,14.14,49.59,12.65,10.26,312],["Hirving Rodrigo Lozano Bahena",70.97,18.37,46.27,12.96,9.64,325],["Juan Fernando Quintero Paniagua",70.63,19.03,47.27,9.31,13.51,309],["Edinson Roberto Cavani Gómez",70.44,17.67,48.59,11.52,7.69,355],["Dries Mertens",70.18,19.27,46.19,11.5,9.36,310],["Ludwig Augustinsson",70.03,15.57,42.63,12.39,13.03,476],["Artem Dzyuba",70.01,16.87,49.26,10.11,9.74,339],["Rodrigo Bentancur Colmán",69.93,16.71,37.83,14.8,13.17,372],["Raheem Sterling",69.75,18.1,42.55,9.54,10.99,456],["Andrés Iniesta Luján",69.61,19.43,46.6,6.21,13.36,294],["Raphaël Adelino José Guerreiro",69.26,19.83,38.99,12.9,13.46,381],["Olivier Giroud",69.2,10.48,43.05,13.09,10.21,566],["Sergio Busquets i Burgos",69.11,18.47,37.91,13.5,12.7,409],["Mile Jedinak",68.95,15.47,47.35,10.38,11.59,282],["Heung-Min Son",68.94,18,47.93,8.22,10.13,288],["Samuel Yves Umtiti",68.72,16.51,39.24,12.07,13.76,569],["Jordan Brian Henderson",68.72,14.11,33.94,14.58,13.97,494],["Bamidele Alli",68.65,14.31,41.88,14.65,10.39,369],["Salem Mohammed Al Dawsari",68.56,16.97,42.22,13.21,12.36,283],["José Martín Cáceres Silva",68.23,10.82,36.34,13.24,14.02,473],["Willian Borges da Silva",68.22,18.7,38.41,12.72,11.67,369],["Takashi Inui",68.18,18.3,47.68,10.61,8.48,305],["Ola Toivonen",68,15.37,45.45,11.37,8.93,407],["Dušan Tadić",67.98,19.47,40.48,13.44,10.39,269],["Marcelo Vieira da Silva Júnior",67.71,19.5,35.1,14.21,14.11,298],["Marouane Fellaini-Bakkioui",67.32,17.64,41.23,14.16,8.27,333],["Granit Xhaka",67.29,14.68,40.9,13.61,14.43,382],["Emil Peter Forsberg",67.26,12.75,41.39,13.81,10.06,429],["Dejan Lovren",67.16,18.67,29.22,13.14,14.65,688],["Jan Vertonghen",66.78,8.05,38.49,14.25,14.36,566],["Marcus Berg",66.71,10.12,39.98,13.68,8.34,435],["Joshua Kimmich",66.51,19.97,37.59,10.83,12.9,289],["Yerry Fernando Mina González",66.07,10.55,48.18,11.17,12.27,315],["Ashley Young",65.89,15.91,38.16,11.85,12.52,474],["André Martín Carrillo Díaz",65.63,18.97,42.3,11.06,9.56,266],["Simon Thorup Kjær",65.61,16.84,42.13,6.93,13.58,409],["Cristiano Ronaldo dos Santos Aveiro",65.49,9.62,49.51,6.43,11.35,381],["Gabriel Fernando de Jesus",65.48,10.15,36.67,14.3,11.19,416],["M'Baye Babacar Niang",65.41,14.44,44.95,10.13,8.8,244],["Ricardo Iván Rodríguez Araya",65.36,18.57,35.02,10.48,12.7,382],["Kléper Laveran Lima Ferreira",65.3,14.08,40.06,11.69,13.31,381],["José María Giménez de Vargas",65.25,15.54,39.48,10.96,12.31,379],["Aleksandr Samedov",65.17,17.24,34.1,13.73,11.42,364],["Eric Dier",64.98,13.64,43.38,9.16,12.01,276],["Gaku Shibasaki",64.86,15.11,39.41,11.92,12.99,346],["Yuto Nagatomo",64.75,17.34,37.01,11.4,11.52,377],["Mikael Lustig",64.62,19.37,33.86,12.75,12.17,366],["Diego Roberto Godín Leal",64.56,16.37,29.72,13.88,14.3,473],["Nicolás Hernán Otamendi",64.38,17.07,30.21,13.04,14.33,378],["Sadio Mané",64.27,15.51,43.55,10.5,9.42,281],["Wahbi Khazri",63.78,15.84,48.76,8.67,5.94,264],["Ivan Strinić",63.66,17.77,28.27,13.66,14.21,515],["Éver Maximiliano David Banega",63.63,12.81,43.13,11.32,12.96,231],["Carlos Henrique Casimiro",63.62,16.17,30.96,14.6,13.4,346],["Blerim Džemaili",63.43,8.49,43.79,12.29,9.69,335]];
+$('xtBoard').innerHTML=compositeTop100.map((p,i)=>`<div class="match-row"><b>#${i+1}</b><div><b>${esc(p[0])}</b><br><span class="evidence measured">xT ${p[2]} · שערים/xG ${p[3]} · הגנה ${p[4]} · אחר ${p[5]}</span></div><div class="scan-score">${p[1]}</div><div class="match-team muted">${p[6]} דק׳</div></div>`).join('');
+const compositeGems=[["James David Rodríguez Rubio",57.7,163],["Milan Badelj",56.41,122],["Adrien Sebastian Perruchet Silva",55.97,168],["Khalid Boutaïb",51.38,138],["Iago Aspas Juncal",51.36,87]];
+$('gemBoard').innerHTML=compositeGems.map((p,i)=>`<div class="match-row"><b>#${i+1}</b><div><b>${esc(p[0])}</b><br><span class="evidence measured">קומפוזיט מדיד · מדגם דקות נמוך</span></div><div class="scan-score">${p[1]}</div><div class="match-team muted">${p[2]} דק׳</div></div>`).join('');
 </script>
 </body>
 </html>
