@@ -335,8 +335,8 @@
     "semantic_hash": "cbcbaf0763302b8cca853c2b04793d23"
   },
   "index.html": {
-    "mtime": 1784812673.8145332,
-    "ast_hash": "e2e47aad42911aff518a8da5808fe0f1",
+    "mtime": 1784769896.416257,
+    "ast_hash": "195ef7807eb43273bd4561873e09bdf1",
     "semantic_hash": ""
   },
   "lib/README.md": {
@@ -460,8 +460,8 @@
     "semantic_hash": ""
   },
   "lib/fbrefAdapter.js": {
-    "mtime": 1784812668.3523839,
-    "ast_hash": "45dc9ddd425729bba0786df1abe93021",
+    "mtime": 1784769735.4250183,
+    "ast_hash": "bf1611c2b779d85ebe4d22af05160aca",
     "semantic_hash": ""
   },
   "lib/generatePlayerHighlightReel.js": {
@@ -490,8 +490,8 @@
     "semantic_hash": ""
   },
   "lib/scanPipeline.js": {
-    "mtime": 1784807832.0304804,
-    "ast_hash": "33dfae1d21b52f5c57f7aa5cbaa61834",
+    "mtime": 1784769759.8569608,
+    "ast_hash": "cad80aa65e0e2c0d7bb6a4be718cc59d",
     "semantic_hash": ""
   },
   "lib/seasonAggregate.js": {
@@ -552,91 +552,6 @@
   "data/FBREF_README.md": {
     "mtime": 1784769735.484512,
     "ast_hash": "5018d68a73dcef3a41608a37ed1b4696",
-    "semantic_hash": ""
-  },
-  "data/body_v2_SNMOT-116.json": {
-    "mtime": 1784806312.8465633,
-    "ast_hash": "0b5d7701f12f33867e4c6aa74d152d3a",
-    "semantic_hash": ""
-  },
-  "data/offball_identities.json": {
-    "mtime": 1784810273.214317,
-    "ast_hash": "474ad9630e54bd959c296203fa22843d",
-    "semantic_hash": ""
-  },
-  "data/offball_scale.json": {
-    "mtime": 1784807714.3031976,
-    "ast_hash": "b979ac8aa813a13f7137dd6996c4b9b7",
-    "semantic_hash": ""
-  },
-  "lib/bodyLanguageAdapter.js": {
-    "mtime": 1784806601.0249758,
-    "ast_hash": "88592beab4cf980c6704a7769ae5ed50",
-    "semantic_hash": ""
-  },
-  "lib/compareScoutData.js": {
-    "mtime": 1784789163.0268712,
-    "ast_hash": "d30a44674ceaacbdddddf8f0a9d58314",
-    "semantic_hash": ""
-  },
-  "lib/createAiPredictionAudit.js": {
-    "mtime": 1784817969.2864237,
-    "ast_hash": "1ae35a74ed62c17a7fcb6170192fb73b",
-    "semantic_hash": ""
-  },
-  "lib/generateAuditToken.js": {
-    "mtime": 1784774769.4032953,
-    "ast_hash": "fd53353bf35161992e6af7026e5c2367",
-    "semantic_hash": ""
-  },
-  "lib/generateSampleReport.js": {
-    "mtime": 1784796366.3520217,
-    "ast_hash": "7ffb7135c5248c58b75b8903af2b5293",
-    "semantic_hash": ""
-  },
-  "lib/identityProfiles.js": {
-    "mtime": 1784810358.0971723,
-    "ast_hash": "6e0f1d6ba42010d62634ed13c81ae49c",
-    "semantic_hash": ""
-  },
-  "lib/importRosterFromFile.js": {
-    "mtime": 1784796365.7464983,
-    "ast_hash": "94d884d5e4bf6451418721d20d61b893",
-    "semantic_hash": ""
-  },
-  "lib/offBallAdapter.js": {
-    "mtime": 1784807804.4104733,
-    "ast_hash": "8851969daceebae817c583303573a95f",
-    "semantic_hash": ""
-  },
-  "lib/sanitizeScoutingReport.js": {
-    "mtime": 1784774766.5588262,
-    "ast_hash": "b8f2857503ba096632589a493468a9b5",
-    "semantic_hash": ""
-  },
-  "lib/verifyPlayerConsent.js": {
-    "mtime": 1784817965.9929867,
-    "ast_hash": "5803d77374bb152f2c398f8253789aaa",
-    "semantic_hash": ""
-  },
-  "lib/watchVideoFolder.js": {
-    "mtime": 1784789163.9281523,
-    "ast_hash": "579f234c9f8a25be07c38e580eadd9ea",
-    "semantic_hash": ""
-  },
-  "proof-body.js": {
-    "mtime": 1784806630.3368225,
-    "ast_hash": "24f57b46a2e458388c0a86bdccfaaeaa",
-    "semantic_hash": ""
-  },
-  "proof-identity.js": {
-    "mtime": 1784810358.0983996,
-    "ast_hash": "2c125dc7307725c874a04ca6d75a362d",
-    "semantic_hash": ""
-  },
-  "proof-offball.js": {
-    "mtime": 1784807843.452953,
-    "ast_hash": "a09314a933034cf9ddc0497ca459b933",
     "semantic_hash": ""
   }
 }

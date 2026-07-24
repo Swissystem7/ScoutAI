@@ -1,0 +1,666 @@
+{
+  "communities": {
+    "0": [
+      "lib_convertexternaleventlog_test",
+      "lib_convertexternaleventlog_test_assert",
+      "lib_convertexternaleventlog_test_convertexternaleventlog",
+      "lib_convertexternaleventlog_test_mapping",
+      "lib_convertexternaleventlog_test_optajsondata",
+      "lib_convertexternaleventlog_test_optajsonwrapper",
+      "lib_convertexternaleventlog_test_optalarge",
+      "lib_convertexternaleventlog_test_optamissing",
+      "lib_convertexternaleventlog_test_optanan",
+      "lib_convertexternaleventlog_test_result1",
+      "lib_convertexternaleventlog_test_result10",
+      "lib_convertexternaleventlog_test_result11",
+      "lib_convertexternaleventlog_test_result12",
+      "lib_convertexternaleventlog_test_result13",
+      "lib_convertexternaleventlog_test_result14",
+      "lib_convertexternaleventlog_test_result15",
+      "lib_convertexternaleventlog_test_result16",
+      "lib_convertexternaleventlog_test_result2",
+      "lib_convertexternaleventlog_test_result3",
+      "lib_convertexternaleventlog_test_result4",
+      "lib_convertexternaleventlog_test_result5",
+      "lib_convertexternaleventlog_test_result6",
+      "lib_convertexternaleventlog_test_result7",
+      "lib_convertexternaleventlog_test_result8",
+      "lib_convertexternaleventlog_test_result9"
+    ],
+    "1": [
+      "lib_computePlayerValueIndex_computePlayerValueIndex",
+      "lib_geneticPropensityScore_geneticPropensityScore",
+      "lib_rankProspects_rankProspects",
+      "lib_scientificUpsideIndex_scientificUpsideIndex",
+      "lib_statSignatureScore_statSignatureScore",
+      "player_angeldal",
+      "player_de_bruyne",
+      "player_eustaquio",
+      "player_gabriel_jesus",
+      "player_hanson",
+      "player_hofmann",
+      "player_kante",
+      "player_kirby",
+      "player_kovacic",
+      "player_payne",
+      "player_pogba",
+      "player_raphinha",
+      "player_rodrygo",
+      "player_ziu",
+      "poc_report_calibrated_md",
+      "poc_report_md",
+      "poc_report_multi_md",
+      "scientific_upside_index"
+    ],
+    "2": [
+      "clutch",
+      "energy",
+      "grit",
+      "impact_score",
+      "impact_score_md",
+      "involvement",
+      "lib_impactScore_impactScore",
+      "player_coutinho",
+      "player_golovin",
+      "player_hazard",
+      "player_iniesta",
+      "player_inui",
+      "player_lozano",
+      "player_mbappe",
+      "player_messi",
+      "player_neymar",
+      "player_sigurdsson",
+      "player_vela"
+    ],
+    "3": [
+      "lib_faceenergyprofile",
+      "lib_faceenergyprofile_dims",
+      "lib_faceenergyprofile_faceenergyprofile",
+      "lib_faceenergyprofile_isplainobject",
+      "lib_faceenergyprofile_mergeweights",
+      "lib_faceenergyprofile_round1",
+      "lib_faceenergyprofile_weights",
+      "lib_scoutupsideindex",
+      "lib_scoutupsideindex_energy_dims",
+      "lib_scoutupsideindex_normalizemomentum",
+      "lib_scoutupsideindex_round1",
+      "lib_scoutupsideindex_scoutupsideindex",
+      "lib_scoutupsideindex_will_weights",
+      "proof_demo",
+      "proof_demo_faceenergyprofile",
+      "proof_demo_players",
+      "proof_demo_run",
+      "proof_demo_scoutupsideindex"
+    ],
+    "4": [
+      "lib_calculateplayerpercentile",
+      "lib_calculateplayerpercentile_calculateplayerpercentile",
+      "lib_calculateplayerpercentile_test",
+      "lib_calculateplayerpercentile_test_assert",
+      "lib_calculateplayerpercentile_test_calculateplayerpercentile",
+      "lib_calculateplayerpercentile_test_negativepeers",
+      "lib_calculateplayerpercentile_test_negativeplayer",
+      "lib_calculateplayerpercentile_test_negativeresult",
+      "lib_calculateplayerpercentile_test_peers",
+      "lib_calculateplayerpercentile_test_player",
+      "lib_calculateplayerpercentile_test_result",
+      "lib_calculateplayerpercentile_test_unknownpospeers",
+      "lib_calculateplayerpercentile_test_unknownposplayer",
+      "lib_calculateplayerpercentile_test_unknownresult"
+    ],
+    "5": [
+      "lib_matchrostertotracking",
+      "lib_matchrostertotracking_matchrostertotracking",
+      "lib_matchrostertotracking_test",
+      "lib_matchrostertotracking_test_assert",
+      "lib_matchrostertotracking_test_dupres",
+      "lib_matchrostertotracking_test_matchmetadata",
+      "lib_matchrostertotracking_test_matchrostertotracking",
+      "lib_matchrostertotracking_test_nomatch",
+      "lib_matchrostertotracking_test_result",
+      "lib_matchrostertotracking_test_result2",
+      "lib_matchrostertotracking_test_result5",
+      "lib_matchrostertotracking_test_trackingids",
+      "lib_matchrostertotracking_test_trackingidsdup"
+    ],
+    "6": [
+      "lib_statsignaturescore",
+      "lib_statsignaturescore_clamp",
+      "lib_statsignaturescore_computestatcomposite",
+      "lib_statsignaturescore_normalizemetrics",
+      "lib_statsignaturescore_num",
+      "lib_statsignaturescore_peakagefor",
+      "lib_statsignaturescore_rationale_23",
+      "lib_statsignaturescore_rationale_33",
+      "lib_statsignaturescore_req",
+      "lib_statsignaturescore_round2",
+      "lib_statsignaturescore_selftest",
+      "lib_statsignaturescore_signals",
+      "lib_statsignaturescore_statsignaturescore"
+    ],
+    "7": [
+      "lib_geneticpropensityscore",
+      "lib_geneticpropensityscore_clamp",
+      "lib_geneticpropensityscore_geneticpropensityscore",
+      "lib_geneticpropensityscore_isnum",
+      "lib_geneticpropensityscore_isplainobject",
+      "lib_geneticpropensityscore_norm",
+      "lib_geneticpropensityscore_normfield",
+      "lib_geneticpropensityscore_round2",
+      "lib_geneticpropensityscore_selftest",
+      "lib_geneticpropensityscore_total_possible_proxies",
+      "lib_geneticpropensityscore_traits"
+    ],
+    "8": [
+      "lib_scientificupsideindex",
+      "lib_scientificupsideindex_base_no_narr",
+      "lib_scientificupsideindex_base_with_narr",
+      "lib_scientificupsideindex_clamp",
+      "lib_scientificupsideindex_collapsegenetic",
+      "lib_scientificupsideindex_fuse",
+      "lib_scientificupsideindex_num",
+      "lib_scientificupsideindex_round2",
+      "lib_scientificupsideindex_scientificupsideindex",
+      "lib_scientificupsideindex_selftest",
+      "lib_scientificupsideindex_tierof"
+    ],
+    "9": [
+      "lib_ingestclubvideo",
+      "lib_ingestclubvideo_checkurlreachable",
+      "lib_ingestclubvideo_computehash",
+      "lib_ingestclubvideo_createhash_randomuuid",
+      "lib_ingestclubvideo_existssync_statsync",
+      "lib_ingestclubvideo_http",
+      "lib_ingestclubvideo_https",
+      "lib_ingestclubvideo_ingestclubvideo",
+      "lib_ingestclubvideo_jobstore",
+      "lib_ingestclubvideo_validateurl"
+    ],
+    "10": [
+      "lib_convertexternaleventlog",
+      "lib_convertexternaleventlog_convertexternaleventlog",
+      "lib_convertexternaleventlog_mapoptaeventtype",
+      "lib_convertexternaleventlog_normalizelocation",
+      "lib_convertexternaleventlog_parsemanualcsv",
+      "lib_convertexternaleventlog_parseoptajson",
+      "lib_convertexternaleventlog_parsetimestamp",
+      "lib_convertexternaleventlog_parsewyscoutcsv",
+      "lib_convertexternaleventlog_parsexmlmatch"
+    ],
+    "11": [
+      "lib_generatereferrallink",
+      "lib_generatereferrallink_crypto",
+      "lib_generatereferrallink_db_path",
+      "lib_generatereferrallink_fs",
+      "lib_generatereferrallink_generatereferrallink",
+      "lib_generatereferrallink_path",
+      "lib_generatereferrallink_readdb",
+      "lib_generatereferrallink_writedb"
+    ],
+    "12": [
+      "lib_rankprospects",
+      "lib_rankprospects_clamp",
+      "lib_rankprospects_rankprospects",
+      "lib_rankprospects_rankscored",
+      "lib_rankprospects_round2",
+      "lib_rankprospects_selftest",
+      "lib_rankprospects_tier_order"
+    ],
+    "13": [
+      "lib_resolvevideodirecturl",
+      "lib_resolvevideodirecturl_handledropbox",
+      "lib_resolvevideodirecturl_handlegoogledrive",
+      "lib_resolvevideodirecturl_http",
+      "lib_resolvevideodirecturl_https",
+      "lib_resolvevideodirecturl_resolvevideodirecturl",
+      "lib_resolvevideodirecturl_url"
+    ],
+    "14": [
+      "lib_countbyposition",
+      "lib_countbyposition_countbyposition",
+      "lib_countbyposition_test",
+      "lib_countbyposition_test_assert",
+      "lib_countbyposition_test_countbyposition",
+      "lib_countbyposition_test_zeros"
+    ],
+    "15": [
+      "lib_detectmomentumshifts",
+      "lib_detectmomentumshifts_clamp",
+      "lib_detectmomentumshifts_detectmomentumshifts",
+      "lib_detectmomentumshifts_event_values",
+      "lib_detectmomentumshifts_num",
+      "lib_detectmomentumshifts_round4"
+    ],
+    "16": [
+      "lib_impactscore",
+      "lib_impactscore_clamp",
+      "lib_impactscore_impactscore",
+      "lib_impactscore_r1",
+      "lib_impactscore_sc",
+      "lib_impactscore_weights"
+    ],
+    "17": [
+      "lib_importteamroster",
+      "lib_importteamroster_allowed",
+      "lib_importteamroster_csvrows",
+      "lib_importteamroster_fs",
+      "lib_importteamroster_importteamroster",
+      "lib_importteamroster_randomuuid"
+    ],
+    "18": [
+      "lib_playerstats",
+      "lib_playerstats_playerstats",
+      "lib_playerstats_test",
+      "lib_playerstats_test_assert",
+      "lib_playerstats_test_events",
+      "lib_playerstats_test_playerstats"
+    ],
+    "19": [
+      "lib_assesspositionbias",
+      "lib_assesspositionbias_assesspositionbias",
+      "lib_assesspositionbias_chisquaredcdf",
+      "lib_assesspositionbias_lgamma",
+      "lib_assesspositionbias_regularizedgammap"
+    ],
+    "20": [
+      "lib_percentilerank",
+      "lib_percentilerank_percentilerank",
+      "lib_percentilerank_test",
+      "lib_percentilerank_test_assert",
+      "lib_percentilerank_test_percentilerank"
+    ],
+    "21": [
+      "lib_avgrating",
+      "lib_avgrating_test",
+      "lib_avgrating_test_a",
+      "lib_avgrating_test_avgrating"
+    ],
+    "22": [
+      "lib_detectscoutbias",
+      "lib_detectscoutbias_detectscoutbias",
+      "lib_detectscoutbias_getcriticalz",
+      "lib_detectscoutbias_normalcdf"
+    ],
+    "23": [
+      "lib_importplayersfromcsv",
+      "lib_importplayersfromcsv_fs",
+      "lib_importplayersfromcsv_importplayersfromcsv",
+      "lib_importplayersfromcsv_path"
+    ],
+    "24": [
+      "lib_monitorvideofolder",
+      "lib_monitorvideofolder_fs",
+      "lib_monitorvideofolder_monitorvideofolder",
+      "lib_monitorvideofolder_path"
+    ],
+    "25": [
+      "lib_verifyplayeridentityconsistency",
+      "lib_verifyplayeridentityconsistency_computeiou",
+      "lib_verifyplayeridentityconsistency_cosinesimilarity",
+      "lib_verifyplayeridentityconsistency_verifyplayeridentityconsistency"
+    ],
+    "26": [
+      "lib_verifyvideointegrity",
+      "lib_verifyvideointegrity_crypto",
+      "lib_verifyvideointegrity_fs",
+      "lib_verifyvideointegrity_verifyvideointegrity"
+    ],
+    "27": [
+      "lib_calculatereferralrewards",
+      "lib_calculatereferralrewards_calculatereferralrewards",
+      "lib_calculatereferralrewards_path"
+    ],
+    "28": [
+      "lib_generatescoutingreport",
+      "lib_generatescoutingreport_crypto",
+      "lib_generatescoutingreport_generatescoutingreport"
+    ],
+    "29": [
+      "lib_leaguestrength",
+      "lib_leaguestrength_league_table",
+      "lib_leaguestrength_leaguestrength"
+    ],
+    "30": [
+      "lib_autoplayersummary",
+      "lib_autoplayersummary_autoplayersummary"
+    ],
+    "31": [
+      "lib_calculateroi",
+      "lib_calculateroi_calculateroi"
+    ],
+    "32": [
+      "lib_combinescores",
+      "lib_combinescores_combinescores"
+    ],
+    "33": [
+      "lib_computeclipaggregatescore",
+      "lib_computeclipaggregatescore_computeclipaggregatescore"
+    ],
+    "34": [
+      "lib_computeplayervalueindex",
+      "lib_computeplayervalueindex_computeplayervalueindex"
+    ],
+    "35": [
+      "lib_computescoutroi",
+      "lib_computescoutroi_computescoutroi"
+    ],
+    "36": [
+      "lib_computestatcomposite",
+      "lib_computestatcomposite_computestatcomposite"
+    ],
+    "37": [
+      "lib_detectmetricanomalies",
+      "lib_detectmetricanomalies_detectmetricanomalies"
+    ],
+    "38": [
+      "lib_estimateplayervalue",
+      "lib_estimateplayervalue_estimateplayervalue"
+    ],
+    "39": [
+      "lib_findtopprospects",
+      "lib_findtopprospects_findtopprospects"
+    ],
+    "40": [
+      "lib_generatematchreportdigest",
+      "lib_generatematchreportdigest_generatematchreportdigest"
+    ],
+    "41": [
+      "lib_generateonboardingplan",
+      "lib_generateonboardingplan_generateonboardingplan"
+    ],
+    "42": [
+      "lib_generateplayerhighlightlinks",
+      "lib_generateplayerhighlightlinks_generateplayerhighlightlinks"
+    ],
+    "43": [
+      "lib_generateroireport",
+      "lib_generateroireport_generateroireport"
+    ],
+    "44": [
+      "lib_getonboardingprogress",
+      "lib_getonboardingprogress_getonboardingprogress"
+    ],
+    "45": [
+      "lib_importfixturecalendar",
+      "lib_importfixturecalendar_importfixturecalendar"
+    ],
+    "46": [
+      "lib_importplayerroster",
+      "lib_importplayerroster_importplayerroster"
+    ],
+    "47": [
+      "lib_mergescoutreports",
+      "lib_mergescoutreports_mergescoutreports"
+    ],
+    "48": [
+      "lib_normalizemetrics",
+      "lib_normalizemetrics_normalizemetrics"
+    ],
+    "49": [
+      "lib_parsematchmetadatafromfilename",
+      "lib_parsematchmetadatafromfilename_parsematchmetadatafromfilename"
+    ],
+    "50": [
+      "lib_projectdevelopmentprogram",
+      "lib_projectdevelopmentprogram_projectdevelopmentprogram"
+    ],
+    "51": [
+      "lib_rankbyundervaluedupside",
+      "lib_rankbyundervaluedupside_rankbyundervaluedupside"
+    ],
+    "52": [
+      "lib_scoutroianalyzer",
+      "lib_scoutroianalyzer_scoutroianalyzer"
+    ],
+    "53": [
+      "lib_videotimestampxml",
+      "lib_videotimestampxml_videotimestampxml"
+    ],
+    "54": [
+      "index_html"
+    ],
+    "55": [
+      "lib_impactScore"
+    ],
+    "56": [
+      "lib_impactScore_WEIGHTS"
+    ],
+    "57": [
+      "lib_percentileRank"
+    ],
+    "58": [
+      "lib_playerStats"
+    ],
+    "59": [
+      "lib_rankProspects"
+    ],
+    "60": [
+      "lib_rankProspects_DISCLAIMER"
+    ],
+    "61": [
+      "lib_readme_md"
+    ],
+    "62": [
+      "lib_scientificUpsideIndex"
+    ],
+    "63": [
+      "narrative_face_energy"
+    ],
+    "64": [
+      "readme_md"
+    ]
+  },
+  "cohesion": {
+    "0": 0.08,
+    "1": 0.08695652173913043,
+    "2": 0.1111111111111111,
+    "3": 0.17647058823529413,
+    "4": 0.15384615384615385,
+    "5": 0.16666666666666666,
+    "6": 0.2564102564102564,
+    "7": 0.32727272727272727,
+    "8": 0.4,
+    "9": 0.26666666666666666,
+    "10": 0.5833333333333334,
+    "11": 0.32142857142857145,
+    "12": 0.47619047619047616,
+    "13": 0.38095238095238093,
+    "14": 0.4,
+    "15": 0.4666666666666667,
+    "16": 0.6,
+    "17": 0.4,
+    "18": 0.4,
+    "19": 0.7,
+    "20": 0.5,
+    "21": 0.5,
+    "22": 0.8333333333333334,
+    "23": 0.5,
+    "24": 0.5,
+    "25": 0.8333333333333334,
+    "26": 0.5,
+    "27": 0.6666666666666666,
+    "28": 0.6666666666666666,
+    "29": 0.6666666666666666,
+    "30": 1.0,
+    "31": 1.0,
+    "32": 1.0,
+    "33": 1.0,
+    "34": 1.0,
+    "35": 1.0,
+    "36": 1.0,
+    "37": 1.0,
+    "38": 1.0,
+    "39": 1.0,
+    "40": 1.0,
+    "41": 1.0,
+    "42": 1.0,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 1.0,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "63": 1.0,
+    "64": 1.0
+  },
+  "gods": [
+    {
+      "id": "scientific_upside_index",
+      "label": "Scientific Upside Index",
+      "degree": 19
+    },
+    {
+      "id": "impact_score",
+      "label": "Impact Score",
+      "degree": 18
+    },
+    {
+      "id": "lib_statsignaturescore_statsignaturescore",
+      "label": "statSignatureScore()",
+      "degree": 8
+    },
+    {
+      "id": "lib_faceenergyprofile_faceenergyprofile",
+      "label": "faceEnergyProfile()",
+      "degree": 7
+    },
+    {
+      "id": "lib_geneticpropensityscore_geneticpropensityscore",
+      "label": "geneticPropensityScore()",
+      "degree": 7
+    },
+    {
+      "id": "lib_scientificupsideindex_scientificupsideindex",
+      "label": "scientificUpsideIndex()",
+      "degree": 7
+    },
+    {
+      "id": "lib_convertexternaleventlog_convertexternaleventlog",
+      "label": "convertExternalEventLog()",
+      "degree": 6
+    },
+    {
+      "id": "lib_convertexternaleventlog_parseoptajson",
+      "label": "parseOptaJson()",
+      "degree": 5
+    },
+    {
+      "id": "lib_convertexternaleventlog_parsetimestamp",
+      "label": "parseTimestamp()",
+      "degree": 5
+    },
+    {
+      "id": "lib_convertexternaleventlog_normalizelocation",
+      "label": "normalizeLocation()",
+      "degree": 5
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Neymar",
+      "target": "Scientific Upside Index",
+      "source_files": [
+        "IMPACT_SCORE.md",
+        "POC_REPORT.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "conceptually_related_to",
+      "why": "connects across different repos/directories; bridges separate communities; peripheral node `Neymar` unexpectedly reaches hub `Scientific Upside Index`"
+    },
+    {
+      "source": "impactScore",
+      "target": "Impact Score",
+      "source_files": [
+        "index.html",
+        "IMPACT_SCORE.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "implements",
+      "why": "connects across different repos/directories; peripheral node `impactScore` unexpectedly reaches hub `Impact Score`"
+    },
+    {
+      "source": "Filippa Angeldal",
+      "target": "Scientific Upside Index",
+      "source_files": [
+        "POC_REPORT_CALIBRATED.md",
+        "POC_REPORT.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "conceptually_related_to",
+      "why": "connects across different repos/directories; peripheral node `Filippa Angeldal` unexpectedly reaches hub `Scientific Upside Index`"
+    },
+    {
+      "source": "Kevin De Bruyne",
+      "target": "Scientific Upside Index",
+      "source_files": [
+        "IMPACT_SCORE.md",
+        "POC_REPORT.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "conceptually_related_to",
+      "why": "connects across different repos/directories; peripheral node `Kevin De Bruyne` unexpectedly reaches hub `Scientific Upside Index`"
+    },
+    {
+      "source": "Stephen Eustáquio",
+      "target": "Scientific Upside Index",
+      "source_files": [
+        "POC_REPORT_CALIBRATED.md",
+        "POC_REPORT.md"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "conceptually_related_to",
+      "why": "connects across different repos/directories; peripheral node `Stephen Eustáquio` unexpectedly reaches hub `Scientific Upside Index`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `Scientific Upside Index` connect `Scientific Upside Index` to `Impact Score`?",
+      "why": "High betweenness centrality (0.012) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `Impact Score` connect `Impact Score` to `Scientific Upside Index`?",
+      "why": "High betweenness centrality (0.010) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `Neymar` connect `Impact Score` to `Scientific Upside Index`?",
+      "why": "High betweenness centrality (0.004) - this node is a cross-community bridge."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `a`, `{avgRating}`, `assert` to the rest of the system?",
+      "why": "133 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `convertExternalEventLog.test.js` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.08 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Scientific Upside Index` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.08695652173913043 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Impact Score` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.1111111111111111 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

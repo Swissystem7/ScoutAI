@@ -84,15 +84,5 @@
   "82": "extractMatchMetadataFromFileName.js",
   "83": "generatePlayerHighlightReel.js",
   "84": "importVideoFromCloudStorage.js",
-  "85": "linkVideoClips.js",
-  "86": "proof-offball.js",
-  "87": "proof-identity.js",
-  "88": "importRosterFromFile.js",
-  "89": "generateAuditToken.js",
-  "90": "sanitizeScoutingReport.js",
-  "91": "compareScoutData.js",
-  "92": "createAiPredictionAudit.js",
-  "93": "generateSampleReport.js",
-  "94": "verifyPlayerConsent.js",
-  "95": "watchVideoFolder.js"
+  "85": "linkVideoClips.js"
 }
