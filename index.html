@@ -13,7 +13,18 @@
     input[type=file],input[type=text]{width:100%}button{background:#176b48;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
     .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{background:#f3f6f1;padding:16px;border-radius:12px}.metric strong{display:block;font-size:1.6rem;margin:8px 0}
     .notice{border-right:4px solid #cf8b00;background:#fff6dd;padding:12px}.actions button{margin-left:8px}.status{min-height:1.5em;font-weight:700}
-    footer{color:#59675e;font-size:.9rem;margin:22px 0}@media(max-width:650px){.metrics{grid-template-columns:1fr}}
+    .impact-head{display:flex;flex-wrap:wrap;gap:16px;align-items:stretch;margin:12px 0 18px}
+    .impact-score{flex:0 0 160px;background:#10281d;color:#fff;border-radius:14px;padding:18px;text-align:center}
+    .impact-score strong{display:block;font-size:2.4rem;line-height:1.1;margin:8px 0 4px}
+    .impact-score span{opacity:.9;font-size:.9rem}
+    .impact-decision{flex:1;min-width:220px;background:#f3f6f1;border-radius:14px;padding:16px;border-right:4px solid #176b48}
+    .impact-decision .decision-label{font-size:.85rem;color:#59675e;margin-bottom:4px}
+    .impact-decision strong{display:block;font-size:1.15rem;margin-bottom:8px}
+    .bars{display:grid;gap:10px}.bar-row{display:grid;grid-template-columns:110px 1fr 48px;gap:10px;align-items:center}
+    .bar-track{background:#e4ebe3;border-radius:999px;height:12px;overflow:hidden}
+    .bar-fill{background:#176b48;height:100%;border-radius:999px}
+    .formula{font-size:.9rem;color:#59675e;margin-top:14px}
+    footer{color:#59675e;font-size:.9rem;margin:22px 0}@media(max-width:650px){.metrics{grid-template-columns:1fr}.bar-row{grid-template-columns:1fr}.bar-row span:last-child{justify-self:start}}
   </style>
 </head>
 <body>
@@ -43,6 +54,12 @@
     <ol id="timeline"></ol>
   </section>
 
+  <section class="card" aria-live="polite">
+    <h2>כרטיס Impact Score למועדון</h2>
+    <p>ציון שקוף 0–100 שממחיש למחלקה המקצועית תרומה מעבר לסטטיסטיקות קופסה: מאמץ (Grit), מעורבות (Involvement) והכרעה (Clutch). כל הערכים כאן הם <span class="badge">DEMO_METRIC</span> מהזרע — לא מדידה מווידאו.</p>
+    <div id="impactCard"></div>
+  </section>
+
   <section class="card actions">
     <h2>פעולות שאינן זמינות בדמו</h2>
     <button type="button" data-unavailable="הרשמה ויצירת חשבון אינן זמינות; לא נשמר חשבון.">יצירת חשבון</button>
@@ -61,6 +78,58 @@
 <script>
   const metricRoot = document.getElementById('metrics');
   const timelineRoot = document.getElementById('timeline');
+  const impactRoot = document.getElementById('impactCard');
+
+  function metricValue(fixture, id) {
+    const item = fixture.metrics.find(entry => entry.id === id);
+    return item ? item.value : 0;
+  }
+
+  function buildClubImpact(fixture) {
+    const grit = metricValue(fixture, 'work-demo');
+    const involvement = metricValue(fixture, 'control-demo');
+    const clutch = metricValue(fixture, 'pace-demo');
+    const impact = Math.round(0.4 * grit + 0.3 * involvement + 0.3 * clutch);
+    const components = [
+      { key: 'grit', label: 'Grit (מאמץ)', value: grit, role: 'פרופיל מאמץ — בלם / קשר הגנתי' },
+      { key: 'involvement', label: 'Involvement (מעורבות)', value: involvement, role: 'פרופיל יצירה — קשר מרכזי / קישור' },
+      { key: 'clutch', label: 'Clutch (הכרעה)', value: clutch, role: 'פרופיל הכרעה — חלוץ / שחקן קו התקפה' }
+    ];
+    const dominant = components.reduce((best, item) => item.value > best.value ? item : best, components[0]);
+    let decision;
+    let rationale;
+    if (impact >= 75) {
+      decision = 'קצר רשימה — מועמד לפיילוט אימונים';
+      rationale = 'ציון Impact גבוה יחסית לסף ההמחשה; מומלץ לצוות המקצועי לבחון התאמה לסגל באימון מבוקר.';
+    } else if (impact >= 60) {
+      decision = 'מעקב — לאסוף משחקים נוספים';
+      rationale = 'פרופיל ביניים: יש אותות תרומה, אך נדרש מדגם רחב יותר לפני החלטת גיוס.';
+    } else {
+      decision = 'לא כעת — מתחת לסף המועדון';
+      rationale = 'הציון המשוקלל נמוך יחסית; עדיף להפנות משאבי סקאוטינג למועמדים אחרים בתיק.';
+    }
+    return { grit, involvement, clutch, impact, components, dominant, decision, rationale };
+  }
+
+  function renderImpact(fixture) {
+    const card = buildClubImpact(fixture);
+    const bars = card.components.map(item =>
+      `<div class="bar-row"><span>${item.label}</span><div class="bar-track" aria-hidden="true"><div class="bar-fill" style="width:${item.value}%"></div></div><span><strong>${item.value}</strong>/100</span></div>`
+    ).join('');
+    impactRoot.innerHTML =
+      `<div class="impact-head">` +
+        `<div class="impact-score"><span class="badge">DEMO_METRIC</span><strong>${card.impact}</strong><span>Impact Score</span></div>` +
+        `<div class="impact-decision">` +
+          `<div class="decision-label">המלצת החלטה למועדון (המחשה)</div>` +
+          `<strong>${card.decision}</strong>` +
+          `<p>${card.rationale}</p>` +
+          `<p><span class="badge">DEMO_METRIC</span> התאמת תפקיד בולטת: ${card.dominant.role}</p>` +
+        `</div>` +
+      `</div>` +
+      `<div class="bars">${bars}</div>` +
+      `<p class="formula">נוסחה שקופה בדמו: Impact = 0.4×Grit + 0.3×Involvement + 0.3×Clutch. הרכיבים נגזרים ממדדי ה־fixture של אותו זרע (עבודה→Grit, שליטה→Involvement, קצב→Clutch).</p>`;
+  }
+
   function render() {
     const fixture = ScoutAIDemo.createDemoFixture(document.getElementById('seed').value);
     metricRoot.innerHTML = fixture.metrics.map(item =>
@@ -69,6 +138,7 @@
     timelineRoot.innerHTML = fixture.timeline.map(item =>
       `<li><span class="badge">${item.provenance}</span> ${item.at} — ${item.label}</li>`
     ).join('');
+    renderImpact(fixture);
   }
   document.getElementById('run').addEventListener('click', render);
   document.getElementById('video').addEventListener('change', event => {
