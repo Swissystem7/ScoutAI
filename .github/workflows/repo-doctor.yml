@@ -1,0 +1,70 @@
+name: Repo Doctor
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run checks
+        id: checks
+        run: |
+          problems=""
+          if [ ! -f README.md ]; then problems="${problems}- חסר קובץ README.md\n"; fi
+          if [ ! -f LICENSE ] && [ ! -f LICENSE.md ]; then problems="${problems}- חסר קובץ LICENSE\n"; fi
+
+          links=$(grep -rhoE 'https?://[^ )">]+' README.md index.html 2>/dev/null | sed 's/[.,)]*$//' | sort -u | head -40)
+          for u in $links; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -A 'Mozilla/5.0 repo-doctor' --max-time 15 -L "$u" || echo 000)
+            case "$code" in
+              200|301|302|403|429|000) ;;
+              *) problems="${problems}- קישור שבור ($code): $u\n" ;;
+            esac
+          done
+
+          printf "%b" "$problems" > problems.txt
+          if [ -s problems.txt ]; then
+            echo "has=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "has=0" >> "$GITHUB_OUTPUT"
+          fi
+          echo "--- ממצאים ---"
+          cat problems.txt
+
+      - name: Open or update issue
+        if: steps.checks.outputs.has == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="בדיקת ריפו שבועית — נמצאו ממצאים"
+          num=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          body="ממצאים מהבדיקה האוטומטית ($(date -u +%Y-%m-%d)):
+
+          $(cat problems.txt)
+
+          נוצר אוטומטית על ידי Repo Doctor."
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
+
+      - name: Close issue when clean
+        if: steps.checks.outputs.has == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="בדיקת ריפו שבועית — נמצאו ממצאים"
+          num=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue close "$num" --comment "הבדיקה האחרונה עברה נקי. נסגר אוטומטית."
+          fi
