@@ -43,11 +43,13 @@ jobs:
           echo "OK: graphify-out is not tracked"
       - name: No oversized files in the tree
         run: |
+          # The loop's last comparison is normally false, which would make the
+          # whole assignment exit non-zero and abort the step under `set -e`.
           big=$(git ls-files | while read -r f; do
             [ -f "$f" ] || continue
             size=$(wc -c < "$f")
-            [ "$size" -gt 262144 ] && echo "$f ($size bytes)"
-          done)
+            if [ "$size" -gt 262144 ]; then echo "$f ($size bytes)"; fi
+          done) || true
           if [ -n "$big" ]; then
             echo "::error::files over 256KB are tracked:"
             echo "$big"
