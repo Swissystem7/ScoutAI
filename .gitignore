@@ -7,3 +7,5 @@ __pycache__/
 Thumbs.db
 dist/
 build/
+*.key
+*.pem
