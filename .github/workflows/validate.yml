@@ -1,9 +1,56 @@
 name: validate
 on:
   push:
+  pull_request:
   workflow_dispatch:
 jobs:
+  test:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run unit tests
+        run: node --test
+
+  proofs:
+    name: the proofs actually run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # These three scripts are the only evidence that the Impact Score is
+      # computed rather than asserted. They were unrunnable for weeks because
+      # lib/ had been deleted as "unused" while they still required it, and
+      # nothing noticed. Now the build notices.
+      - name: Every module the proofs require must exist
+        run: |
+          node -e "
+            const fs=require('fs');
+            const scripts=['proof-demo.js','proof-match.js','proof-tournament.js'];
+            let missing=[];
+            for (const s of scripts) {
+              const src=fs.readFileSync(s,'utf8');
+              for (const m of src.matchAll(/require\('(\.\/lib\/[^']+)'\)/g)) {
+                if (!fs.existsSync(m[1])) missing.push(s+' -> '+m[1]);
+              }
+            }
+            if (missing.length) throw new Error('missing modules:\n'+missing.join('\n'));
+            console.log('OK: every required module is present');
+          "
+      - name: Run the proofs
+        run: |
+          node proof-demo.js > /dev/null
+          node proof-match.js > /dev/null
+          node proof-tournament.js > /dev/null
+          echo "OK: all three proofs ran"
+
   syntax:
+    name: browser bundle
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,3 +62,31 @@ jobs:
           node -e "const fs=require('fs');const h=fs.readFileSync('index.html','utf8');const s=[...h.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)].map(m=>m[1]);if(!s.length){throw new Error('no scripts found')}s.forEach(x=>new Function(x));console.log('OK: '+s.length+' inline scripts parse cleanly')"
       - name: Confirm single-file app present
         run: test -f index.html && echo "index.html present"
+
+  hygiene:
+    name: repo hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generated analysis output must stay untracked
+        run: |
+          if git ls-files --error-unmatch graphify-out > /dev/null 2>&1; then
+            echo "::error::graphify-out is tracked again — it is generated output, keep it in .gitignore"
+            exit 1
+          fi
+          echo "OK: graphify-out is not tracked"
+      - name: No oversized files in the tree
+        run: |
+          # The loop's last comparison is normally false, which would make the
+          # whole assignment exit non-zero and abort the step under `set -e`.
+          big=$(git ls-files | while read -r f; do
+            [ -f "$f" ] || continue
+            size=$(wc -c < "$f")
+            if [ "$size" -gt 262144 ]; then echo "$f ($size bytes)"; fi
+          done) || true
+          if [ -n "$big" ]; then
+            echo "::error::files over 256KB are tracked:"
+            echo "$big"
+            exit 1
+          fi
+          echo "OK: no tracked file exceeds 256KB"

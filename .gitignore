@@ -7,5 +7,7 @@ __pycache__/
 Thumbs.db
 dist/
 build/
+# Generated code-analysis output (graphify). Regenerated on demand; never committed.
+graphify-out/
 *.key
 *.pem
