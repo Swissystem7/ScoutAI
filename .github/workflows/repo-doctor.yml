@@ -22,7 +22,11 @@ jobs:
           if [ ! -f README.md ]; then problems="${problems}- חסר קובץ README.md\n"; fi
           if [ ! -f LICENSE ] && [ ! -f LICENSE.md ]; then problems="${problems}- חסר קובץ LICENSE\n"; fi
 
-          links=$(grep -rhoE 'https?://[^ )">]+' README.md index.html 2>/dev/null | sed 's/[.,)]*$//' | sort -u | head -40)
+          # exclude quotes from the URL charset, and skip template/placeholder URLs
+          links=$(grep -rhoE "https?://[^ )\">'<]+" README.md index.html 2>/dev/null \
+            | sed "s/[.,;)'\"]*$//" \
+            | grep -vE '\{|\.example($|/)|example\.(com|org|net)|localhost|127\.0\.0\.1' \
+            | sort -u | head -40)
           for u in $links; do
             code=$(curl -s -o /dev/null -w '%{http_code}' -A 'Mozilla/5.0 repo-doctor' --max-time 15 -L "$u" || echo 000)
             case "$code" in
