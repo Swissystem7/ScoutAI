@@ -1,3 +1,5 @@
+> **Note**: This document was prepared for the MusicTech Hackathon, Afeka/Ono, June 2026. It is kept for historical reference.
+
 # ScoutAI — חבילת הצגה להאקתון
 
 ## הבעיה במשפט אחד
