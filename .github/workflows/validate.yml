@@ -81,6 +81,8 @@ jobs:
           # whole assignment exit non-zero and abort the step under `set -e`.
           big=$(git ls-files | while read -r f; do
             [ -f "$f" ] || continue
+            # the StatsBomb/fbref aggregates the demo reads are data, not stray binaries
+            case "$f" in data/*.json) continue ;; esac
             size=$(wc -c < "$f")
             if [ "$size" -gt 262144 ]; then echo "$f ($size bytes)"; fi
           done) || true
