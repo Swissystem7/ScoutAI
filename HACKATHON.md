@@ -1,4 +1,4 @@
-> **Note**: This document was prepared for the MusicTech Hackathon, Afeka/Ono, June 2026. It is kept for historical reference.
+> **הערה:** מסמך זה הוכן להאקתון ביוני 2026 ונשמר לתיעוד היסטורי בלבד.
 
 # ScoutAI — חבילת הצגה להאקתון
 
