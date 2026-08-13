@@ -35,5 +35,442 @@
     };
   }
 
-  return { createDemoFixture };
+  function flattenCalibrated(data) {
+    if (Array.isArray(data)) return data.slice();
+    const men = data && Array.isArray(data.men) ? data.men : [];
+    const women = data && Array.isArray(data.women) ? data.women : [];
+    return men.concat(women);
+  }
+
+  function attachBreakdowns(rows, top30) {
+    const extras = Array.isArray(top30) ? top30 : [];
+    const byId = new Map(extras.map(function (item) {
+      return [String(item.id), item];
+    }));
+    return rows.map(function (row) {
+      const extra = byId.get(String(row.id));
+      return {
+        id: row.id,
+        name: row.name,
+        team: row.team,
+        comp: row.comp,
+        category: row.category,
+        minutes: row.minutes,
+        index: row.index,
+        rank: row.rank,
+        breakdown: row.breakdown || (extra && extra.breakdown) || null,
+        explanation: row.explanation || (extra && extra.explanation) || null,
+        provenance: 'STATSBOMB_OPEN_DATA'
+      };
+    });
+  }
+
+  const WORLD_CUP_MAX_MINUTES = 480;
+  const SEASON_MISLABELED = 'season data, mislabeled';
+
+  function isWorldCupLabel(comp) {
+    return /world\s*cup/i.test(String(comp || ''));
+  }
+
+  function minutesImpossibleForCompetition(row) {
+    const minutes = Number(row && row.minutes);
+    if (!Number.isFinite(minutes)) return false;
+    return isWorldCupLabel(row.comp) && minutes > WORLD_CUP_MAX_MINUTES;
+  }
+
+  function flagImpossibleMinutes(rows) {
+    return rows.map(function (row) {
+      if (!minutesImpossibleForCompetition(row)) return row;
+      return Object.assign({}, row, {
+        labeledComp: row.comp,
+        comp: SEASON_MISLABELED,
+        hygiene: SEASON_MISLABELED
+      });
+    });
+  }
+
+  function rankPlayers(rows) {
+    return rows
+      .slice()
+      .filter(function (row) { return row && row.name; })
+      .sort(function (a, b) {
+        const scoreDelta = Number(b.index) - Number(a.index);
+        if (scoreDelta !== 0) return scoreDelta;
+        return String(a.name).localeCompare(String(b.name));
+      })
+      .map(function (row, i) {
+        return Object.assign({}, row, { rank: i + 1, provenance: 'STATSBOMB_OPEN_DATA' });
+      });
+  }
+
+  function preparePocRows(calibrated, top30) {
+    return flagImpossibleMinutes(rankPlayers(attachBreakdowns(flattenCalibrated(calibrated), top30)));
+  }
+
+  function formatBreakdown(breakdown) {
+    if (!breakdown || typeof breakdown !== 'object') return '';
+    const parts = [];
+    Object.keys(breakdown).forEach(function (key) {
+      const item = breakdown[key];
+      if (!item || typeof item !== 'object' || item.value == null) return;
+      const weight = item.weight != null ? ' ×' + item.weight : '';
+      parts.push(key + ' ' + item.value + weight);
+    });
+    return parts.join(' · ');
+  }
+
+  const DEFAULT_METRIC = Object.freeze({
+    grit: 40,
+    involvement: 30,
+    clutch: 30,
+    minMinutes: 270,
+    normalizePosition: false,
+    selectedId: ''
+  });
+
+  function clamp(value, lo, hi) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return lo;
+    return Math.min(hi, Math.max(lo, n));
+  }
+
+  function round1(value) {
+    return Math.round(Number(value) * 10) / 10;
+  }
+
+  function round2(value) {
+    return Math.round(Number(value) * 100) / 100;
+  }
+
+  function playerKey(row) {
+    if (row && row.id != null && String(row.id)) return String(row.id);
+    return String(row && row.name || '') + '|' + String(row && row.team || '');
+  }
+
+  function positionGroup(position) {
+    const text = String(position || '');
+    if (/goalkeeper/i.test(text)) return 'GK';
+    if (/back|defen/i.test(text)) return 'DF';
+    if (/forward|wing|striker/i.test(text)) return 'FW';
+    if (/midfield/i.test(text)) return 'MF';
+    return 'OT';
+  }
+
+  function per90(value, minutes) {
+    const mins = Number(minutes) || 0;
+    if (mins <= 0) return 0;
+    return (Number(value) || 0) * 90 / mins;
+  }
+
+  function scaleCap(value, cap) {
+    if (!cap) return 0;
+    return clamp((Number(value) || 0) / cap * 100, 0, 100);
+  }
+
+  function rawPer90(player, totalKey, per90Key) {
+    const minutes = player.totalMinutesProxy || player.minutes || 0;
+    if (player.per90 && Number.isFinite(Number(player.per90[per90Key]))) {
+      return Number(player.per90[per90Key]);
+    }
+    return per90(player[totalKey], minutes);
+  }
+
+  function componentsFromEvents(player) {
+    const press = rawPer90(player, 'pressures', 'pressuresPer90');
+    const tackles = rawPer90(player, 'tackles', 'tacklesPer90');
+    const intercepts = rawPer90(player, 'interceptions', 'interceptionsPer90');
+    const defense = rawPer90(player, 'defensiveActions', 'defensiveActionsPer90');
+    const grit = round1(scaleCap(press, 18) * 0.45 + scaleCap(tackles + intercepts, 6) * 0.3 + scaleCap(defense, 14) * 0.25);
+
+    const prog = rawPer90(player, 'progressiveActions', 'progressiveActionsPer90');
+    const keyPasses = rawPer90(player, 'keyPasses', 'keyPassesPer90');
+    const passes = rawPer90(player, 'passesCompleted', 'passesCompletedPer90');
+    const involvement = round1(scaleCap(prog, 22) * 0.5 + scaleCap(keyPasses, 4) * 0.3 + scaleCap(passes, 80) * 0.2);
+
+    const xg = rawPer90(player, 'shotXgSum', 'shotXgSumPer90');
+    const box = rawPer90(player, 'boxTouches', 'boxTouchesPer90');
+    const onTarget = rawPer90(player, 'shotsOnTarget', 'shotsOnTargetPer90');
+    const clutch = round1(scaleCap(xg, 0.6) * 0.4 + scaleCap(box, 8) * 0.35 + scaleCap(onTarget, 2) * 0.25);
+
+    return {
+      grit: grit,
+      involvement: involvement,
+      clutch: clutch,
+      raw: {
+        pressures90: round2(press),
+        tacklesInt90: round2(tackles + intercepts),
+        defensive90: round2(defense),
+        progressive90: round2(prog),
+        keyPasses90: round2(keyPasses),
+        passes90: round2(passes),
+        xg90: round2(xg),
+        boxTouches90: round2(box),
+        shotsOnTarget90: round2(onTarget)
+      }
+    };
+  }
+
+  function percentile(value, peers) {
+    if (!peers.length) return 50;
+    let below = 0;
+    for (let i = 0; i < peers.length; i += 1) {
+      if (peers[i] <= value) below += 1;
+    }
+    return round1(below / peers.length * 100);
+  }
+
+  function normalizeByPosition(rows) {
+    const groups = {};
+    rows.forEach(function (row) {
+      const key = row.positionGroup || 'OT';
+      if (!groups[key]) groups[key] = { grit: [], involvement: [], clutch: [] };
+      groups[key].grit.push(row.components.grit);
+      groups[key].involvement.push(row.components.involvement);
+      groups[key].clutch.push(row.components.clutch);
+    });
+    return rows.map(function (row) {
+      const peers = groups[row.positionGroup || 'OT'];
+      return Object.assign({}, row, {
+        components: {
+          grit: percentile(row.components.grit, peers.grit),
+          involvement: percentile(row.components.involvement, peers.involvement),
+          clutch: percentile(row.components.clutch, peers.clutch),
+          raw: row.components.raw,
+          normalized: true
+        }
+      });
+    });
+  }
+
+  function normalizeMetricSpec(spec) {
+    const src = spec || {};
+    return {
+      grit: clamp(src.grit, 0, 100),
+      involvement: clamp(src.involvement, 0, 100),
+      clutch: clamp(src.clutch, 0, 100),
+      minMinutes: clamp(src.minMinutes, 0, 900),
+      normalizePosition: !!src.normalizePosition,
+      selectedId: src.selectedId ? String(src.selectedId) : ''
+    };
+  }
+
+  function compositeScore(components, spec) {
+    const weights = normalizeMetricSpec(spec);
+    const total = weights.grit + weights.involvement + weights.clutch;
+    if (!total) return 0;
+    return round2(
+      (components.grit * weights.grit +
+        components.involvement * weights.involvement +
+        components.clutch * weights.clutch) / total
+    );
+  }
+
+  function eventPlayers(dataset) {
+    if (Array.isArray(dataset)) return dataset;
+    if (dataset && Array.isArray(dataset.players)) return dataset.players;
+    return [];
+  }
+
+  function scoreAndRank(players, spec) {
+    const metric = normalizeMetricSpec(spec);
+    const prepared = players
+      .filter(function (row) {
+        return row && (row.name || row.id) && (row.totalMinutesProxy || row.minutes || 0) >= metric.minMinutes;
+      })
+      .map(function (row) {
+        return {
+          id: playerKey(row),
+          name: row.name,
+          team: row.team,
+          comp: row.comp || row.competition || 'WorldCup2018',
+          category: row.category,
+          position: row.position || '',
+          positionGroup: positionGroup(row.position),
+          minutes: row.totalMinutesProxy || row.minutes || 0,
+          matchesPlayed: row.matchesPlayed,
+          components: componentsFromEvents(row),
+          sourceRow: row,
+          provenance: 'STATSBOMB_OPEN_DATA'
+        };
+      });
+    const adjusted = metric.normalizePosition ? normalizeByPosition(prepared) : prepared;
+    return adjusted
+      .map(function (row) {
+        const score = compositeScore(row.components, metric);
+        return Object.assign({}, row, { score: score, index: score });
+      })
+      .sort(function (a, b) {
+        const delta = b.score - a.score;
+        if (delta !== 0) return delta;
+        return String(a.name).localeCompare(String(b.name));
+      })
+      .map(function (row, i) {
+        return Object.assign({}, row, { rank: i + 1 });
+      });
+  }
+
+  function applyMetric(dataset, spec, baselineSpec) {
+    const ranked = scoreAndRank(eventPlayers(dataset), spec);
+    if (!baselineSpec) return ranked;
+    const baseline = scoreAndRank(eventPlayers(dataset), baselineSpec);
+    const byId = {};
+    baseline.forEach(function (row) { byId[row.id] = row; });
+    return ranked.map(function (row) {
+      const prev = byId[row.id];
+      return Object.assign({}, row, {
+        baselineScore: prev ? prev.score : null,
+        baselineRank: prev ? prev.rank : null,
+        deltaScore: prev ? round2(row.score - prev.score) : null,
+        deltaRank: prev ? prev.rank - row.rank : null
+      });
+    });
+  }
+
+  function serializeMetricHash(spec) {
+    const metric = normalizeMetricSpec(spec);
+    const parts = [
+      'g=' + Math.round(metric.grit),
+      'i=' + Math.round(metric.involvement),
+      'c=' + Math.round(metric.clutch),
+      'min=' + Math.round(metric.minMinutes),
+      'npos=' + (metric.normalizePosition ? '1' : '0')
+    ];
+    if (metric.selectedId) parts.push('sel=' + encodeURIComponent(metric.selectedId));
+    return parts.join('&');
+  }
+
+  function parseMetricHash(hash) {
+    const text = String(hash || '').replace(/^#/, '');
+    if (!text) return normalizeMetricSpec(DEFAULT_METRIC);
+    const params = {};
+    text.split('&').forEach(function (pair) {
+      const parts = pair.split('=');
+      if (parts.length < 2) return;
+      params[decodeURIComponent(parts[0])] = decodeURIComponent(parts.slice(1).join('='));
+    });
+    return normalizeMetricSpec({
+      grit: params.g,
+      involvement: params.i,
+      clutch: params.c,
+      minMinutes: params.min,
+      normalizePosition: params.npos === '1' || params.npos === 'true',
+      selectedId: params.sel || ''
+    });
+  }
+
+  function formatFormula(spec) {
+    const metric = normalizeMetricSpec(spec);
+    const total = metric.grit + metric.involvement + metric.clutch;
+    return 'ציון = (' + metric.grit + '×Grit + ' + metric.involvement + '×Involvement + ' +
+      metric.clutch + '×Clutch) / ' + (total || 1);
+  }
+
+  function buildLesson(row, spec) {
+    const metric = normalizeMetricSpec(spec);
+    if (!row) {
+      return [{
+        title: 'בחרו שחקן',
+        body: 'לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב ממספרים גולמיים.'
+      }];
+    }
+    const raw = row.components && row.components.raw || {};
+    const total = metric.grit + metric.involvement + metric.clutch || 1;
+    const gritPart = round2(row.components.grit * metric.grit / total);
+    const invPart = round2(row.components.involvement * metric.involvement / total);
+    const clutchPart = round2(row.components.clutch * metric.clutch / total);
+    const scaleNote = row.components.normalized
+      ? 'אחרי נרמול עמדה כל רכיב הוא אחוזון 0–100 בתוך קבוצת העמדה ' + row.positionGroup + '.'
+      : 'בלי נרמול עמדה הרכיבים הם סקייל 0–100 מול תקרות קבועות (לא כיול מדעי).';
+    return [
+      {
+        title: '1. מי השחקן ומה המקור',
+        body: row.name + ' · ' + (row.team || '') + ' · ' + (row.position || 'בלי עמדה') +
+          ' · ' + row.minutes + ' דקות. מקור: STATSBOMB_OPEN_DATA, מונדיאל 2018. זה שיעור לימודי, לא סקאוטינג מקצועי ולא מוצר מסחרי.'
+      },
+      {
+        title: '2. מספרים גולמיים ל-90 דקות',
+        body: 'לחיצות ' + raw.pressures90 + '/90, תיקולים+חטיפות ' + raw.tacklesInt90 +
+          '/90, פעולות הגנה ' + raw.defensive90 + '/90, התקדמות ' + raw.progressive90 +
+          '/90, מסירות מפתח ' + raw.keyPasses90 + '/90, מסירות ' + raw.passes90 +
+          '/90, xG ' + raw.xg90 + '/90, נגיעות ברחבה ' + raw.boxTouches90 +
+          '/90, בעיטות למסגרת ' + raw.shotsOnTarget90 + '/90.'
+      },
+      {
+        title: '3. תרגום לשלושה רכיבים',
+        body: 'Grit נבנה מלחיצות/תיקולים/הגנה → ' + row.components.grit +
+          '. Involvement מפעולות התקדמות ומסירות מפתח → ' + row.components.involvement +
+          '. Clutch מ-xG, נגיעות ברחבה ובעיטות למסגרת → ' + row.components.clutch +
+          '. ' + scaleNote
+      },
+      {
+        title: '4. כפל במשקלות שבחרתם',
+        body: formatFormula(metric) + '. תרומות: Grit ' + gritPart +
+          ' + Involvement ' + invPart + ' + Clutch ' + clutchPart +
+          ' = ' + row.score + '. המשקלות ידניות ושרירותיות — זה בדיוק מה שהשיעור מדגים.'
+      },
+      {
+        title: '5. דירוג אחרי סף דקות',
+        body: 'רק שחקנים עם לפחות ' + metric.minMinutes +
+          ' דקות נשארים. הדירוג הנוכחי: #' + row.rank +
+          (row.deltaRank == null ? '.' : ' (Δדירוג ' + (row.deltaRank > 0 ? '+' : '') + row.deltaRank + ' מול בסיס 40/30/30).')
+      }
+    ];
+  }
+
+  function bumpSpec(spec, key, delta) {
+    const next = normalizeMetricSpec(spec);
+    next[key] = clamp(next[key] + delta, 0, 100);
+    return next;
+  }
+
+  function fragilityReport(dataset, spec, delta) {
+    const step = delta == null ? 10 : delta;
+    const variants = [
+      { key: 'grit', label: 'Grit +' + step },
+      { key: 'involvement', label: 'Involvement +' + step },
+      { key: 'clutch', label: 'Clutch +' + step }
+    ];
+    return variants.map(function (variant) {
+      const ranked = applyMetric(dataset, bumpSpec(spec, variant.key, step), spec);
+      const swings = ranked
+        .filter(function (row) { return row.deltaRank; })
+        .sort(function (a, b) { return Math.abs(b.deltaRank) - Math.abs(a.deltaRank); })
+        .slice(0, 5)
+        .map(function (row) {
+          return {
+            name: row.name,
+            team: row.team,
+            from: row.baselineRank,
+            to: row.rank,
+            deltaRank: row.deltaRank
+          };
+        });
+      return { key: variant.key, label: variant.label, swings: swings };
+    });
+  }
+
+  return {
+    createDemoFixture: createDemoFixture,
+    flattenCalibrated: flattenCalibrated,
+    attachBreakdowns: attachBreakdowns,
+    rankPlayers: rankPlayers,
+    preparePocRows: preparePocRows,
+    formatBreakdown: formatBreakdown,
+    flagImpossibleMinutes: flagImpossibleMinutes,
+    minutesImpossibleForCompetition: minutesImpossibleForCompetition,
+    WORLD_CUP_MAX_MINUTES: WORLD_CUP_MAX_MINUTES,
+    SEASON_MISLABELED: SEASON_MISLABELED,
+    DEFAULT_METRIC: DEFAULT_METRIC,
+    positionGroup: positionGroup,
+    componentsFromEvents: componentsFromEvents,
+    compositeScore: compositeScore,
+    applyMetric: applyMetric,
+    serializeMetricHash: serializeMetricHash,
+    parseMetricHash: parseMetricHash,
+    formatFormula: formatFormula,
+    buildLesson: buildLesson,
+    fragilityReport: fragilityReport,
+    normalizeMetricSpec: normalizeMetricSpec,
+    playerKey: playerKey
+  };
 }));

@@ -24,40 +24,85 @@
     .bar-track{background:#e4ebe3;border-radius:999px;height:12px;overflow:hidden}
     .bar-fill{background:#176b48;height:100%;border-radius:999px}
     .formula{font-size:.9rem;color:#59675e;margin-top:14px}
-    footer{color:#59675e;font-size:.9rem;margin:22px 0}@media(max-width:650px){.metrics{grid-template-columns:1fr}.bar-row{grid-template-columns:1fr}.bar-row span:last-child{justify-self:start}}
+    .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:right;padding:10px 8px;border-bottom:1px solid #e4ebe3;vertical-align:top}
+    th{font-size:.8rem;letter-spacing:.02em;color:#59675e}tr:hover td{background:#f7faf6}.muted{color:#59675e;font-size:.85rem}
+    tr.flagged td{background:#fff6dd}.flag{display:inline-block;margin-top:6px;background:#fff0c2;color:#6a4b00;border-radius:999px;padding:2px 8px;font-size:.75rem;font-weight:700}
+    .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
+    .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0}
+    .toggle{display:flex;gap:10px;align-items:center;font-weight:700;margin:10px 0}
+    .toggle input{width:auto}.up{color:#176b48;font-weight:700}.down{color:#8a2b2b;font-weight:700}
+    .lesson{display:grid;gap:12px}.lesson-step{background:#f3f6f1;border-radius:12px;padding:14px}
+    .lesson-step h3{margin:0 0 6px;font-size:1rem}
+    tr.selected td{outline:2px solid #176b48;background:#eef8f1}button.secondary{background:#fff;color:#176b48}
+    footer{color:#59675e;font-size:.9rem;margin:22px 0}@media(max-width:650px){.metrics{grid-template-columns:1fr}.bar-row{grid-template-columns:1fr}.bar-row span:last-child{justify-self:start}.slider-row{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
+    <code>STATSBOMB_OPEN_DATA</code> טבלת הדירוג נטענת מקובץ סטטי בריפו (<code>poc-calibrated.json</code>), לא מניתוח וידאו.
     <code>LOCAL_VIDEO</code> נבחר ונקרא בדפדפן בלבד, ללא העלאה.
-    <code>DEMO_METRIC</code> הוא נתון דמו קבוע שנגזר מזרע, ולא נמדד מהווידאו.
+    <code>DEMO_METRIC</code> אינו נמדד מהווידאו ואינו שירות סקאוטינג מקצועי.
     <code>VERIFIED_ANALYSIS_SERVICE</code> אינו זמין; זו אינטגרציה עתידית בלבד.
   </aside>
 
   <section class="card">
     <h1>ScoutAI — מעבדת המחשה מקומית</h1>
-    <p>הדף מדגים ממשק אפשרי באמצעות fixture דטרמיניסטי. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי.</p>
+    <p>הדף הוא מעבדת לימוד: בונים מדד מרוכב מנתוני StatsBomb Open Data, רואים איך המשקלות מזיזות דירוג, ומשתפים את המדד ב־hash של הכתובת. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. השימוש לימודי/מחקרי בלבד — הרישיון אוסר ניצול מסחרי.</p>
     <label for="video">בחירת וידאו מקומי (אופציונלי)</label>
     <input id="video" type="file" accept="video/*">
     <p id="videoStatus" class="status">LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.</p>
-    <label for="seed">זרע הדמו</label>
-    <input id="seed" type="text" value="scoutai-demo-001">
-    <button id="run" type="button">הצג fixture דטרמיניסטי</button>
+  </section>
+
+  <section class="card">
+    <h2>בנה מדד בעצמך</h2>
+    <p>שנו משקלות ביד. הדירוג מחושב מחדש מיד מ־<code>data/wc2018_event_aggregates.json</code> (מונדיאל 2018, מספרים גולמיים מקומיים). <span class="badge">STATSBOMB_OPEN_DATA</span> המשקלות שרירותיות בכוונה — זה השיעור.</p>
+    <div class="sliders">
+      <div class="slider-row">
+        <label for="wGrit">Grit — מאמץ</label>
+        <input id="wGrit" type="range" min="0" max="100" value="40">
+        <strong id="wGritVal">40</strong>
+      </div>
+      <div class="slider-row">
+        <label for="wInv">Involvement — מעורבות</label>
+        <input id="wInv" type="range" min="0" max="100" value="30">
+        <strong id="wInvVal">30</strong>
+      </div>
+      <div class="slider-row">
+        <label for="wClutch">Clutch — הכרעה</label>
+        <input id="wClutch" type="range" min="0" max="100" value="30">
+        <strong id="wClutchVal">30</strong>
+      </div>
+      <div class="slider-row">
+        <label for="minMinutes">סף דקות מינימלי</label>
+        <input id="minMinutes" type="range" min="90" max="630" step="30" value="270">
+        <strong id="minMinutesVal">270</strong>
+      </div>
+    </div>
+    <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון בתוך GK/DF/MF/FW)</label>
+    <p id="formulaLine" class="formula"></p>
+    <p class="muted">Δ מול מדד הבסיס 40/30/30 בלי נרמול עמדה. שיתוף: המצב נשמר ב־hash של הכתובת — העתיקו מהדפדפן או בלחיצה.</p>
+    <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
+    <p id="hashStatus" class="status"></p>
   </section>
 
   <section class="card" aria-live="polite">
-    <h2>מדדי המחשה</h2>
-    <div id="metrics" class="metrics"></div>
-    <p class="notice">כל הערכים מסומנים DEMO_METRIC. אין להסיק מהם מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
-    <h2>אירועי timeline קבועים</h2>
-    <ol id="timeline"></ol>
+    <h2>דירוג חי לפי המדד שלכם</h2>
+    <p>מקור: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
+    <p id="tableStatus" class="status">טוען קבצי PoC מקומיים…</p>
+    <div id="playerTable" class="table-wrap"></div>
   </section>
 
   <section class="card" aria-live="polite">
-    <h2>כרטיס Impact Score למועדון</h2>
-    <p>ציון שקוף 0–100 שממחיש למחלקה המקצועית תרומה מעבר לסטטיסטיקות קופסה: מאמץ (Grit), מעורבות (Involvement) והכרעה (Clutch). כל הערכים כאן הם <span class="badge">DEMO_METRIC</span> מהזרע — לא מדידה מווידאו.</p>
-    <div id="impactCard"></div>
+    <h2>שיעור שקוף</h2>
+    <p>איך הציון של שחקן אחד מורכב ממספרים גולמיים — השקיפות שהמחקר זיהה כנכס. לחצו על שורה, או השאירו את בחירת ה־hash.</p>
+    <div id="lessonRoot" class="lesson"></div>
+  </section>
+
+  <section class="card" aria-live="polite">
+    <h2>מעבדת שבריריות משקלות</h2>
+    <p>ציון מרוכב נשבר ממשקל אחד. כאן רואים את חמשת השחקנים שהדירוג שלהם זז הכי הרבה אם מוסיפים 10 נקודות למשקל בודד — השיעור שסטודנט אנליזה צריך בתיק עבודות.</p>
+    <div id="fragilityRoot" class="lesson"></div>
   </section>
 
   <section class="card actions">
@@ -70,77 +115,172 @@
 
   <section class="card">
     <h2>פרטיות ותנאי שימוש בזמן הריצה</h2>
-    <p>הדמו הוא קובץ מקומי ללא backend. בחירת קובץ מאפשרת לדפדפן להציג רק את שמו וגודלו; הקובץ אינו מנותח, מועלה, נשמר או משותף. אין חשבונות, תשלומים, אימייל, תמיכה תפעולית או שירות AI. רענון הדף מאפס את המצב.</p>
+    <p>הדמו הוא קובץ מקומי ללא backend. בחירת קובץ מאפשרת לדפדפן להציג רק את שמו וגודלו; הקובץ אינו מנותח, מועלה, נשמר או משותף. אין חשבונות, תשלומים, אימייל, תמיכה תפעולית או שירות AI. מצב המדד נשמר ב־hash המקומי של הדף (לא נשלח לשרת). Open Data מותר למחקר/לימוד בלבד, לא למסחר.</p>
   </section>
   <footer>ScoutAI local deterministic demo · לא שירות ניתוח מאומת</footer>
 </main>
 <script src="demo.js"></script>
 <script>
-  const metricRoot = document.getElementById('metrics');
-  const timelineRoot = document.getElementById('timeline');
-  const impactRoot = document.getElementById('impactCard');
+  const tableRoot = document.getElementById('playerTable');
+  const tableStatus = document.getElementById('tableStatus');
+  const formulaLine = document.getElementById('formulaLine');
+  const hashStatus = document.getElementById('hashStatus');
+  const lessonRoot = document.getElementById('lessonRoot');
+  const fragilityRoot = document.getElementById('fragilityRoot');
+  let eventData = null;
+  let writingHash = false;
 
-  function metricValue(fixture, id) {
-    const item = fixture.metrics.find(entry => entry.id === id);
-    return item ? item.value : 0;
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
-  function buildClubImpact(fixture) {
-    const grit = metricValue(fixture, 'work-demo');
-    const involvement = metricValue(fixture, 'control-demo');
-    const clutch = metricValue(fixture, 'pace-demo');
-    const impact = Math.round(0.4 * grit + 0.3 * involvement + 0.3 * clutch);
-    const components = [
-      { key: 'grit', label: 'Grit (מאמץ)', value: grit, role: 'פרופיל מאמץ — בלם / קשר הגנתי' },
-      { key: 'involvement', label: 'Involvement (מעורבות)', value: involvement, role: 'פרופיל יצירה — קשר מרכזי / קישור' },
-      { key: 'clutch', label: 'Clutch (הכרעה)', value: clutch, role: 'פרופיל הכרעה — חלוץ / שחקן קו התקפה' }
-    ];
-    const dominant = components.reduce((best, item) => item.value > best.value ? item : best, components[0]);
-    let decision;
-    let rationale;
-    if (impact >= 75) {
-      decision = 'קצר רשימה — מועמד לפיילוט אימונים';
-      rationale = 'ציון Impact גבוה יחסית לסף ההמחשה; מומלץ לצוות המקצועי לבחון התאמה לסגל באימון מבוקר.';
-    } else if (impact >= 60) {
-      decision = 'מעקב — לאסוף משחקים נוספים';
-      rationale = 'פרופיל ביניים: יש אותות תרומה, אך נדרש מדגם רחב יותר לפני החלטת גיוס.';
-    } else {
-      decision = 'לא כעת — מתחת לסף המועדון';
-      rationale = 'הציון המשוקלל נמוך יחסית; עדיף להפנות משאבי סקאוטינג למועמדים אחרים בתיק.';
+  function readSpecFromControls() {
+    return ScoutAIDemo.normalizeMetricSpec({
+      grit: document.getElementById('wGrit').value,
+      involvement: document.getElementById('wInv').value,
+      clutch: document.getElementById('wClutch').value,
+      minMinutes: document.getElementById('minMinutes').value,
+      normalizePosition: document.getElementById('normPos').checked,
+      selectedId: document.getElementById('playerTable').dataset.selected || ''
+    });
+  }
+
+  function writeSpecToControls(spec) {
+    const metric = ScoutAIDemo.normalizeMetricSpec(spec);
+    document.getElementById('wGrit').value = metric.grit;
+    document.getElementById('wInv').value = metric.involvement;
+    document.getElementById('wClutch').value = metric.clutch;
+    document.getElementById('minMinutes').value = metric.minMinutes;
+    document.getElementById('normPos').checked = metric.normalizePosition;
+    document.getElementById('wGritVal').textContent = Math.round(metric.grit);
+    document.getElementById('wInvVal').textContent = Math.round(metric.involvement);
+    document.getElementById('wClutchVal').textContent = Math.round(metric.clutch);
+    document.getElementById('minMinutesVal').textContent = Math.round(metric.minMinutes);
+    tableRoot.dataset.selected = metric.selectedId || '';
+  }
+
+  function deltaCell(value, suffix) {
+    if (value == null || value === 0) return '<span class="muted">0</span>';
+    const cls = value > 0 ? 'up' : 'down';
+    const sign = value > 0 ? '+' : '';
+    return '<span class="' + cls + '">' + sign + escapeHtml(value) + (suffix || '') + '</span>';
+  }
+
+  function renderLive(rows, spec) {
+    formulaLine.textContent = ScoutAIDemo.formatFormula(spec);
+    if (!rows.length) {
+      tableStatus.textContent = 'STATSBOMB_OPEN_DATA: אין שחקנים מעל סף הדקות.';
+      tableRoot.innerHTML = '';
+      return;
     }
-    return { grit, involvement, clutch, impact, components, dominant, decision, rationale };
+    tableStatus.textContent = 'STATSBOMB_OPEN_DATA: ' + rows.length + ' שחקנים ממונדיאל 2018 אחרי סף ' + spec.minMinutes + ' דקות.';
+    const body = rows.map(function (row) {
+      const selected = spec.selectedId && row.id === spec.selectedId;
+      return '<tr data-id="' + escapeHtml(row.id) + '"' + (selected ? ' class="selected"' : '') + '>' +
+        '<td>' + escapeHtml(row.rank) + '<div class="muted">' + deltaCell(row.deltaRank) + '</div></td>' +
+        '<td>' + escapeHtml(row.name) + '<div class="muted">' + escapeHtml(row.positionGroup) + ' · ' + escapeHtml(row.position || '') + '</div></td>' +
+        '<td>' + escapeHtml(row.team || '—') + '</td>' +
+        '<td>' + escapeHtml(row.minutes) + '</td>' +
+        '<td><span class="badge">STATSBOMB_OPEN_DATA</span> <strong>' + escapeHtml(row.score) + '</strong><div class="muted">' + deltaCell(row.deltaScore) + '</div></td>' +
+        '<td>' + escapeHtml(row.components.grit) + '</td>' +
+        '<td>' + escapeHtml(row.components.involvement) + '</td>' +
+        '<td>' + escapeHtml(row.components.clutch) + '</td>' +
+      '</tr>';
+    }).join('');
+    tableRoot.innerHTML =
+      '<table><thead><tr>' +
+        '<th># / Δדירוג</th><th>שם</th><th>קבוצה</th><th>דקות</th><th>ציון / Δ</th><th>Grit</th><th>Inv</th><th>Clutch</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table>';
   }
 
-  function renderImpact(fixture) {
-    const card = buildClubImpact(fixture);
-    const bars = card.components.map(item =>
-      `<div class="bar-row"><span>${item.label}</span><div class="bar-track" aria-hidden="true"><div class="bar-fill" style="width:${item.value}%"></div></div><span><strong>${item.value}</strong>/100</span></div>`
-    ).join('');
-    impactRoot.innerHTML =
-      `<div class="impact-head">` +
-        `<div class="impact-score"><span class="badge">DEMO_METRIC</span><strong>${card.impact}</strong><span>Impact Score</span></div>` +
-        `<div class="impact-decision">` +
-          `<div class="decision-label">המלצת החלטה למועדון (המחשה)</div>` +
-          `<strong>${card.decision}</strong>` +
-          `<p>${card.rationale}</p>` +
-          `<p><span class="badge">DEMO_METRIC</span> התאמת תפקיד בולטת: ${card.dominant.role}</p>` +
-        `</div>` +
-      `</div>` +
-      `<div class="bars">${bars}</div>` +
-      `<p class="formula">נוסחה שקופה בדמו: Impact = 0.4×Grit + 0.3×Involvement + 0.3×Clutch. הרכיבים נגזרים ממדדי ה־fixture של אותו זרע (עבודה→Grit, שליטה→Involvement, קצב→Clutch).</p>`;
+  function persistHash(spec) {
+    writingHash = true;
+    const next = ScoutAIDemo.serializeMetricHash(spec);
+    if (location.hash.replace(/^#/, '') !== next) location.hash = next;
+    writingHash = false;
   }
 
-  function render() {
-    const fixture = ScoutAIDemo.createDemoFixture(document.getElementById('seed').value);
-    metricRoot.innerHTML = fixture.metrics.map(item =>
-      `<div class="metric"><span class="badge">${item.provenance}</span><strong>${item.value} ${item.unit}</strong>${item.label}</div>`
-    ).join('');
-    timelineRoot.innerHTML = fixture.timeline.map(item =>
-      `<li><span class="badge">${item.provenance}</span> ${item.at} — ${item.label}</li>`
-    ).join('');
-    renderImpact(fixture);
+  function recompute() {
+    if (!eventData) return;
+    const spec = readSpecFromControls();
+    document.getElementById('wGritVal').textContent = Math.round(spec.grit);
+    document.getElementById('wInvVal').textContent = Math.round(spec.involvement);
+    document.getElementById('wClutchVal').textContent = Math.round(spec.clutch);
+    document.getElementById('minMinutesVal').textContent = Math.round(spec.minMinutes);
+    const rows = ScoutAIDemo.applyMetric(eventData, spec, ScoutAIDemo.DEFAULT_METRIC);
+    renderLive(rows, spec);
+    const selected = rows.find(function (row) { return row.id === spec.selectedId; }) || rows[0] || null;
+    if (selected && !spec.selectedId) {
+      tableRoot.dataset.selected = selected.id;
+      spec.selectedId = selected.id;
+    }
+    const lesson = ScoutAIDemo.buildLesson(selected, spec);
+    lessonRoot.innerHTML = lesson.map(function (step) {
+      return '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' + escapeHtml(step.body) + '</p></article>';
+    }).join('');
+    const fragility = ScoutAIDemo.fragilityReport(eventData, spec, 10);
+    fragilityRoot.innerHTML = fragility.map(function (variant) {
+      const items = variant.swings.length
+        ? '<ol>' + variant.swings.map(function (row) {
+          return '<li>' + escapeHtml(row.name) + ' (' + escapeHtml(row.team || '') + '): #' +
+            escapeHtml(row.from) + ' → #' + escapeHtml(row.to) + ' (' +
+            (row.deltaRank > 0 ? '+' : '') + escapeHtml(row.deltaRank) + ')</li>';
+        }).join('') + '</ol>'
+        : '<p class="muted">אין תזוזת דירוג ב־+10 הזה — נסו סף דקות אחר.</p>';
+      return '<article class="lesson-step"><h3>' + escapeHtml(variant.label) + '</h3>' + items + '</article>';
+    }).join('');
+    persistHash(spec);
   }
-  document.getElementById('run').addEventListener('click', render);
+
+  function asJson(response, path) {
+    if (!response.ok) throw new Error('failed to load ' + path);
+    return response.json();
+  }
+
+  Promise.all([
+    fetch('poc-calibrated.json').then(function (res) { return asJson(res, 'poc-calibrated.json'); }),
+    fetch('poc-top30.json').then(function (res) { return asJson(res, 'poc-top30.json'); }).catch(function () { return null; }),
+    fetch('data/wc2018_event_aggregates.json').then(function (res) { return asJson(res, 'data/wc2018_event_aggregates.json'); })
+  ]).then(function (loaded) {
+    eventData = loaded[2];
+    writeSpecToControls(ScoutAIDemo.parseMetricHash(location.hash));
+    recompute();
+  }).catch(function (err) {
+    tableStatus.textContent = 'STATSBOMB_OPEN_DATA: טעינת הקובץ המקומי נכשלה. פתחו את הדף דרך GitHub Pages או שרת סטטי מקומי.';
+    tableRoot.innerHTML = '<p class="notice">' + escapeHtml(err && err.message ? err.message : err) + '</p>';
+  });
+
+  ['wGrit', 'wInv', 'wClutch', 'minMinutes'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', recompute);
+  });
+  document.getElementById('normPos').addEventListener('change', recompute);
+  tableRoot.addEventListener('click', function (event) {
+    const row = event.target.closest('tr[data-id]');
+    if (!row) return;
+    tableRoot.dataset.selected = row.getAttribute('data-id') || '';
+    recompute();
+  });
+  window.addEventListener('hashchange', function () {
+    if (writingHash) return;
+    writeSpecToControls(ScoutAIDemo.parseMetricHash(location.hash));
+    recompute();
+  });
+  document.getElementById('copyHash').addEventListener('click', function () {
+    const text = location.href;
+    const done = function () { hashStatus.textContent = 'הקישור למדד הועתק (hash מקומי, בלי שרת).'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        hashStatus.textContent = 'העתיקו ידנית את הכתובת מהדפדפן — המדד יושב אחרי #.';
+      });
+    } else {
+      hashStatus.textContent = 'העתיקו ידנית את הכתובת מהדפדפן — המדד יושב אחרי #.';
+    }
+  });
+
   document.getElementById('video').addEventListener('change', event => {
     const file = event.target.files[0];
     document.getElementById('videoStatus').textContent = file
@@ -150,7 +290,6 @@
   document.querySelectorAll('[data-unavailable]').forEach(button => button.addEventListener('click', () => {
     document.getElementById('actionStatus').textContent = button.dataset.unavailable;
   }));
-  render();
 </script>
 </body>
 </html>
