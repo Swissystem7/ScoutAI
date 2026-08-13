@@ -44,26 +44,57 @@
     .export-box{white-space:pre-wrap;background:#f3f6f1;border-radius:12px;padding:12px;max-height:240px;overflow:auto;font-size:.9rem}
     .glossary{display:grid;gap:10px}dt{font-weight:700}dd{margin:4px 0 0}
     .unused{opacity:.92}
-    @media(max-width:650px){.slider-row,.bar-row,.radar-layout{grid-template-columns:1fr}}
+    .toc{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+    .toc a{color:#dff4e7;font-weight:700;text-decoration:underline}
+    .course-nav{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+    .course-nav button{margin-top:0;padding:8px 10px}
+    .course-nav button.done{background:#0f3d26}
+    .course-nav button[aria-current="step"]{outline:3px solid #10281d}
+    .quiz{display:grid;gap:8px;margin:12px 0}
+    .quiz label{margin:0;font-weight:500;display:flex;gap:8px;align-items:center}
+    .quiz input,.quiz select{width:auto}
+    .receipt{display:grid;gap:8px;margin:12px 0}
+    .receipt li{list-style:none}
+    tr.hl td,tr.hl th{background:#fff8e8;outline:2px solid #8a5a00}
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:650px){.slider-row,.bar-row,.radar-layout,.stats-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
+<a class="skip" href="#course">דלגו לשיעור המלא</a>
 <a class="skip" href="#lab">דלגו למעבדת המדד</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
-    <code>STATSBOMB_OPEN_DATA</code> שכבת הנתונים היחידה היא <code>data/wc2018_event_aggregates.json</code>; דירוג, שיעור ושבריריות נגזרים ממנה.
+    <code>STATSBOMB_OPEN_DATA</code> שכבת הנתונים היחידה היא <code>data/wc2018_event_aggregates.json</code>; דירוג, שיעור, חוקר ספירות, אימות ושבריריות נגזרים ממנה.
     <code>LOCAL_VIDEO</code> נבחר ונקרא בדפדפן בלבד, ללא העלאה.
     <code>DEMO_METRIC</code> אינו נמדד מהווידאו ואינו שירות סקאוטינג מקצועי.
     <code>VERIFIED_ANALYSIS_SERVICE</code> אינו זמין; זו אינטגרציה עתידית בלבד.
+    <code>NO_HELD_OUT_SEASON</code> אין עונה שנייה בריפו — האימות הוא פיצול בתים באותו מונדיאל.
+    <nav class="toc" aria-label="מעבר לחלקי המעבדה">
+      <a href="#course">שיעור מלא</a>
+      <a href="#lab">בנה מדד</a>
+      <a href="#explorer">חוקר ספירות</a>
+      <a href="#validate">אימות</a>
+      <a href="#glossary">מילון</a>
+      <a href="trap/">מלכודת פיצ'רים</a>
+    </nav>
   </aside>
 
   <section class="card">
     <h1>ScoutAI — מעבדת המחשה מקומית</h1>
-    <p>מעבדה אחת, שכבת נתונים אחת: בונים מדד, בודקים אותו בתרגיל בלמים, משווים שני שחקנים על רכיבים גולמיים, ומייצאים פסקת מתודולוגיה. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד, לא למסחר.</p>
+    <p>מעבדה אחת, שכבת נתונים אחת: מאירוע ספור לספירה, למדד, למדגם מוחזק. בונים משקלות, בודקים בתרגיל בלמים, קוראים את הקבלה מאחורי המספרים, מפצלים בתים A–D / E–H, ומייצאים פסקת מתודולוגיה. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד, לא למסחר.</p>
     <p><a href="trap/">מלכודת הפיצ'רים המשכנעים</a> — שיעור על פיצ'ר שמוסיפים אחרי המסקנה, כולל המקרה מ־<code>attic/proof-demo.js</code>. הדף לא מנתח פנים.</p>
     <label for="video">בחירת וידאו מקומי (אופציונלי)</label>
     <input id="video" type="file" accept="video/*">
     <p id="videoStatus" class="status">LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.</p>
+  </section>
+
+  <section class="card" id="course" aria-live="polite">
+    <h2>שיעור מלא: מאירוע למדד מאומת</h2>
+    <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
+    <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
+    <p id="courseProgress" class="status" role="status"></p>
+    <div id="courseRoot" class="lesson"></div>
   </section>
 
   <section class="card" id="lab">
@@ -137,7 +168,37 @@
     </div>
   </section>
 
-  <section class="card" aria-live="polite">
+  <section class="card" id="explorer" aria-live="polite">
+    <h2>חוקר ספירות האירועים</h2>
+    <p>הקובץ המקומי הוא <strong>ספירות מצטברות</strong> מ-64 משחקים, לא יומן אירוע-אחר-אירוע. כאן רואים את השדות האמיתיים מאחורי הציון של השחקן הנבחר, וגם את מה שנאסף ולא נכנס לנוסחה.</p>
+    <p id="explorerStatus" class="lab-note"></p>
+    <ol id="explorerReceipt" class="receipt"></ol>
+    <div id="explorerTable" class="table-wrap"></div>
+  </section>
+
+  <section class="card" id="validate" aria-live="polite">
+    <h2>מעבדת אימות: האם המדד חוזה מדגם מוחזק?</h2>
+    <p class="notice">אין בריפו עונה שנייה של אותן ספירות. ברירת המחדל מפצלת 32 נבחרות לבתים A–D (אימון) מול E–H (מבחן) בתוך מונדיאל 2018. זה מדגם מוחזק, לא «העונה הבאה».</p>
+    <label for="outcomeSelect">יעד לחיזוי (שדה מהקובץ, לא הציון עצמו)</label>
+    <select id="outcomeSelect">
+      <option value="assists">בישולים — לא בנוסחה</option>
+      <option value="dribbles">כדרורים — לא בנוסחה</option>
+      <option value="duelsWon">דו-קרבות שנרכשו — לא בנוסחה</option>
+      <option value="goals">שערים — דליפה דרך Clutch/xG</option>
+      <option value="box">שערים+בישולים — דליפה</option>
+    </select>
+    <label for="splitSelect">איך מפצלים</label>
+    <select id="splitSelect">
+      <option value="groups">בתים A–D מול E–H (מומלץ)</option>
+      <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
+    </select>
+    <p id="validateStatus" class="status" role="status"></p>
+    <p id="validateVerdict" class="lab-note"></p>
+    <div id="validateStats" class="stats-grid"></div>
+    <div id="validateTables" class="table-wrap"></div>
+  </section>
+
+  <section class="card" id="fragility" aria-live="polite">
     <h2>מעבדת שבריריות משקלות</h2>
     <p>אותה שכבת נתונים, אותו שחקן נבחר. מוסיפים 10 נקודות למשקל אחד — מי קופץ, ומה קורה לשחקן שבחרתם.</p>
     <p id="selectedSwing" class="lab-note"></p>
@@ -156,9 +217,9 @@
     <pre id="exportJson" class="export-box" dir="ltr"></pre>
   </section>
 
-  <section class="card">
+  <section class="card" id="glossary">
     <h2>מילון סוגי אירועים של StatsBomb</h2>
-    <p>רק הסוגים שנכנסו לספירות המקומיות. מה שכתוב «לא בנוסחה» קיים בקובץ ולא נכנס לציון — זה חלק מהשיעור.</p>
+    <p>כל מונח מקושר לשדה ב־<code>data/wc2018_event_aggregates.json</code> ולערך של השחקן הנבחר. מה שכתוב «לא בנוסחה» קיים בקובץ ולא נכנס לציון — זה חלק מהשיעור.</p>
     <dl id="glossaryRoot" class="glossary"></dl>
   </section>
 
@@ -191,6 +252,17 @@
   let view = null;
   let writingHash = false;
   let lessonIndex = 0;
+  const courseAnswers = {
+    unusedField: '',
+    per90: '',
+    kanteCapped: '',
+    weightsManual: '',
+    bumpCanMove: '',
+    splitIsSeason: '',
+    whatMatters: '',
+    unusedTerm: '',
+    commercial: ''
+  };
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -208,7 +280,10 @@
       minMinutes: document.getElementById('minMinutes').value,
       normalizePosition: document.getElementById('normPos').checked,
       selectedId: tableRoot.dataset.selected || '',
-      compareId: compareSelect.value || ''
+      compareId: compareSelect.value || '',
+      outcomeId: document.getElementById('outcomeSelect').value || 'assists',
+      splitId: document.getElementById('splitSelect').value || 'groups',
+      curriculumIndex: Number(document.getElementById('course').dataset.step || 0)
     });
   }
 
@@ -225,6 +300,9 @@
     syncSlider('minMinutes', metric.minMinutes, 'סף דקות, ' + Math.round(metric.minMinutes));
     tableRoot.dataset.selected = metric.selectedId || '';
     compareSelect.value = metric.compareId || '';
+    document.getElementById('outcomeSelect').value = metric.outcomeId || 'assists';
+    document.getElementById('splitSelect').value = metric.splitId || 'groups';
+    document.getElementById('course').dataset.step = String(metric.curriculumIndex || 0);
   }
 
   function syncSlider(id, value, text) {
@@ -395,11 +473,249 @@
   function renderGlossary(current) {
     const items = current.glossary || ScoutAIDemo.EVENT_GLOSSARY;
     document.getElementById('glossaryRoot').innerHTML = items.map(function (item) {
-      return '<div class="' + (item.usedInScore ? '' : 'unused') + '"><dt>' +
-        escapeHtml(item.type) + ' — ' + escapeHtml(item.he) +
-        ' <span class="badge">' + escapeHtml(item.feeds) + '</span></dt><dd>' +
-        escapeHtml(item.body) + '</dd></div>';
+      const live = item.selectedName
+        ? ' אצל ' + item.selectedName + ': ' +
+          (item.selectedTotal == null ? '—' : item.selectedTotal) +
+          (item.selectedPer90 == null ? '' : ' · ' + item.selectedPer90 + '/90') + '.'
+        : '';
+      return '<div class="' + (item.usedInScore ? '' : 'unused') + '" id="gloss-' + escapeHtml(item.field || item.type) + '"><dt>' +
+        '<button type="button" class="secondary" data-field="' + escapeHtml(item.field || '') + '">' +
+        escapeHtml(item.type) + ' — ' + escapeHtml(item.he) + '</button>' +
+        ' <span class="badge">' + escapeHtml(item.feeds) + '</span>' +
+        ' <code>' + escapeHtml(item.filePath || '') + '</code></dt><dd>' +
+        escapeHtml(item.body) +
+        '<div class="muted">' + escapeHtml(live) + '</div></dd></div>';
     }).join('');
+  }
+
+  function renderExplorer(current) {
+    const explorer = current.explorer;
+    const root = document.getElementById('explorerTable');
+    const receipt = document.getElementById('explorerReceipt');
+    const status = document.getElementById('explorerStatus');
+    if (!explorer || !explorer.player) {
+      status.textContent = 'בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים.';
+      root.innerHTML = '';
+      receipt.innerHTML = '';
+      return;
+    }
+    status.textContent = explorer.honesty;
+    receipt.innerHTML = (explorer.receipt || []).map(function (item) {
+      return '<li><strong>' + escapeHtml(item.step) + ':</strong> ' + escapeHtml(item.detail) + '</li>';
+    }).join('');
+    root.innerHTML =
+      '<table aria-describedby="explorerStatus">' +
+        '<caption>ספירות מ-' + escapeHtml(explorer.player.name) + ' ב־data/wc2018_event_aggregates.json</caption>' +
+        '<thead><tr>' +
+          '<th scope="col">שדה</th><th scope="col">סוג StatsBomb</th><th scope="col">ספירה</th>' +
+          '<th scope="col">/90 מחושב</th><th scope="col">/90 בקובץ</th>' +
+          '<th scope="col">תקרה</th><th scope="col">סקייל</th><th scope="col">נכנס ל</th>' +
+        '</tr></thead><tbody>' +
+        (explorer.rows || []).map(function (row) {
+          return '<tr id="field-' + escapeHtml(row.key) + '" data-field="' + escapeHtml(row.key) + '"' +
+            (row.usedInScore ? '' : ' class="unused"') + '>' +
+            '<th scope="row"><code>' + escapeHtml(row.filePath) + '</code><div class="muted">' + escapeHtml(row.label) + '</div></th>' +
+            '<td>' + escapeHtml(row.type) + '</td>' +
+            '<td>' + escapeHtml(row.total) + '</td>' +
+            '<td>' + escapeHtml(row.per90) + '</td>' +
+            '<td>' + escapeHtml(row.per90File == null ? '—' : row.per90File) + '</td>' +
+            '<td>' + escapeHtml(row.cap == null ? '—' : row.cap) + (row.capped ? ' <span class="down">חתוך</span>' : '') + '</td>' +
+            '<td>' + escapeHtml(row.scaled == null ? '—' : row.scaled) + '</td>' +
+            '<td>' + escapeHtml(row.feeds) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+  }
+
+  function renderValidation(current) {
+    const report = current.validation;
+    if (!report) return;
+    document.getElementById('validateStatus').textContent =
+      (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
+      ' · אימון n=' + report.train.n + ' ρ=' + report.train.rho +
+      ' · מבחן n=' + report.test.n + ' ρ=' + report.test.rho +
+      (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop);
+    document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
+    function rhoLine(label, stats) {
+      const cr = stats.componentRho || {};
+      return '<article class="lesson-step"><h3>' + label + '</h3>' +
+        '<p>n=' + escapeHtml(stats.n) + ' · Spearman ρ=' + escapeHtml(stats.rho) + '</p>' +
+        '<p class="muted">ρ רכיבים מול היעד: Grit ' + escapeHtml(cr.grit) +
+        ' · Involvement ' + escapeHtml(cr.involvement) +
+        ' · Clutch ' + escapeHtml(cr.clutch) + '</p></article>';
+    }
+    document.getElementById('validateStats').innerHTML =
+      rhoLine('אימון', report.train) + rhoLine('מבחן', report.test);
+    function topTable(title, rows, id) {
+      return '<table><caption>' + title + '</caption><thead><tr>' +
+        '<th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">ציון</th><th scope="col">יעד</th>' +
+        '</tr></thead><tbody>' +
+        (rows || []).map(function (row) {
+          return '<tr><th scope="row">' + escapeHtml(row.name) + '</th><td>' +
+            escapeHtml(row.team) + '</td><td>' + escapeHtml(row.score) + '</td><td>' +
+            escapeHtml(row.outcome) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    document.getElementById('validateTables').innerHTML =
+      topTable('חמשת הראשונים לפי המדד — מבחן', report.test.topMetric) +
+      topTable('חמשת הראשונים לפי היעד — מבחן', report.test.topOutcome);
+  }
+
+  function courseQuizHtml(lesson) {
+    if (lesson.id === 'events') {
+      return '<label for="ansUnusedField">איזה שדה נאסף ולא נכנס לנוסחה?</label>' +
+        '<select id="ansUnusedField">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="pressures">pressures (לחיצות)</option>' +
+          '<option value="dribbles">dribbles (כדרורים)</option>' +
+          '<option value="shotXgSum">shotXgSum (xG)</option>' +
+          '<option value="keyPasses">keyPasses (מסירות מפתח)</option>' +
+        '</select>';
+    }
+    if (lesson.id === 'per90') {
+      return '<label for="ansPer90">90 לחיצות ב-180 דקות = ? ל-90 דקות</label>' +
+        '<select id="ansPer90">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="90">90</option>' +
+          '<option value="45">45</option>' +
+          '<option value="180">180</option>' +
+        '</select>';
+    }
+    if (lesson.id === 'caps') {
+      return '<label for="ansCap">26.5 לחיצות/90 מעל תקרה 18 — מה הסקייל?</label>' +
+        '<select id="ansCap">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="yes">100, כי התקרה חותכת</option>' +
+          '<option value="no">יותר מ-100, כי 26.5 גדול</option>' +
+        '</select>';
+    }
+    if (lesson.id === 'weights') {
+      return '<label for="ansWeights">המשקלות במעבדה הן</label>' +
+        '<select id="ansWeights">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="yes">ידניות ושרירותיות, לא מודל מכויל</option>' +
+          '<option value="no">כיול מדעי מעונת 2018</option>' +
+        '</select>';
+    }
+    if (lesson.id === 'fragility') {
+      return '<label for="ansBump">האם +10 למשקל יכול להזיז את החמישייה?</label>' +
+        '<select id="ansBump">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="yes">כן, הדירוג שברירי</option>' +
+          '<option value="no">לא, הציון יציב</option>' +
+        '</select>';
+    }
+    if (lesson.id === 'holdout') {
+      return '<label for="ansSeason">האם פיצול הבתים A–D / E–H הוא עונה חדשה?</label>' +
+        '<select id="ansSeason">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="no">לא — אותו מונדיאל, שני מדגמי קבוצות</option>' +
+          '<option value="yes">כן — זו העונה המוחזקת</option>' +
+        '</select>' +
+        '<label for="ansRho">איזה Spearman קובע אם המדד מכליל?</label>' +
+        '<select id="ansRho">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="test">ρ במבחן</option>' +
+          '<option value="train">ρ באימון</option>' +
+        '</select>';
+    }
+    if (lesson.id === 'honesty') {
+      return '<label for="ansTerm">מונח שנאסף ולא נכנס לציון</label>' +
+        '<select id="ansTerm">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="Pressure">Pressure</option>' +
+          '<option value="dribble">Dribble / Goal / Assist</option>' +
+          '<option value="Pass">Pass</option>' +
+        '</select>' +
+        '<label for="ansCommercial">האם מותר למכור ניתוח על הנתונים האלה?</label>' +
+        '<select id="ansCommercial">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="no">לא — Open Data אסור למסחר</option>' +
+          '<option value="yes">כן, אם נותנים קרדיט</option>' +
+        '</select>';
+    }
+    return '<p class="muted">התרגיל חי במעבדת הבלמים למעלה — הזיזו משקלות עד שהבדיקה ירוקה.</p>';
+  }
+
+  function syncQuizControls(lesson) {
+    const map = {
+      ansUnusedField: 'unusedField',
+      ansPer90: 'per90',
+      ansCap: 'kanteCapped',
+      ansWeights: 'weightsManual',
+      ansBump: 'bumpCanMove',
+      ansSeason: 'splitIsSeason',
+      ansRho: 'whatMatters',
+      ansTerm: 'unusedTerm',
+      ansCommercial: 'commercial'
+    };
+    Object.keys(map).forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && courseAnswers[map[id]]) el.value = courseAnswers[map[id]];
+    });
+  }
+
+  function readQuizAnswers() {
+    const map = [
+      ['ansUnusedField', 'unusedField'],
+      ['ansPer90', 'per90'],
+      ['ansCap', 'kanteCapped'],
+      ['ansWeights', 'weightsManual'],
+      ['ansBump', 'bumpCanMove'],
+      ['ansSeason', 'splitIsSeason'],
+      ['ansRho', 'whatMatters'],
+      ['ansTerm', 'unusedTerm'],
+      ['ansCommercial', 'commercial']
+    ];
+    map.forEach(function (pair) {
+      const el = document.getElementById(pair[0]);
+      if (el) courseAnswers[pair[1]] = el.value;
+    });
+    return courseAnswers;
+  }
+
+  function renderCurriculum(current) {
+    const answers = readQuizAnswers();
+    const lessons = ScoutAIDemo.evaluateCurriculum({
+      spec: current.spec,
+      selected: current.selected,
+      explorer: current.explorer,
+      validation: current.validation,
+      exercise: current.exercise,
+      answers: answers
+    });
+    const idx = Math.min(lessons.length - 1, Math.max(0, current.spec.curriculumIndex || 0));
+    document.getElementById('course').dataset.step = String(idx);
+    const passedCount = lessons.filter(function (item) { return item.passed; }).length;
+    document.getElementById('courseProgress').textContent =
+      passedCount + '/' + lessons.length + ' צעדים עברו. סיום = יושרה, לא ρ גבוה.';
+    document.getElementById('courseNav').innerHTML = lessons.map(function (lesson, i) {
+      return '<button type="button" data-course="' + i + '"' +
+        (i === idx ? ' aria-current="step"' : '') +
+        (lesson.passed ? ' class="done"' : '') +
+        ' aria-label="' + escapeHtml(lesson.title) + '">' + (i + 1) + '</button>';
+    }).join('') +
+      '<button type="button" class="secondary" data-course="prev">הקודם</button>' +
+      '<button type="button" class="secondary" data-course="next">הבא</button>';
+    const lesson = lessons[idx];
+    if (!lesson) {
+      document.getElementById('courseRoot').innerHTML = '';
+      return;
+    }
+    const hintBtn = lesson.hint
+      ? '<button type="button" class="secondary" id="courseHint">הציעו נקודת התחלה לשיעור</button>'
+      : '';
+    document.getElementById('courseRoot').innerHTML =
+      '<article class="lesson-step"><h3>' + escapeHtml(lesson.title) + '</h3>' +
+      '<p>' + escapeHtml(lesson.body) + '</p>' +
+      '<p><strong>תרגיל:</strong> ' + escapeHtml(lesson.exercise) + '</p>' +
+      '<div class="quiz">' + courseQuizHtml(lesson) + '</div>' +
+      hintBtn +
+      '<ul class="checks">' + lesson.checks.map(function (item) {
+        return '<li class="' + (item.pass ? 'pass' : 'fail') + '">' +
+          '<span class="check-flag">' + (item.pass ? 'עבר' : 'לא עבר') + '</span>' +
+          escapeHtml(item.label) +
+          '<div class="muted">' + escapeHtml(item.detail || '') + '</div></li>';
+      }).join('') + '</ul></article>';
+    syncQuizControls(lesson);
   }
 
   function renderFragility(current) {
@@ -435,9 +751,12 @@
     renderLesson(current);
     renderExercise(current);
     renderRadar(current);
+    renderExplorer(current);
+    renderValidation(current);
     renderFragility(current);
     renderExport(current);
     renderGlossary(current);
+    renderCurriculum(current);
     persistHash(current.spec);
   }
 
@@ -461,6 +780,8 @@
   });
   document.getElementById('normPos').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);
+  document.getElementById('outcomeSelect').addEventListener('change', recompute);
+  document.getElementById('splitSelect').addEventListener('change', recompute);
   document.getElementById('applyHint').addEventListener('click', function () {
     const hint = ScoutAIDemo.DEFENDER_EXERCISE.hint;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), hint));
@@ -512,6 +833,43 @@
     else if (token === 'prev') lessonIndex = Math.max(0, lessonIndex - 1);
     else lessonIndex = Number(token) || 0;
     renderLesson(view);
+  });
+  document.getElementById('courseNav').addEventListener('click', function (event) {
+    const button = event.target.closest('button[data-course]');
+    if (!button || !view) return;
+    const token = button.getAttribute('data-course');
+    const max = (ScoutAIDemo.CURRICULUM_LESSONS || []).length - 1;
+    let next = view.spec.curriculumIndex || 0;
+    if (token === 'next') next = Math.min(max, next + 1);
+    else if (token === 'prev') next = Math.max(0, next - 1);
+    else next = Number(token) || 0;
+    document.getElementById('course').dataset.step = String(next);
+    recompute();
+    const lesson = ScoutAIDemo.CURRICULUM_LESSONS[next];
+    const target = lesson && document.getElementById(lesson.section);
+    if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start' });
+  });
+  document.getElementById('courseRoot').addEventListener('change', function (event) {
+    if (!event.target.closest('select')) return;
+    readQuizAnswers();
+    if (view) renderCurriculum(view);
+  });
+  document.getElementById('courseRoot').addEventListener('click', function (event) {
+    if (!event.target.closest('#courseHint') || !view) return;
+    const lesson = ScoutAIDemo.CURRICULUM_LESSONS[view.spec.curriculumIndex || 0];
+    if (!lesson || !lesson.hint) return;
+    writeSpecToControls(Object.assign({}, readSpecFromControls(), lesson.hint));
+    recompute();
+  });
+  document.getElementById('glossaryRoot').addEventListener('click', function (event) {
+    const button = event.target.closest('button[data-field]');
+    if (!button) return;
+    const field = button.getAttribute('data-field');
+    const row = document.getElementById('field-' + field);
+    if (row && row.scrollIntoView) {
+      row.classList.add('hl');
+      row.scrollIntoView({ block: 'center' });
+    }
   });
   window.addEventListener('hashchange', function () {
     if (writingHash) return;
