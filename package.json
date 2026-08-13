@@ -1,0 +1,8 @@
+{
+  "name": "scoutai",
+  "private": true,
+  "description": "Honest StatsBomb open-data football scouting metric demo",
+  "scripts": {
+    "test": "node --test test/demo.test.js"
+  }
+}

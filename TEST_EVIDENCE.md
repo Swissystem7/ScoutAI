@@ -23,12 +23,11 @@ node --test test/demo.test.js
 tests 4
 pass 4
 fail 0
-
-HTML structural closure check
-PASS
 ```
 
-The tests cover deterministic byte-equivalent output, explicit provenance,
-unavailable verified analysis, absence of network/API/form submission paths in
-the browser runtime, and absence of fabricated account/trial/email/report
-success.
+The recorded commands above are the checks that exist in this repository:
+`node --check` on `demo.js` / `test/demo.test.js`, and `node --test test/demo.test.js`.
+The tests cover deterministic byte-equivalent fixture output, explicit
+provenance, unavailable verified analysis, and absence of external network,
+API, or form-submission paths in the browser runtime (relative static JSON
+fetch is allowed).
