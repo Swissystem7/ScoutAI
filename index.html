@@ -3,44 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ScoutAI — דמו מקומי ודטרמיניסטי</title>
+  <title>ScoutAI — מעבדת מדד שקופה</title>
   <style>
     :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
-    body{margin:0}.shell{max-width:900px;margin:auto;padding:24px}.banner{position:sticky;top:0;z-index:2;background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    body{margin:0}.shell{max-width:980px;margin:auto;padding:24px}.banner{position:sticky;top:0;z-index:2;background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
     .banner code,.badge{background:#dff4e7;color:#174d32;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
     label{display:block;margin:14px 0 6px;font-weight:700}input,button{font:inherit;padding:11px;border-radius:10px;border:1px solid #b8c7bc}
-    input[type=file],input[type=text]{width:100%}button{background:#176b48;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
-    .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{background:#f3f6f1;padding:16px;border-radius:12px}.metric strong{display:block;font-size:1.6rem;margin:8px 0}
+    input[type=file]{width:100%}button{background:#176b48;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
     .notice{border-right:4px solid #cf8b00;background:#fff6dd;padding:12px}.actions button{margin-left:8px}.status{min-height:1.5em;font-weight:700}
-    .impact-head{display:flex;flex-wrap:wrap;gap:16px;align-items:stretch;margin:12px 0 18px}
-    .impact-score{flex:0 0 160px;background:#10281d;color:#fff;border-radius:14px;padding:18px;text-align:center}
-    .impact-score strong{display:block;font-size:2.4rem;line-height:1.1;margin:8px 0 4px}
-    .impact-score span{opacity:.9;font-size:.9rem}
-    .impact-decision{flex:1;min-width:220px;background:#f3f6f1;border-radius:14px;padding:16px;border-right:4px solid #176b48}
-    .impact-decision .decision-label{font-size:.85rem;color:#59675e;margin-bottom:4px}
-    .impact-decision strong{display:block;font-size:1.15rem;margin-bottom:8px}
-    .bars{display:grid;gap:10px}.bar-row{display:grid;grid-template-columns:110px 1fr 48px;gap:10px;align-items:center}
-    .bar-track{background:#e4ebe3;border-radius:999px;height:12px;overflow:hidden}
-    .bar-fill{background:#176b48;height:100%;border-radius:999px}
-    .formula{font-size:.9rem;color:#59675e;margin-top:14px}
+    .formula{font-size:.95rem;color:#174d32;margin:12px 0;font-weight:700}
     .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:right;padding:10px 8px;border-bottom:1px solid #e4ebe3;vertical-align:top}
     th{font-size:.8rem;letter-spacing:.02em;color:#59675e}tr:hover td{background:#f7faf6}.muted{color:#59675e;font-size:.85rem}
-    tr.flagged td{background:#fff6dd}.flag{display:inline-block;margin-top:6px;background:#fff0c2;color:#6a4b00;border-radius:999px;padding:2px 8px;font-size:.75rem;font-weight:700}
     .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
     .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0}
     .toggle{display:flex;gap:10px;align-items:center;font-weight:700;margin:10px 0}
     .toggle input{width:auto}.up{color:#176b48;font-weight:700}.down{color:#8a2b2b;font-weight:700}
     .lesson{display:grid;gap:12px}.lesson-step{background:#f3f6f1;border-radius:12px;padding:14px}
-    .lesson-step h3{margin:0 0 6px;font-size:1rem}
+    .lesson-step h3{margin:0 0 6px;font-size:1rem}.lesson-nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+    .lesson-nav button{margin-top:0;padding:8px 12px}.lesson-nav button.active{outline:2px solid #10281d}
+    .bars{display:grid;gap:8px;margin-top:10px}.bar-row{display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center}
+    .bar-track{background:#e4ebe3;border-radius:999px;height:12px;overflow:hidden}
+    .bar-fill{background:#176b48;height:100%;border-radius:999px}
     tr.selected td{outline:2px solid #176b48;background:#eef8f1}button.secondary{background:#fff;color:#176b48}
-    footer{color:#59675e;font-size:.9rem;margin:22px 0}@media(max-width:650px){.metrics{grid-template-columns:1fr}.bar-row{grid-template-columns:1fr}.bar-row span:last-child{justify-self:start}.slider-row{grid-template-columns:1fr}}
+    .lab-note{font-size:.9rem;color:#59675e}footer{color:#59675e;font-size:.9rem;margin:22px 0}
+    @media(max-width:650px){.slider-row,.bar-row{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
-    <code>STATSBOMB_OPEN_DATA</code> טבלת הדירוג נטענת מקובץ סטטי בריפו (<code>poc-calibrated.json</code>), לא מניתוח וידאו.
+    <code>STATSBOMB_OPEN_DATA</code> שכבת הנתונים היחידה היא <code>data/wc2018_event_aggregates.json</code>; דירוג, שיעור ושבריריות נגזרים ממנה.
     <code>LOCAL_VIDEO</code> נבחר ונקרא בדפדפן בלבד, ללא העלאה.
     <code>DEMO_METRIC</code> אינו נמדד מהווידאו ואינו שירות סקאוטינג מקצועי.
     <code>VERIFIED_ANALYSIS_SERVICE</code> אינו זמין; זו אינטגרציה עתידית בלבד.
@@ -48,7 +41,7 @@
 
   <section class="card">
     <h1>ScoutAI — מעבדת המחשה מקומית</h1>
-    <p>הדף הוא מעבדת לימוד: בונים מדד מרוכב מנתוני StatsBomb Open Data, רואים איך המשקלות מזיזות דירוג, ומשתפים את המדד ב־hash של הכתובת. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. השימוש לימודי/מחקרי בלבד — הרישיון אוסר ניצול מסחרי.</p>
+    <p>מעבדה אחת, שכבת נתונים אחת: בוחרים שחקן, מפרקים את הציון לגורמים (כמו שיעור xG על בעיטה אחת), משנים משקל, ורואים את אותו שחקן זז. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד.</p>
     <label for="video">בחירת וידאו מקומי (אופציונלי)</label>
     <input id="video" type="file" accept="video/*">
     <p id="videoStatus" class="status">LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.</p>
@@ -95,13 +88,15 @@
 
   <section class="card" aria-live="polite">
     <h2>שיעור שקוף</h2>
-    <p>איך הציון של שחקן אחד מורכב ממספרים גולמיים — השקיפות שהמחקר זיהה כנכס. לחצו על שורה, או השאירו את בחירת ה־hash.</p>
+    <p>יחידת הלימוד היא <strong>שחקן אחד</strong>, כמו בעיטה אחת בשיעור xG: קודם הגורמים, אחר כך ההסתברות/הציון, ורק אז מה קורה אם משנים מודל.</p>
+    <div id="lessonNav" class="lesson-nav"></div>
     <div id="lessonRoot" class="lesson"></div>
   </section>
 
   <section class="card" aria-live="polite">
     <h2>מעבדת שבריריות משקלות</h2>
-    <p>ציון מרוכב נשבר ממשקל אחד. כאן רואים את חמשת השחקנים שהדירוג שלהם זז הכי הרבה אם מוסיפים 10 נקודות למשקל בודד — השיעור שסטודנט אנליזה צריך בתיק עבודות.</p>
+    <p>אותה שכבת נתונים, אותו שחקן נבחר. מוסיפים 10 נקודות למשקל אחד — מי קופץ, ומה קורה לשחקן שבחרתם.</p>
+    <p id="selectedSwing" class="lab-note"></p>
     <div id="fragilityRoot" class="lesson"></div>
   </section>
 
@@ -126,9 +121,13 @@
   const formulaLine = document.getElementById('formulaLine');
   const hashStatus = document.getElementById('hashStatus');
   const lessonRoot = document.getElementById('lessonRoot');
+  const lessonNav = document.getElementById('lessonNav');
   const fragilityRoot = document.getElementById('fragilityRoot');
-  let eventData = null;
+  const selectedSwing = document.getElementById('selectedSwing');
+  let store = null;
+  let view = null;
   let writingHash = false;
+  let lessonIndex = 0;
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -145,7 +144,7 @@
       clutch: document.getElementById('wClutch').value,
       minMinutes: document.getElementById('minMinutes').value,
       normalizePosition: document.getElementById('normPos').checked,
-      selectedId: document.getElementById('playerTable').dataset.selected || ''
+      selectedId: tableRoot.dataset.selected || ''
     });
   }
 
@@ -163,21 +162,30 @@
     tableRoot.dataset.selected = metric.selectedId || '';
   }
 
-  function deltaCell(value, suffix) {
+  function deltaCell(value) {
     if (value == null || value === 0) return '<span class="muted">0</span>';
     const cls = value > 0 ? 'up' : 'down';
     const sign = value > 0 ? '+' : '';
-    return '<span class="' + cls + '">' + sign + escapeHtml(value) + (suffix || '') + '</span>';
+    return '<span class="' + cls + '">' + sign + escapeHtml(value) + '</span>';
   }
 
-  function renderLive(rows, spec) {
-    formulaLine.textContent = ScoutAIDemo.formatFormula(spec);
+  function persistHash(spec) {
+    writingHash = true;
+    const next = ScoutAIDemo.serializeMetricHash(spec);
+    if (location.hash.replace(/^#/, '') !== next) location.hash = next;
+    writingHash = false;
+  }
+
+  function renderTable(current) {
+    formulaLine.textContent = current.formula;
+    const rows = current.rows;
+    const spec = current.spec;
     if (!rows.length) {
       tableStatus.textContent = 'STATSBOMB_OPEN_DATA: אין שחקנים מעל סף הדקות.';
       tableRoot.innerHTML = '';
       return;
     }
-    tableStatus.textContent = 'STATSBOMB_OPEN_DATA: ' + rows.length + ' שחקנים ממונדיאל 2018 אחרי סף ' + spec.minMinutes + ' דקות.';
+    tableStatus.textContent = 'STATSBOMB_OPEN_DATA: ' + rows.length + ' שחקנים ממונדיאל 2018 אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
     const body = rows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
       return '<tr data-id="' + escapeHtml(row.id) + '"' + (selected ? ' class="selected"' : '') + '>' +
@@ -197,56 +205,76 @@
       '</tr></thead><tbody>' + body + '</tbody></table>';
   }
 
-  function persistHash(spec) {
-    writingHash = true;
-    const next = ScoutAIDemo.serializeMetricHash(spec);
-    if (location.hash.replace(/^#/, '') !== next) location.hash = next;
-    writingHash = false;
+  function renderLesson(current) {
+    const steps = current.lesson || [];
+    if (lessonIndex >= steps.length) lessonIndex = 0;
+    lessonNav.innerHTML = steps.map(function (step, i) {
+      return '<button type="button" data-step="' + i + '"' + (i === lessonIndex ? ' class="active"' : '') + '>' + (i + 1) + '</button>';
+    }).join('') +
+      '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next">הבא</button>';
+    const step = steps[lessonIndex];
+    if (!step) {
+      lessonRoot.innerHTML = '';
+      return;
+    }
+    const bars = (current.contributions || []).map(function (item) {
+      return '<div class="bar-row"><span>' + escapeHtml(item.label) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + Math.min(100, item.share) + '%"></div></div><span>' + escapeHtml(item.share) + '</span></div>';
+    }).join('');
+    let extra = '';
+    if (lessonIndex === 1 || lessonIndex === 2) {
+      extra = '<table><thead><tr><th>גורם גולמי</th><th>/90</th><th>נכנס ל</th></tr></thead><tbody>' +
+        (current.mapping || []).map(function (row) {
+          return '<tr><td>' + escapeHtml(row.factor) + '</td><td>' + escapeHtml(row.value) + '</td><td>' + escapeHtml(row.feeds) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    if (lessonIndex === 3) extra = '<div class="bars">' + bars + '</div>';
+    lessonRoot.innerHTML = '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' + escapeHtml(step.body) + '</p>' + extra + '</article>';
   }
 
-  function recompute() {
-    if (!eventData) return;
-    const spec = readSpecFromControls();
-    document.getElementById('wGritVal').textContent = Math.round(spec.grit);
-    document.getElementById('wInvVal').textContent = Math.round(spec.involvement);
-    document.getElementById('wClutchVal').textContent = Math.round(spec.clutch);
-    document.getElementById('minMinutesVal').textContent = Math.round(spec.minMinutes);
-    const rows = ScoutAIDemo.applyMetric(eventData, spec, ScoutAIDemo.DEFAULT_METRIC);
-    renderLive(rows, spec);
-    const selected = rows.find(function (row) { return row.id === spec.selectedId; }) || rows[0] || null;
-    if (selected && !spec.selectedId) {
-      tableRoot.dataset.selected = selected.id;
-      spec.selectedId = selected.id;
-    }
-    const lesson = ScoutAIDemo.buildLesson(selected, spec);
-    lessonRoot.innerHTML = lesson.map(function (step) {
-      return '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' + escapeHtml(step.body) + '</p></article>';
-    }).join('');
-    const fragility = ScoutAIDemo.fragilityReport(eventData, spec, 10);
-    fragilityRoot.innerHTML = fragility.map(function (variant) {
+  function renderFragility(current) {
+    const selectedId = current.selected && current.selected.id;
+    const notes = [];
+    (current.fragility || []).forEach(function (variant) {
+      const hit = variant.swings.find(function (row) { return row.id === selectedId; });
+      if (hit) notes.push(variant.label + ': #' + hit.from + ' → #' + hit.to);
+    });
+    selectedSwing.textContent = current.selected
+      ? (current.selected.name + (notes.length ? ' — ' + notes.join(' · ') : ' — השחקן לא זז בטופ־5 של אף דחיפה +10.'))
+      : '';
+    fragilityRoot.innerHTML = (current.fragility || []).map(function (variant) {
       const items = variant.swings.length
         ? '<ol>' + variant.swings.map(function (row) {
+          const mark = row.id === selectedId ? ' ← הנבחר' : '';
           return '<li>' + escapeHtml(row.name) + ' (' + escapeHtml(row.team || '') + '): #' +
             escapeHtml(row.from) + ' → #' + escapeHtml(row.to) + ' (' +
-            (row.deltaRank > 0 ? '+' : '') + escapeHtml(row.deltaRank) + ')</li>';
+            (row.deltaRank > 0 ? '+' : '') + escapeHtml(row.deltaRank) + ')' + mark + '</li>';
         }).join('') + '</ol>'
         : '<p class="muted">אין תזוזת דירוג ב־+10 הזה — נסו סף דקות אחר.</p>';
       return '<article class="lesson-step"><h3>' + escapeHtml(variant.label) + '</h3>' + items + '</article>';
     }).join('');
-    persistHash(spec);
   }
 
-  function asJson(response, path) {
-    if (!response.ok) throw new Error('failed to load ' + path);
-    return response.json();
+  function renderAll(current) {
+    document.getElementById('wGritVal').textContent = Math.round(current.spec.grit);
+    document.getElementById('wInvVal').textContent = Math.round(current.spec.involvement);
+    document.getElementById('wClutchVal').textContent = Math.round(current.spec.clutch);
+    document.getElementById('minMinutesVal').textContent = Math.round(current.spec.minMinutes);
+    if (current.selected) tableRoot.dataset.selected = current.selected.id;
+    renderTable(current);
+    renderLesson(current);
+    renderFragility(current);
+    persistHash(current.spec);
   }
 
-  Promise.all([
-    fetch('poc-calibrated.json').then(function (res) { return asJson(res, 'poc-calibrated.json'); }),
-    fetch('poc-top30.json').then(function (res) { return asJson(res, 'poc-top30.json'); }).catch(function () { return null; }),
-    fetch('data/wc2018_event_aggregates.json').then(function (res) { return asJson(res, 'data/wc2018_event_aggregates.json'); })
-  ]).then(function (loaded) {
-    eventData = loaded[2];
+  function recompute() {
+    if (!store) return;
+    view = store.derive(readSpecFromControls(), ScoutAIDemo.DEFAULT_METRIC);
+    renderAll(view);
+  }
+
+  ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
+    store = lab.store;
     writeSpecToControls(ScoutAIDemo.parseMetricHash(location.hash));
     recompute();
   }).catch(function (err) {
@@ -263,6 +291,15 @@
     if (!row) return;
     tableRoot.dataset.selected = row.getAttribute('data-id') || '';
     recompute();
+  });
+  lessonNav.addEventListener('click', function (event) {
+    const button = event.target.closest('button[data-step]');
+    if (!button || !view) return;
+    const token = button.getAttribute('data-step');
+    if (token === 'next') lessonIndex = Math.min((view.lesson || []).length - 1, lessonIndex + 1);
+    else if (token === 'prev') lessonIndex = Math.max(0, lessonIndex - 1);
+    else lessonIndex = Number(token) || 0;
+    renderLesson(view);
   });
   window.addEventListener('hashchange', function () {
     if (writingHash) return;

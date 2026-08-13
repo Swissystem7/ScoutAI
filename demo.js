@@ -265,35 +265,40 @@
     );
   }
 
+  const LAB_PATHS = Object.freeze({
+    events: 'data/wc2018_event_aggregates.json',
+    calibrated: 'poc-calibrated.json',
+    top30: 'poc-top30.json'
+  });
+
   function eventPlayers(dataset) {
     if (Array.isArray(dataset)) return dataset;
     if (dataset && Array.isArray(dataset.players)) return dataset.players;
     return [];
   }
 
-  function scoreAndRank(players, spec) {
+  function preparePlayer(row) {
+    return {
+      id: playerKey(row),
+      name: row.name,
+      team: row.team,
+      comp: row.comp || row.competition || 'WorldCup2018',
+      category: row.category,
+      position: row.position || '',
+      positionGroup: positionGroup(row.position),
+      minutes: row.totalMinutesProxy || row.minutes || 0,
+      matchesPlayed: row.matchesPlayed,
+      components: componentsFromEvents(row),
+      provenance: 'STATSBOMB_OPEN_DATA'
+    };
+  }
+
+  function scorePrepared(prepared, spec) {
     const metric = normalizeMetricSpec(spec);
-    const prepared = players
-      .filter(function (row) {
-        return row && (row.name || row.id) && (row.totalMinutesProxy || row.minutes || 0) >= metric.minMinutes;
-      })
-      .map(function (row) {
-        return {
-          id: playerKey(row),
-          name: row.name,
-          team: row.team,
-          comp: row.comp || row.competition || 'WorldCup2018',
-          category: row.category,
-          position: row.position || '',
-          positionGroup: positionGroup(row.position),
-          minutes: row.totalMinutesProxy || row.minutes || 0,
-          matchesPlayed: row.matchesPlayed,
-          components: componentsFromEvents(row),
-          sourceRow: row,
-          provenance: 'STATSBOMB_OPEN_DATA'
-        };
-      });
-    const adjusted = metric.normalizePosition ? normalizeByPosition(prepared) : prepared;
+    const eligible = prepared.filter(function (row) {
+      return row && row.name && row.minutes >= metric.minMinutes;
+    });
+    const adjusted = metric.normalizePosition ? normalizeByPosition(eligible) : eligible;
     return adjusted
       .map(function (row) {
         const score = compositeScore(row.components, metric);
@@ -309,13 +314,10 @@
       });
   }
 
-  function applyMetric(dataset, spec, baselineSpec) {
-    const ranked = scoreAndRank(eventPlayers(dataset), spec);
-    if (!baselineSpec) return ranked;
-    const baseline = scoreAndRank(eventPlayers(dataset), baselineSpec);
+  function attachDeltas(current, baseline) {
     const byId = {};
-    baseline.forEach(function (row) { byId[row.id] = row; });
-    return ranked.map(function (row) {
+    (baseline || []).forEach(function (row) { byId[row.id] = row; });
+    return current.map(function (row) {
       const prev = byId[row.id];
       return Object.assign({}, row, {
         baselineScore: prev ? prev.score : null,
@@ -323,6 +325,108 @@
         deltaScore: prev ? round2(row.score - prev.score) : null,
         deltaRank: prev ? prev.rank - row.rank : null
       });
+    });
+  }
+
+  function lessonContributions(row, spec) {
+    if (!row || !row.components) return [];
+    const metric = normalizeMetricSpec(spec);
+    const total = metric.grit + metric.involvement + metric.clutch || 1;
+    return [
+      { key: 'grit', label: 'Grit', value: row.components.grit, weight: metric.grit, share: round2(row.components.grit * metric.grit / total) },
+      { key: 'involvement', label: 'Involvement', value: row.components.involvement, weight: metric.involvement, share: round2(row.components.involvement * metric.involvement / total) },
+      { key: 'clutch', label: 'Clutch', value: row.components.clutch, weight: metric.clutch, share: round2(row.components.clutch * metric.clutch / total) }
+    ];
+  }
+
+  function lessonMapping(row) {
+    const raw = row && row.components && row.components.raw || {};
+    return [
+      { factor: 'לחיצות /90', value: raw.pressures90, feeds: 'Grit' },
+      { factor: 'תיקולים+חטיפות /90', value: raw.tacklesInt90, feeds: 'Grit' },
+      { factor: 'פעולות הגנה /90', value: raw.defensive90, feeds: 'Grit' },
+      { factor: 'התקדמות /90', value: raw.progressive90, feeds: 'Involvement' },
+      { factor: 'מסירות מפתח /90', value: raw.keyPasses90, feeds: 'Involvement' },
+      { factor: 'מסירות /90', value: raw.passes90, feeds: 'Involvement' },
+      { factor: 'xG /90', value: raw.xg90, feeds: 'Clutch' },
+      { factor: 'נגיעות ברחבה /90', value: raw.boxTouches90, feeds: 'Clutch' },
+      { factor: 'בעיטות למסגרת /90', value: raw.shotsOnTarget90, feeds: 'Clutch' }
+    ];
+  }
+
+  function fragilityFromPrepared(prepared, spec, delta) {
+    const step = delta == null ? 10 : delta;
+    const baseRows = scorePrepared(prepared, spec);
+    const byId = {};
+    baseRows.forEach(function (row) { byId[row.id] = row; });
+    const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
+    return ['grit', 'involvement', 'clutch'].map(function (key) {
+      const ranked = scorePrepared(prepared, bumpSpec(spec, key, step));
+      const swings = ranked
+        .map(function (row) {
+          const prev = byId[row.id];
+          return {
+            id: row.id,
+            name: row.name,
+            team: row.team,
+            from: prev ? prev.rank : null,
+            to: row.rank,
+            deltaRank: prev ? prev.rank - row.rank : 0
+          };
+        })
+        .filter(function (row) { return row.deltaRank; })
+        .sort(function (a, b) { return Math.abs(b.deltaRank) - Math.abs(a.deltaRank); })
+        .slice(0, 5);
+      return { key: key, label: labels[key] + ' +' + step, swings: swings };
+    });
+  }
+
+  function createStore(rawPlayers) {
+    const players = eventPlayers(rawPlayers).map(preparePlayer);
+    function derive(spec, baselineSpec) {
+      const metric = normalizeMetricSpec(spec);
+      let rows = scorePrepared(players, metric);
+      if (baselineSpec) rows = attachDeltas(rows, scorePrepared(players, baselineSpec));
+      const selected = rows.find(function (row) { return row.id === metric.selectedId; }) || rows[0] || null;
+      if (selected && !metric.selectedId) metric.selectedId = selected.id;
+      const fragility = fragilityFromPrepared(players, metric, 10);
+      return {
+        spec: metric,
+        rows: rows,
+        selected: selected,
+        lesson: buildLesson(selected, metric),
+        contributions: lessonContributions(selected, metric),
+        mapping: lessonMapping(selected),
+        fragility: fragility,
+        formula: formatFormula(metric)
+      };
+    }
+    return { players: players, derive: derive };
+  }
+
+  function applyMetric(dataset, spec, baselineSpec) {
+    return createStore(dataset).derive(spec, baselineSpec || null).rows;
+  }
+
+  function readJson(fetchImpl, path) {
+    return fetchImpl(path).then(function (response) {
+      if (!response.ok) throw new Error('failed to load ' + path);
+      return response.json();
+    });
+  }
+
+  function loadLabSources(fetchImpl) {
+    const load = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+    if (!load) return Promise.reject(new Error('fetch is not available'));
+    return Promise.all([
+      readJson(load, LAB_PATHS.events),
+      readJson(load, LAB_PATHS.calibrated).catch(function () { return null; }),
+      readJson(load, LAB_PATHS.top30).catch(function () { return null; })
+    ]).then(function (files) {
+      return {
+        store: createStore(files[0]),
+        pocRows: files[1] ? preparePocRows(files[1], files[2]) : []
+      };
     });
   }
 
@@ -424,29 +528,7 @@
   }
 
   function fragilityReport(dataset, spec, delta) {
-    const step = delta == null ? 10 : delta;
-    const variants = [
-      { key: 'grit', label: 'Grit +' + step },
-      { key: 'involvement', label: 'Involvement +' + step },
-      { key: 'clutch', label: 'Clutch +' + step }
-    ];
-    return variants.map(function (variant) {
-      const ranked = applyMetric(dataset, bumpSpec(spec, variant.key, step), spec);
-      const swings = ranked
-        .filter(function (row) { return row.deltaRank; })
-        .sort(function (a, b) { return Math.abs(b.deltaRank) - Math.abs(a.deltaRank); })
-        .slice(0, 5)
-        .map(function (row) {
-          return {
-            name: row.name,
-            team: row.team,
-            from: row.baselineRank,
-            to: row.rank,
-            deltaRank: row.deltaRank
-          };
-        });
-      return { key: variant.key, label: variant.label, swings: swings };
-    });
+    return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
 
   return {
@@ -465,6 +547,10 @@
     componentsFromEvents: componentsFromEvents,
     compositeScore: compositeScore,
     applyMetric: applyMetric,
+    createStore: createStore,
+    loadLabSources: loadLabSources,
+    lessonContributions: lessonContributions,
+    LAB_PATHS: LAB_PATHS,
     serializeMetricHash: serializeMetricHash,
     parseMetricHash: parseMetricHash,
     formatFormula: formatFormula,

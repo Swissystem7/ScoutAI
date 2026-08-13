@@ -15,7 +15,9 @@ const {
   componentsFromEvents,
   compositeScore,
   buildLesson,
-  fragilityReport
+  fragilityReport,
+  createStore,
+  loadLabSources
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
@@ -47,9 +49,10 @@ test('runtime contains no external network or submission path', () => {
     /fetch\s*\(\s*['"`]https?:/i
   ];
   forbidden.forEach(pattern => assert.doesNotMatch(productRuntime, pattern));
-  assert.match(html, /fetch\s*\(\s*['"]poc-calibrated\.json['"]\s*\)/);
-  assert.match(html, /fetch\s*\(\s*['"]poc-top30\.json['"]\s*\)/);
-  assert.match(html, /fetch\s*\(\s*['"]data\/wc2018_event_aggregates\.json['"]\s*\)/);
+  assert.match(runtime, /poc-calibrated\.json/);
+  assert.match(runtime, /poc-top30\.json/);
+  assert.match(runtime, /data\/wc2018_event_aggregates\.json/);
+  assert.match(html, /loadLabSources\s*\(\s*fetch\s*\)/);
 });
 
 test('UI labels provenance and unavailable external actions', () => {
@@ -180,4 +183,54 @@ test('fragility lab reports rank swings when one weight is bumped by 10', () => 
   assert.ok(clutchBump.swings.some(row => row.name === 'Finisher' && row.from === 2 && row.to === 1));
   assert.ok(invBump.swings.some(row => row.name === 'Grinder' && row.deltaRank < 0));
   assert.match(html, /מעבדת שבריריות משקלות/);
+});
+
+test('createStore prepares players once and derive feeds table, lesson, and fragility', () => {
+  const dataset = {
+    players: [
+      {
+        name: 'Grinder', team: 'France', position: 'Center Defensive Midfield',
+        totalMinutesProxy: 500, pressures: 120, tackles: 20, interceptions: 15,
+        defensiveActions: 80, progressiveActions: 20, keyPasses: 1, passesCompleted: 200,
+        shotXgSum: 0.1, boxTouches: 2, shotsOnTarget: 0
+      },
+      {
+        name: 'Finisher', team: 'Brazil', position: 'Center Forward',
+        totalMinutesProxy: 500, pressures: 20, tackles: 2, interceptions: 1,
+        defensiveActions: 10, progressiveActions: 40, keyPasses: 8, passesCompleted: 80,
+        shotXgSum: 3.2, boxTouches: 40, shotsOnTarget: 8
+      }
+    ]
+  };
+  const store = createStore(dataset);
+  assert.equal(store.players.length, 2);
+  const firstGrit = store.players[0].components.grit;
+  const gritView = store.derive({ grit: 100, involvement: 0, clutch: 0, minMinutes: 270 }, DEFAULT_METRIC);
+  const clutchView = store.derive({ grit: 0, involvement: 0, clutch: 100, minMinutes: 270 }, DEFAULT_METRIC);
+  assert.equal(store.players[0].components.grit, firstGrit);
+  assert.equal(gritView.rows[0].name, 'Grinder');
+  assert.equal(clutchView.rows[0].name, 'Finisher');
+  assert.equal(gritView.lesson.length, 5);
+  assert.equal(gritView.fragility.length, 3);
+  assert.ok(gritView.contributions.some(item => item.key === 'grit'));
+  assert.ok(gritView.mapping.some(item => item.feeds === 'Clutch'));
+});
+
+test('loadLabSources uses only relative static paths', async () => {
+  const calls = [];
+  const fake = (path) => {
+    calls.push(path);
+    if (path === 'data/wc2018_event_aggregates.json') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ players: [] }) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ men: [], women: [] }) });
+  };
+  const lab = await loadLabSources(fake);
+  assert.deepEqual(calls, [
+    'data/wc2018_event_aggregates.json',
+    'poc-calibrated.json',
+    'poc-top30.json'
+  ]);
+  assert.ok(lab.store);
+  assert.ok(Array.isArray(lab.pocRows));
 });
