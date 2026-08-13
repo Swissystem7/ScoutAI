@@ -158,6 +158,22 @@
     'shots', 'goals', 'assists', 'dribbles', 'duelsWon', 'bigChanceProxy'
   ]);
 
+  const USER_DATASET_COLUMNS = Object.freeze(
+    ['name', 'team', 'position', 'minutes'].concat(COUNT_FIELDS)
+  );
+
+  const OPEN_DATA_PROVENANCE = 'STATSBOMB_OPEN_DATA';
+  const USER_DATA_PROVENANCE = 'USER_LICENSED_DATA';
+  const SYNTHETIC_PROVENANCE = 'SYNTHETIC_EXAMPLE';
+
+  const OPEN_DATA_SOURCE = Object.freeze({
+    dataset: 'data/wc2018_event_aggregates.json',
+    competition: 'FIFA World Cup 2018',
+    competitionId: 43,
+    seasonId: 3,
+    license: 'StatsBomb Open Data — research and public sharing with credit; commercial use prohibited'
+  });
+
   function clamp(value, lo, hi) {
     const n = Number(value);
     if (!Number.isFinite(n)) return lo;
@@ -327,13 +343,16 @@
     return counts;
   }
 
-  function preparePlayer(row) {
+  function preparePlayer(row, options) {
+    const opts = options || {};
+    const provenance = opts.provenance || row.provenance || OPEN_DATA_PROVENANCE;
     const minutes = row.totalMinutesProxy || row.minutes || 0;
+    const defaultComp = provenance === OPEN_DATA_PROVENANCE ? 'WorldCup2018' : 'USER_DATASET';
     return {
       id: playerKey(row),
       name: row.name,
       team: row.team,
-      comp: row.comp || row.competition || 'WorldCup2018',
+      comp: row.comp || row.competition || defaultComp,
       category: row.category,
       position: row.position || '',
       positionGroup: positionGroup(row.position),
@@ -343,7 +362,7 @@
       counts: countsFromRow(row),
       per90File: row.per90 || null,
       components: componentsFromEvents(row),
-      provenance: 'STATSBOMB_OPEN_DATA'
+      provenance: provenance
     };
   }
 
@@ -435,8 +454,32 @@
     });
   }
 
-  function createStore(rawPlayers) {
-    const players = eventPlayers(rawPlayers).map(preparePlayer);
+  function looksLikeOpenDataPayload(dataset) {
+    if (!dataset || typeof dataset !== 'object' || Array.isArray(dataset)) return false;
+    const source = String(dataset.source || dataset.license || '').toLowerCase();
+    if (source.indexOf('statsbomb') >= 0) return true;
+    if (Number(dataset.competitionId) === 43 && Number(dataset.seasonId) === 3) return true;
+    return false;
+  }
+
+  function createStore(rawPlayers, options) {
+    const opts = options || {};
+    const openData = looksLikeOpenDataPayload(rawPlayers);
+    const provenance = openData
+      ? OPEN_DATA_PROVENANCE
+      : (opts.provenance || (rawPlayers && rawPlayers.provenance) || OPEN_DATA_PROVENANCE);
+    const source = opts.source || (provenance === OPEN_DATA_PROVENANCE
+      ? OPEN_DATA_SOURCE
+      : {
+        dataset: opts.fileName || 'user-upload',
+        competition: (rawPlayers && (rawPlayers.competition || rawPlayers.comp)) || 'USER_DATASET',
+        license: provenance === USER_DATA_PROVENANCE
+          ? 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
+          : 'Synthetic teaching file shipped with ScoutAI — not match data'
+      });
+    const players = eventPlayers(rawPlayers).map(function (row) {
+      return preparePlayer(row, { provenance: provenance });
+    });
     function derive(spec, baselineSpec) {
       const metric = normalizeMetricSpec(spec);
       let rows = scorePrepared(players, metric);
@@ -473,10 +516,17 @@
           exercise: evaluateExercise(players, metric),
           answers: {}
         }),
-        exportBundle: exportMetricBundle(metric, selected, { compared: compared })
+        exportBundle: exportMetricBundle(metric, selected, {
+          compared: compared,
+          provenance: provenance,
+          source: source
+        }),
+        provenance: provenance,
+        source: source,
+        commercialAllowed: provenance === USER_DATA_PROVENANCE
       };
     }
-    return { players: players, derive: derive };
+    return { players: players, derive: derive, provenance: provenance, source: source };
   }
 
   function applyMetric(dataset, spec, baselineSpec) {
@@ -499,7 +549,7 @@
       readJson(load, LAB_PATHS.top30).catch(function () { return null; })
     ]).then(function (files) {
       return {
-        store: createStore(files[0]),
+        store: createStore(files[0], { provenance: OPEN_DATA_PROVENANCE, source: OPEN_DATA_SOURCE }),
         pocRows: files[1] ? preparePocRows(files[1], files[2]) : []
       };
     });
@@ -896,15 +946,15 @@
     };
   }
 
-  function methodologyParagraph(spec, selected) {
+  function methodologyParagraph(spec, selected, sourceMeta) {
     const metric = normalizeMetricSpec(spec);
     const playerBit = selected
       ? ' דוגמת השחקן בשיעור: ' + selected.name + ' (' + (selected.team || '') + '), ציון ' +
         selected.score + ', דירוג #' + selected.rank + '.'
       : '';
-    return 'המדד חושב במעבדת ScoutAI ככלי לימוד לאנליסט מתחיל, לא כהמלצת סקאוטינג, לא כחוות דעת רפואית או חוזית, ולא כמוצר למכירה. ' +
-      'המקור הוא קובץ ספירות מקומי שנבנה מ-StatsBomb Open Data למונדיאל 2018 (תחרות 43, עונה 3). ' +
-      'הרישיון מתיר מחקר ושיתוף ציבורי עם קרדיט, ואוסר שימוש מסחרי בנתונים ובכל ניתוח שנגזר מהם. ' +
+    const provenance = (sourceMeta && sourceMeta.provenance) ||
+      (selected && selected.provenance) || OPEN_DATA_PROVENANCE;
+    const recipe =
       formatFormula(metric) +
       '. Grit = 0.45×לחיצות + 0.30×(תיקולים+חטיפות) + 0.25×פעולות הגנה, אחרי נרמול לתקרות קבועות ל-90 דקות. ' +
       'Involvement = 0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות שהושלמו. ' +
@@ -912,23 +962,40 @@
       'סף הדקות הוא ' + metric.minMinutes +
       (metric.normalizePosition ? '; הרכיבים הם אחוזון בתוך קבוצת עמדה.' : '; בלי נרמול עמדה.') +
       ' המשקלות ידניות ושרירותיות, בלי כיול מדעי.' + playerBit;
+    if (provenance === USER_DATA_PROVENANCE) {
+      return 'המדד חושב במעבדת ScoutAI ככלי לימוד, לא כהמלצת סקאוטינג ולא כחוות דעת רפואית או חוזית. ' +
+        'השכבה היא USER_LICENSED_DATA: הקובץ נשאר במחשב המשתמש. ScoutAI לא מעניק רישיון לנתונים האלה. ' +
+        'האחריות לעמידה ברישיון הספק (Wyscout / Hudl Statsbomb מסחרי / מנהלת / איסוף עצמי) היא על המשתמש. ' +
+        recipe;
+    }
+    if (provenance === SYNTHETIC_PROVENANCE) {
+      return 'המדד חושב במעבדת ScoutAI על קובץ סינתטי להדגמת פורמט, לא על משחק אמיתי ולא על StatsBomb Open Data. ' +
+        'זה כלי לימוד, לא המלצת סקאוטינג. ' + recipe;
+    }
+    return 'המדד חושב במעבדת ScoutAI ככלי לימוד לאנליסט מתחיל, לא כהמלצת סקאוטינג, לא כחוות דעת רפואית או חוזית, ולא כמוצר למכירה. ' +
+      'המקור הוא קובץ ספירות מקומי שנבנה מ-StatsBomb Open Data למונדיאל 2018 (תחרות 43, עונה 3). ' +
+      'הרישיון מתיר מחקר ושיתוף ציבורי עם קרדיט, ואוסר שימוש מסחרי בנתונים ובכל ניתוח שנגזר מהם. ' +
+      recipe;
   }
 
   function exportMetricBundle(spec, selected, extras) {
     const metric = normalizeMetricSpec(spec);
     const extra = extras || {};
+    const provenance = extra.provenance || (selected && selected.provenance) || OPEN_DATA_PROVENANCE;
+    const source = extra.source || (provenance === OPEN_DATA_PROVENANCE ? OPEN_DATA_SOURCE : {
+      dataset: extra.fileName || 'user-upload',
+      competition: extra.competition || 'USER_DATASET',
+      license: provenance === USER_DATA_PROVENANCE
+        ? 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
+        : 'Synthetic teaching file shipped with ScoutAI — not match data'
+    });
+    const commercial = false;
     return {
       tool: 'ScoutAI',
       purpose: 'educational metric lab',
-      commercial: false,
-      provenance: 'STATSBOMB_OPEN_DATA',
-      source: {
-        dataset: 'data/wc2018_event_aggregates.json',
-        competition: 'FIFA World Cup 2018',
-        competitionId: 43,
-        seasonId: 3,
-        license: 'StatsBomb Open Data — research and public sharing with credit; commercial use prohibited'
-      },
+      commercial: commercial,
+      provenance: provenance,
+      source: source,
       metric: {
         grit: metric.grit,
         involvement: metric.involvement,
@@ -956,8 +1023,12 @@
         positionGroup: extra.compared.positionGroup,
         components: extra.compared.components
       } : null,
-      methodologyHe: methodologyParagraph(metric, selected),
-      citationEn: 'ScoutAI educational metric lab on StatsBomb Open Data, FIFA World Cup 2018 (competition 43, season 3). Non-commercial research/education only. Weights are manual and uncalibrated; not a scouting recommendation.',
+      methodologyHe: methodologyParagraph(metric, selected, { provenance: provenance }),
+      citationEn: provenance === USER_DATA_PROVENANCE
+        ? 'ScoutAI educational metric lab on USER_LICENSED_DATA processed locally. ScoutAI does not license the uploaded file. Weights are manual and uncalibrated; not a scouting recommendation.'
+        : provenance === SYNTHETIC_PROVENANCE
+          ? 'ScoutAI educational metric lab on a synthetic teaching file. Not match data and not StatsBomb Open Data. Weights are manual and uncalibrated.'
+          : 'ScoutAI educational metric lab on StatsBomb Open Data, FIFA World Cup 2018 (competition 43, season 3). Non-commercial research/education only. Weights are manual and uncalibrated; not a scouting recommendation.',
       generatedLocally: true
     };
   }
@@ -1503,6 +1574,127 @@
     return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
 
+  function splitCsvLine(line) {
+    const out = [];
+    let cur = '';
+    let quoted = false;
+    const text = String(line || '');
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (ch === '"') {
+        quoted = !quoted;
+      } else if ((ch === ',' || ch === '\t') && !quoted) {
+        out.push(cur.trim());
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur.trim());
+    return out;
+  }
+
+  function parseUserCsv(text) {
+    const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (line) {
+      return line.trim();
+    });
+    if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
+    const headers = splitCsvLine(lines[0]).map(function (h) { return h.toLowerCase(); });
+    const nameIdx = headers.indexOf('name');
+    if (nameIdx < 0) return { ok: false, errors: ['חסרה עמודת name'], players: [] };
+    const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalminutesproxy');
+    const col = {};
+    USER_DATASET_COLUMNS.forEach(function (key) {
+      col[key] = headers.indexOf(key.toLowerCase());
+    });
+    const players = [];
+    const errors = [];
+    lines.slice(1).forEach(function (line, i) {
+      const cells = splitCsvLine(line);
+      const name = cells[nameIdx];
+      if (!name) {
+        errors.push('שורה ' + (i + 2) + ': חסר שם');
+        return;
+      }
+      const row = { name: name };
+      USER_DATASET_COLUMNS.forEach(function (key) {
+        if (key === 'name') return;
+        const idx = col[key];
+        if (idx < 0) return;
+        const raw = cells[idx];
+        if (raw === '' || raw == null) return;
+        row[key] = key === 'team' || key === 'position' ? raw : raw;
+      });
+      if (minIdx >= 0 && cells[minIdx] !== '') row.totalMinutesProxy = Number(cells[minIdx]);
+      players.push(row);
+    });
+    if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [] };
+    return { ok: true, errors: errors, players: players };
+  }
+
+  function parseUserDataset(text, options) {
+    const opts = options || {};
+    const raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').trim();
+    if (!raw) {
+      return { ok: false, errors: ['הקובץ ריק'], players: [], provenance: null };
+    }
+    let dataset = null;
+    let parseErrors = [];
+    if (raw.charAt(0) === '{' || raw.charAt(0) === '[') {
+      try {
+        dataset = JSON.parse(raw);
+      } catch (err) {
+        return { ok: false, errors: ['JSON לא תקין'], players: [], provenance: null };
+      }
+    } else {
+      const csv = parseUserCsv(raw);
+      if (!csv.ok) return { ok: false, errors: csv.errors, players: [], provenance: null };
+      dataset = { players: csv.players };
+      parseErrors = csv.errors || [];
+    }
+    if (looksLikeOpenDataPayload(dataset)) {
+      return {
+        ok: false,
+        errors: ['הקובץ מזוהה כ-StatsBomb Open Data. הרישיון אוסר ניצול מסחרי. חזרו למצב הדמו החינמי.'],
+        players: [],
+        provenance: OPEN_DATA_PROVENANCE,
+        detected: OPEN_DATA_PROVENANCE
+      };
+    }
+    const synthetic = opts.synthetic === true ||
+      (dataset && typeof dataset === 'object' && !Array.isArray(dataset) &&
+        (dataset.provenance === SYNTHETIC_PROVENANCE ||
+          String(dataset.licenceNote || dataset.license || '').indexOf('סינתט') >= 0));
+    if (!synthetic && !opts.attested) {
+      return {
+        ok: false,
+        errors: ['סמנו שאישרתם שיש לכם רישיון להריץ את הקובץ מקומית.'],
+        players: [],
+        provenance: null
+      };
+    }
+    const players = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    if (!players.length) {
+      return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
+    }
+    const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
+    return {
+      ok: true,
+      errors: parseErrors,
+      warnings: players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [],
+      players: players,
+      provenance: provenance,
+      source: {
+        dataset: opts.fileName || (synthetic ? 'data/user-dataset.example.json' : 'user-upload'),
+        competition: (dataset && !Array.isArray(dataset) && (dataset.competition || dataset.comp)) ||
+          (synthetic ? 'דוגמה סינתטית' : 'USER_DATASET'),
+        license: synthetic
+          ? 'Synthetic teaching file shipped with ScoutAI — not match data'
+          : 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
+      }
+    };
+  }
+
   return {
     createDemoFixture: createDemoFixture,
     flattenCalibrated: flattenCalibrated,
@@ -1551,6 +1743,13 @@
     glossaryForPlayer: glossaryForPlayer,
     validateMetric: validateMetric,
     evaluateCurriculum: evaluateCurriculum,
-    CURRICULUM_LESSONS: CURRICULUM_LESSONS
+    CURRICULUM_LESSONS: CURRICULUM_LESSONS,
+    parseUserDataset: parseUserDataset,
+    looksLikeOpenDataPayload: looksLikeOpenDataPayload,
+    USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
+    OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,
+    USER_DATA_PROVENANCE: USER_DATA_PROVENANCE,
+    SYNTHETIC_PROVENANCE: SYNTHETIC_PROVENANCE,
+    OPEN_DATA_SOURCE: OPEN_DATA_SOURCE
   };
 }));

@@ -63,6 +63,7 @@
 <body>
 <a class="skip" href="#course">דלגו לשיעור המלא</a>
 <a class="skip" href="#lab">דלגו למעבדת המדד</a>
+<a class="skip" href="#byod">דלגו לנתונים שלכם</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
     <code>STATSBOMB_OPEN_DATA</code> שכבת הנתונים היחידה היא <code>data/wc2018_event_aggregates.json</code>; דירוג, שיעור, חוקר ספירות, אימות ושבריריות נגזרים ממנה.
@@ -73,20 +74,39 @@
     <nav class="toc" aria-label="מעבר לחלקי המעבדה">
       <a href="#course">שיעור מלא</a>
       <a href="#lab">בנה מדד</a>
+      <a href="#byod">נתונים שלכם</a>
       <a href="#explorer">חוקר ספירות</a>
       <a href="#validate">אימות</a>
       <a href="#glossary">מילון</a>
       <a href="trap/">מלכודת פיצ'רים</a>
+      <a href="licence.html">רישיון</a>
+      <a href="offer.html">סדנה</a>
     </nav>
   </aside>
 
   <section class="card">
     <h1>ScoutAI — מעבדת המחשה מקומית</h1>
-    <p>מעבדה אחת, שכבת נתונים אחת: מאירוע ספור לספירה, למדד, למדגם מוחזק. בונים משקלות, בודקים בתרגיל בלמים, קוראים את הקבלה מאחורי המספרים, מפצלים בתים A–D / E–H, ומייצאים פסקת מתודולוגיה. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד, לא למסחר.</p>
+    <p>מעבדה אחת, שכבת נתונים אחת: מאירוע ספור לספירה, למדד, למדגם מוחזק. בונים משקלות, בודקים בתרגיל בלמים, קוראים את הקבלה מאחורי המספרים, מפצלים בתים A–D / E–H, ומייצאים פסקת מתודולוגיה. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד, לא למסחר. <a href="licence.html">מה מותר ומה אסור</a> · <a href="offer.html">הצעת סדנה (אין הרשמה בדף)</a>.</p>
     <p><a href="trap/">מלכודת הפיצ'רים המשכנעים</a> — שיעור על פיצ'ר שמוסיפים אחרי המסקנה, כולל המקרה מ־<code>attic/proof-demo.js</code>. הדף לא מנתח פנים.</p>
     <label for="video">בחירת וידאו מקומי (אופציונלי)</label>
     <input id="video" type="file" accept="video/*">
     <p id="videoStatus" class="status">LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.</p>
+  </section>
+
+  <section class="card" id="byod">
+    <h2>הביאו נתונים שרישיתם בעצמכם</h2>
+    <p>הכלי רץ בדפדפן בלבד. הקובץ לא נשלח לשרת. מצב זה קיים כדי שאפשר יהיה ללמוד את המדד על נתונים שהמשתמש רשאי להריץ — לא כדי למכור את מונדיאל 2018. <a href="licence.html">רישיון Open Data</a> אוסר ניצול מסחרי של הנתונים הפתוחים ושל ניתוח שנגזר מהם.</p>
+    <p class="notice">קבצים שנראים כמו StatsBomb Open Data (מקור «StatsBomb», או תחרות 43 / עונה 3) יידחו במצב הזה. חזרו לדמו החינמי.</p>
+    <label for="userData">קובץ JSON או CSV מקומי</label>
+    <input id="userData" type="file" accept=".json,.csv,text/csv,application/json">
+    <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
+    <div class="actions">
+      <button id="loadUserData" type="button">הריצו על הקובץ שלי</button>
+      <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
+      <button id="restoreOpenData" class="secondary" type="button">חזרו לדמו מונדיאל 2018</button>
+    </div>
+    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
+    <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. CSV: אותן כותרות בשורה הראשונה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
   </section>
 
   <section class="card" id="course" aria-live="polite">
@@ -140,7 +160,7 @@
 
   <section class="card" aria-live="polite">
     <h2>דירוג חי לפי המדד שלכם</h2>
-    <p>מקור: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
+    <p>ברירת המחדל: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית, לא למסחר. אחרי טעינת קובץ שלכם התווית משתנה ל־<span class="badge">USER_LICENSED_DATA</span>. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
     <p id="tableStatus" class="status" aria-live="polite">טוען קבצי PoC מקומיים…</p>
     <div id="playerTable" class="table-wrap"></div>
   </section>
@@ -235,7 +255,7 @@
     <h2>פרטיות ותנאי שימוש בזמן הריצה</h2>
     <p>הדמו הוא קובץ מקומי ללא backend. בחירת קובץ מאפשרת לדפדפן להציג רק את שמו וגודלו; הקובץ אינו מנותח, מועלה, נשמר או משותף. אין חשבונות, תשלומים, אימייל, תמיכה תפעולית או שירות AI. מצב המדד נשמר ב־hash המקומי של הדף (לא נשלח לשרת). Open Data מותר למחקר/לימוד בלבד, לא למסחר.</p>
   </section>
-  <footer>ScoutAI local deterministic demo · לא שירות ניתוח מאומת</footer>
+  <footer>ScoutAI local deterministic demo · לא שירות ניתוח מאומת · <a href="licence.html">רישיון</a> · <a href="offer.html">סדנה</a></footer>
 </main>
 <script src="demo.js"></script>
 <script>
@@ -333,16 +353,18 @@
     formulaLine.textContent = current.formula;
     const rows = current.rows;
     const spec = current.spec;
+    const tag = (current.provenance || 'STATSBOMB_OPEN_DATA');
     if (!rows.length) {
-      tableStatus.textContent = 'STATSBOMB_OPEN_DATA: אין שחקנים מעל סף הדקות.';
+      tableStatus.textContent = tag + ': אין שחקנים מעל סף הדקות.';
       tableRoot.innerHTML = '';
       return;
     }
-    tableStatus.textContent = 'STATSBOMB_OPEN_DATA: ' + rows.length + ' שחקנים ממונדיאל 2018 אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
+    tableStatus.textContent = tag + ': ' + rows.length + ' שחקנים אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
     const body = rows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
       const compared = spec.compareId && row.id === spec.compareId;
       const cls = selected ? 'selected' : compared ? 'compared' : '';
+      const rowTag = row.provenance || tag;
       return '<tr data-id="' + escapeHtml(row.id) + '" tabindex="0"' +
         (cls ? ' class="' + cls + '"' : '') +
         ' aria-selected="' + (selected ? 'true' : 'false') + '">' +
@@ -350,15 +372,18 @@
         '<td>' + escapeHtml(row.name) + '<div class="muted">' + escapeHtml(row.positionGroup) + ' · ' + escapeHtml(row.position || '') + '</div></td>' +
         '<td>' + escapeHtml(row.team || '—') + '</td>' +
         '<td>' + escapeHtml(row.minutes) + '</td>' +
-        '<td><span class="badge">STATSBOMB_OPEN_DATA</span> <strong>' + escapeHtml(row.score) + '</strong><div class="muted">' + deltaCell(row.deltaScore) + '</div></td>' +
+        '<td><span class="badge">' + escapeHtml(rowTag) + '</span> <strong>' + escapeHtml(row.score) + '</strong><div class="muted">' + deltaCell(row.deltaScore) + '</div></td>' +
         '<td>' + escapeHtml(row.components.grit) + '</td>' +
         '<td>' + escapeHtml(row.components.involvement) + '</td>' +
         '<td>' + escapeHtml(row.components.clutch) + '</td>' +
       '</tr>';
     }).join('');
+    const caption = tag === 'STATSBOMB_OPEN_DATA'
+      ? 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018'
+      : 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag;
     tableRoot.innerHTML =
       '<table aria-describedby="tableStatus">' +
-        '<caption>דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018</caption>' +
+        '<caption>' + escapeHtml(caption) + '</caption>' +
         '<thead><tr>' +
           '<th scope="col">דירוג ושינוי</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">דקות</th>' +
           '<th scope="col">ציון ושינוי</th><th scope="col">Grit</th><th scope="col">Involvement</th><th scope="col">Clutch</th>' +
@@ -808,7 +833,10 @@
     link.download = 'scoutai-metric.json';
     link.click();
     URL.revokeObjectURL(url);
-    document.getElementById('exportStatus').textContent = 'הקובץ ירד למחשב המקומי. Open Data — לא למסחר.';
+    const tag = (view.provenance || 'STATSBOMB_OPEN_DATA');
+    document.getElementById('exportStatus').textContent = tag === 'STATSBOMB_OPEN_DATA'
+      ? 'הקובץ ירד למחשב המקומי. Open Data — לא למסחר.'
+      : 'הקובץ ירד למחשב המקומי. האחריות לרישיון הנתונים היא עליכם.';
   });
   tableRoot.addEventListener('click', function (event) {
     const row = event.target.closest('tr[data-id]');
@@ -886,6 +914,75 @@
     } else {
       hashStatus.textContent = 'העתיקו ידנית את הכתובת מהדפדפן — המדד יושב אחרי #.';
     }
+  });
+
+  function applyParsedDataset(parsed, statusText) {
+    const byodStatus = document.getElementById('byodStatus');
+    if (!parsed.ok) {
+      byodStatus.textContent = (parsed.errors || []).join(' ');
+      return;
+    }
+    store = ScoutAIDemo.createStore({ players: parsed.players }, {
+      provenance: parsed.provenance,
+      source: parsed.source,
+      fileName: parsed.source && parsed.source.dataset
+    });
+    tableRoot.dataset.selected = '';
+    if (parsed.provenance !== 'STATSBOMB_OPEN_DATA') {
+      document.getElementById('splitSelect').value = 'hash';
+    }
+    recompute();
+    byodStatus.textContent = statusText ||
+      (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.');
+  }
+
+  document.getElementById('loadUserData').addEventListener('click', function () {
+    const input = document.getElementById('userData');
+    const file = input.files && input.files[0];
+    const attested = document.getElementById('userAttest').checked;
+    const byodStatus = document.getElementById('byodStatus');
+    if (!file) {
+      byodStatus.textContent = 'USER_LICENSED_DATA: לא נבחר קובץ.';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function () {
+      const parsed = ScoutAIDemo.parseUserDataset(String(reader.result || ''), {
+        attested: attested,
+        fileName: file.name
+      });
+      applyParsedDataset(parsed);
+    };
+    reader.onerror = function () {
+      byodStatus.textContent = 'קריאת הקובץ המקומי נכשלה. דבר לא נשלח.';
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('loadSynthetic').addEventListener('click', function () {
+    const byodStatus = document.getElementById('byodStatus');
+    fetch('data/user-dataset.example.json').then(function (response) {
+      if (!response.ok) throw new Error('failed to load example');
+      return response.text();
+    }).then(function (text) {
+      const parsed = ScoutAIDemo.parseUserDataset(text, { synthetic: true, attested: true, fileName: 'user-dataset.example.json' });
+      applyParsedDataset(parsed, 'SYNTHETIC_EXAMPLE: דוגמה סינתטית, לא נתוני משחק. ' + parsed.players.length + ' שחקנים.');
+    }).catch(function (err) {
+      byodStatus.textContent = 'טעינת הדוגמה המקומית נכשלה. פתחו דרך שרת סטטי. ' + (err && err.message ? err.message : '');
+    });
+  });
+
+  document.getElementById('restoreOpenData').addEventListener('click', function () {
+    const byodStatus = document.getElementById('byodStatus');
+    ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
+      store = lab.store;
+      tableRoot.dataset.selected = '';
+      document.getElementById('splitSelect').value = 'groups';
+      recompute();
+      byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';
+    }).catch(function (err) {
+      byodStatus.textContent = 'STATSBOMB_OPEN_DATA: טעינה מחדש נכשלה. ' + (err && err.message ? err.message : err);
+    });
   });
 
   document.getElementById('video').addEventListener('change', event => {
