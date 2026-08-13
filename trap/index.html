@@ -37,7 +37,9 @@
     footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
     .archive{direction:ltr;text-align:left;background:#f3f6f1;border-radius:12px;padding:12px;overflow:auto;font-size:.85rem;white-space:pre-wrap}
     .status{min-height:1.5em;font-weight:700}
-    @media(max-width:650px){.slider-row{grid-template-columns:1fr}}
+    button,select,input[type=text],.nav a{min-height:44px}
+    .nav a{display:inline-flex;align-items:center}
+    @media(max-width:650px){.slider-row{grid-template-columns:1fr}.banner{position:static;padding:12px}.shell{padding:12px}}
   </style>
 </head>
 <body>
@@ -49,6 +51,8 @@
     <code>NO_FACE_MODEL</code> הדף לא מנתח פנים, לא מזהה פרצופים, ואין בו תמונות של אנשים.
     <div class="nav">
       <a href="../">חזרה למעבדת המדד</a>
+      <a href="../licence.html">רישיון</a>
+      <a href="../offer.html">סדנה</a>
     </div>
   </aside>
 
@@ -120,18 +124,18 @@
     <div class="sliders">
       <div class="slider-row">
         <label for="labGrit">Grit במעבדה</label>
-        <input id="labGrit" type="range" min="0" max="100" value="40">
-        <strong id="labGritVal">40</strong>
+        <input id="labGrit" type="range" min="0" max="100" value="40" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-valuetext="Grit במעבדה, 40">
+        <strong id="labGritVal" aria-hidden="true">40</strong>
       </div>
       <div class="slider-row">
         <label for="labInv">Involvement במעבדה</label>
-        <input id="labInv" type="range" min="0" max="100" value="30">
-        <strong id="labInvVal">30</strong>
+        <input id="labInv" type="range" min="0" max="100" value="30" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30" aria-valuetext="Involvement במעבדה, 30">
+        <strong id="labInvVal" aria-hidden="true">30</strong>
       </div>
       <div class="slider-row">
         <label for="labClutch">Clutch במעבדה</label>
-        <input id="labClutch" type="range" min="0" max="100" value="30">
-        <strong id="labClutchVal">30</strong>
+        <input id="labClutch" type="range" min="0" max="100" value="30" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30" aria-valuetext="Clutch במעבדה, 30">
+        <strong id="labClutchVal" aria-hidden="true">30</strong>
       </div>
     </div>
     <ul id="checkRoot" class="checks"></ul>

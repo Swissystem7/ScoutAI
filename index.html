@@ -57,7 +57,17 @@
     .receipt li{list-style:none}
     tr.hl td,tr.hl th{background:#fff8e8;outline:2px solid #8a5a00}
     .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    @media(max-width:650px){.slider-row,.bar-row,.radar-layout,.stats-grid{grid-template-columns:1fr}}
+    button,select,input[type=file],.toc a,.course-nav button,.lesson-nav button{min-height:44px}
+    input[type=range]{min-height:32px}
+    .toc a{display:inline-flex;align-items:center;padding:8px 10px}
+    @media(max-width:650px){
+      .slider-row,.bar-row,.radar-layout,.stats-grid{grid-template-columns:1fr}
+      .banner{position:static;padding:12px;font-size:.9rem}
+      .shell{padding:12px}
+      table{font-size:.85rem}
+      th,td{padding:8px 6px}
+      .card{padding:16px}
+    }
   </style>
 </head>
 <body>
@@ -66,50 +76,30 @@
 <a class="skip" href="#byod">דלגו לנתונים שלכם</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
-    <code>STATSBOMB_OPEN_DATA</code> שכבת הנתונים היחידה היא <code>data/wc2018_event_aggregates.json</code>; דירוג, שיעור, חוקר ספירות, אימות ושבריריות נגזרים ממנה.
-    <code>LOCAL_VIDEO</code> נבחר ונקרא בדפדפן בלבד, ללא העלאה.
-    <code>DEMO_METRIC</code> אינו נמדד מהווידאו ואינו שירות סקאוטינג מקצועי.
-    <code>VERIFIED_ANALYSIS_SERVICE</code> אינו זמין; זו אינטגרציה עתידית בלבד.
+    <code>STATSBOMB_OPEN_DATA</code> כל מספר בדמו מגיע מ־<code>data/wc2018_event_aggregates.json</code>.
     <code>NO_HELD_OUT_SEASON</code> אין עונה שנייה בריפו — האימות הוא פיצול בתים באותו מונדיאל.
+    <code>NO_AI</code> אין מודל, אין וידאו, אין חשבון.
     <nav class="toc" aria-label="מעבר לחלקי המעבדה">
       <a href="#course">שיעור מלא</a>
       <a href="#lab">בנה מדד</a>
-      <a href="#byod">נתונים שלכם</a>
       <a href="#explorer">חוקר ספירות</a>
       <a href="#validate">אימות</a>
       <a href="#glossary">מילון</a>
-      <a href="trap/">מלכודת פיצ'רים</a>
+      <a href="#byod">נתונים שלכם</a>
+      <a href="trap/">מלכודת הפיצ'רים המשכנעים</a>
       <a href="licence.html">רישיון</a>
       <a href="offer.html">סדנה</a>
     </nav>
   </aside>
 
-  <section class="card">
-    <h1>ScoutAI — מעבדת המחשה מקומית</h1>
-    <p>מעבדה אחת, שכבת נתונים אחת: מאירוע ספור לספירה, למדד, למדגם מוחזק. בונים משקלות, בודקים בתרגיל בלמים, קוראים את הקבלה מאחורי המספרים, מפצלים בתים A–D / E–H, ומייצאים פסקת מתודולוגיה. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד, לא למסחר. <a href="licence.html">מה מותר ומה אסור</a> · <a href="offer.html">הצעת סדנה (אין הרשמה בדף)</a>.</p>
-    <p><a href="trap/">מלכודת הפיצ'רים המשכנעים</a> — שיעור על פיצ'ר שמוסיפים אחרי המסקנה, כולל המקרה מ־<code>attic/proof-demo.js</code>. הדף לא מנתח פנים.</p>
-    <label for="video">בחירת וידאו מקומי (אופציונלי)</label>
-    <input id="video" type="file" accept="video/*">
-    <p id="videoStatus" class="status">LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.</p>
+  <section class="card" id="hero">
+    <h1>ScoutAI — למדו לבנות מדד כדורגל שקוף</h1>
+    <p>כלי לימוד בדפדפן על נתוני <span dir="ltr">StatsBomb Open Data</span> ממונדיאל 2018. <strong>לא</strong> סקאוטינג, <strong>לא</strong> AI, <strong>לא</strong> למכירה. הנוסחה גלויה כדי שאפשר להתווכח עליה:</p>
+    <p class="formula">Impact = 0.4×Grit + 0.3×Involvement + 0.3×Clutch</p>
+    <p>התחילו בשיעור בן שמונה צעדים. כל ספירה, /90, תקרה וציון ניתנים למעקב עד השדה בקובץ המקומי. Open Data — לימוד/מחקר בלבד. <a href="licence.html">מה מותר ומה אסור</a> · <a href="offer.html">הצעת סדנה (אין הרשמה בדף)</a> · <a href="trap/">מלכודת הפיצ'רים המשכנעים</a> (כולל המקרה מ־<code>attic/proof-demo.js</code>, בלי ניתוח פנים).</p>
   </section>
 
-  <section class="card" id="byod">
-    <h2>הביאו נתונים שרישיתם בעצמכם</h2>
-    <p>הכלי רץ בדפדפן בלבד. הקובץ לא נשלח לשרת. מצב זה קיים כדי שאפשר יהיה ללמוד את המדד על נתונים שהמשתמש רשאי להריץ — לא כדי למכור את מונדיאל 2018. <a href="licence.html">רישיון Open Data</a> אוסר ניצול מסחרי של הנתונים הפתוחים ושל ניתוח שנגזר מהם.</p>
-    <p class="notice">קבצים שנראים כמו StatsBomb Open Data (מקור «StatsBomb», או תחרות 43 / עונה 3) יידחו במצב הזה. חזרו לדמו החינמי.</p>
-    <label for="userData">קובץ JSON או CSV מקומי</label>
-    <input id="userData" type="file" accept=".json,.csv,text/csv,application/json">
-    <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
-    <div class="actions">
-      <button id="loadUserData" type="button">הריצו על הקובץ שלי</button>
-      <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
-      <button id="restoreOpenData" class="secondary" type="button">חזרו לדמו מונדיאל 2018</button>
-    </div>
-    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
-    <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. CSV: אותן כותרות בשורה הראשונה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
-  </section>
-
-  <section class="card" id="course" aria-live="polite">
+  <section class="card" id="course">
     <h2>שיעור מלא: מאירוע למדד מאומת</h2>
     <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
     <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
@@ -149,7 +139,7 @@
     <p id="hashStatus" class="status" role="status" aria-live="polite"></p>
   </section>
 
-  <section class="card" id="exercise" aria-live="polite">
+  <section class="card" id="exercise">
     <h2>תרגיל מודרך</h2>
     <p id="exercisePrompt"></p>
     <p class="muted">בדיקה עצמית מול אותה שכבת מונדיאל 2018 — לא מבחן סקאוטינג ואין תשובה מדעית אחת.</p>
@@ -158,21 +148,21 @@
     <ul id="exerciseChecks" class="checks"></ul>
   </section>
 
-  <section class="card" aria-live="polite">
+  <section class="card">
     <h2>דירוג חי לפי המדד שלכם</h2>
     <p>ברירת המחדל: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית, לא למסחר. אחרי טעינת קובץ שלכם התווית משתנה ל־<span class="badge">USER_LICENSED_DATA</span>. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
-    <p id="tableStatus" class="status" aria-live="polite">טוען קבצי PoC מקומיים…</p>
+    <p id="tableStatus" class="status" role="status" aria-live="polite">טוען את data/wc2018_event_aggregates.json…</p>
     <div id="playerTable" class="table-wrap"></div>
   </section>
 
-  <section class="card" aria-live="polite">
+  <section class="card">
     <h2>שיעור שקוף</h2>
     <p>יחידת הלימוד היא <strong>שחקן אחד</strong>, כמו בעיטה אחת בשיעור xG: קודם הגורמים, אחר כך ההסתברות/הציון, ורק אז מה קורה אם משנים מודל.</p>
     <div id="lessonNav" class="lesson-nav" role="toolbar" aria-label="צעדי השיעור השקוף"></div>
     <div id="lessonRoot" class="lesson"></div>
   </section>
 
-  <section class="card" aria-live="polite">
+  <section class="card">
     <h2>מכ״ם השוואה מרכיבים גולמיים</h2>
     <p>אותם תשעת הגורמים שנכנסים לנוסחה, אחרי אותן תקרות ל-90 דקות. לא מודל חיצוני ולא רדאר Wyscout.</p>
     <label for="compareSelect">השוו את השחקן הנבחר מול</label>
@@ -188,7 +178,7 @@
     </div>
   </section>
 
-  <section class="card" id="explorer" aria-live="polite">
+  <section class="card" id="explorer">
     <h2>חוקר ספירות האירועים</h2>
     <p>הקובץ המקומי הוא <strong>ספירות מצטברות</strong> מ-64 משחקים, לא יומן אירוע-אחר-אירוע. כאן רואים את השדות האמיתיים מאחורי הציון של השחקן הנבחר, וגם את מה שנאסף ולא נכנס לנוסחה.</p>
     <p id="explorerStatus" class="lab-note"></p>
@@ -196,7 +186,7 @@
     <div id="explorerTable" class="table-wrap"></div>
   </section>
 
-  <section class="card" id="validate" aria-live="polite">
+  <section class="card" id="validate">
     <h2>מעבדת אימות: האם המדד חוזה מדגם מוחזק?</h2>
     <p class="notice">אין בריפו עונה שנייה של אותן ספירות. ברירת המחדל מפצלת 32 נבחרות לבתים A–D (אימון) מול E–H (מבחן) בתוך מונדיאל 2018. זה מדגם מוחזק, לא «העונה הבאה».</p>
     <label for="outcomeSelect">יעד לחיזוי (שדה מהקובץ, לא הציון עצמו)</label>
@@ -218,7 +208,7 @@
     <div id="validateTables" class="table-wrap"></div>
   </section>
 
-  <section class="card" id="fragility" aria-live="polite">
+  <section class="card" id="fragility">
     <h2>מעבדת שבריריות משקלות</h2>
     <p>אותה שכבת נתונים, אותו שחקן נבחר. מוסיפים 10 נקודות למשקל אחד — מי קופץ, ומה קורה לשחקן שבחרתם.</p>
     <p id="selectedSwing" class="lab-note"></p>
@@ -243,17 +233,25 @@
     <dl id="glossaryRoot" class="glossary"></dl>
   </section>
 
-  <section class="card actions">
-    <h2>פעולות שאינן זמינות בדמו</h2>
-    <button type="button" data-unavailable="הרשמה ויצירת חשבון אינן זמינות; לא נשמר חשבון.">יצירת חשבון</button>
-    <button type="button" data-unavailable="ניסיון ומכירות אינם זמינים; לא נפתחה פנייה.">התחלת ניסיון</button>
-    <button type="button" data-unavailable="PDF, אימייל ושיתוף חיצוני אינם זמינים; דבר לא נשלח.">שליחת דוח</button>
-    <p id="actionStatus" class="status"></p>
+  <section class="card" id="byod">
+    <h2>הביאו נתונים שרישיתם בעצמכם</h2>
+    <p>הכלי רץ בדפדפן בלבד. הקובץ לא נשלח לשרת. מצב זה קיים כדי ללמוד את אותה נוסחה על נתונים שהמשתמש רשאי להריץ — לא כדי למכור את מונדיאל 2018. <a href="licence.html">רישיון Open Data</a> אוסר ניצול מסחרי של הנתונים הפתוחים ושל ניתוח שנגזר מהם.</p>
+    <p class="notice">קבצים שנראים כמו StatsBomb Open Data (מקור «StatsBomb», או תחרות 43 / עונה 3) יידחו כאן. חזרו לדמו החינמי.</p>
+    <label for="userData">קובץ JSON או CSV מקומי</label>
+    <input id="userData" type="file" accept=".json,.csv,text/csv,application/json">
+    <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
+    <div class="actions">
+      <button id="loadUserData" type="button">הריצו על הקובץ שלי</button>
+      <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
+      <button id="restoreOpenData" class="secondary" type="button">חזרו לדמו מונדיאל 2018</button>
+    </div>
+    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
+    <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. CSV: אותן כותרות בשורה הראשונה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
   </section>
 
   <section class="card">
     <h2>פרטיות ותנאי שימוש בזמן הריצה</h2>
-    <p>הדמו הוא קובץ מקומי ללא backend. בחירת קובץ מאפשרת לדפדפן להציג רק את שמו וגודלו; הקובץ אינו מנותח, מועלה, נשמר או משותף. אין חשבונות, תשלומים, אימייל, תמיכה תפעולית או שירות AI. מצב המדד נשמר ב־hash המקומי של הדף (לא נשלח לשרת). Open Data מותר למחקר/לימוד בלבד, לא למסחר.</p>
+    <p>הדמו הוא קבצים סטטיים בלי backend. קובץ שאתם בוחרים במצב «הביאו נתונים» נקרא בדפדפן בלבד — אינו מועלה, נשמר או משותף. אין חשבונות, תשלומים, אימייל, תמיכה תפעולית או שירות AI. מצב המדד נשמר ב־hash המקומי של הדף (לא נשלח לשרת). Open Data מותר למחקר/לימוד בלבד, לא למסחר.</p>
   </section>
   <footer>ScoutAI local deterministic demo · לא שירות ניתוח מאומת · <a href="licence.html">רישיון</a> · <a href="offer.html">סדנה</a></footer>
 </main>
@@ -530,7 +528,9 @@
     }).join('');
     root.innerHTML =
       '<table aria-describedby="explorerStatus">' +
-        '<caption>ספירות מ-' + escapeHtml(explorer.player.name) + ' ב־data/wc2018_event_aggregates.json</caption>' +
+        '<caption>ספירות מ-' + escapeHtml(explorer.player.name) + ' ב־' +
+          escapeHtml(explorer.dataset || (current.source && current.source.dataset) || 'user-upload') +
+          ' · ' + escapeHtml(explorer.provenance || current.provenance || '') + '</caption>' +
         '<thead><tr>' +
           '<th scope="col">שדה</th><th scope="col">סוג StatsBomb</th><th scope="col">ספירה</th>' +
           '<th scope="col">/90 מחושב</th><th scope="col">/90 בקובץ</th>' +
@@ -851,7 +851,15 @@
       event.preventDefault();
       tableRoot.dataset.selected = row.getAttribute('data-id') || '';
       recompute();
+      return;
     }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const rows = Array.prototype.slice.call(tableRoot.querySelectorAll('tr[data-id]'));
+    const index = rows.indexOf(row);
+    const next = event.key === 'ArrowDown' ? rows[index + 1] : rows[index - 1];
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
   });
   lessonNav.addEventListener('click', function (event) {
     const button = event.target.closest('button[data-step]');
@@ -984,16 +992,6 @@
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: טעינה מחדש נכשלה. ' + (err && err.message ? err.message : err);
     });
   });
-
-  document.getElementById('video').addEventListener('change', event => {
-    const file = event.target.files[0];
-    document.getElementById('videoStatus').textContent = file
-      ? `LOCAL_VIDEO: ${file.name} (${file.size} bytes), זמין מקומית בלבד ולא נותח.`
-      : 'LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.';
-  });
-  document.querySelectorAll('[data-unavailable]').forEach(button => button.addEventListener('click', () => {
-    document.getElementById('actionStatus').textContent = button.dataset.unavailable;
-  }));
 </script>
 </body>
 </html>
