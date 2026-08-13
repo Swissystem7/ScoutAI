@@ -1,31 +1,47 @@
-# ScoutAI — מדד השפעה שקוף לזיהוי כישרונות כדורגל
+# ScoutAI — חוקר מדד השפעה שקוף (לימודי)
 
 **[פתחו את הדמו החי](https://swissystem7.github.io/ScoutAI/)**
 
-**מה זה:** כלי מדד השפעה (Impact Score) שקוף לסקאוטינג כישרונות כדורגל, המחשב ציון מ־0 עד 100 המשקלל מאמץ הגנתי, מעורבות ויכולת הכרעה — מעבר לסטטיסטיקות הקופסה הרגילות.
+ScoutAI הוא כלי לימוד בדפדפן: הוא מציג איך מרכיבים ציון מרוכב (Impact Score) מנתוני [StatsBomb Open Data](https://github.com/hudl/open-data), עם מקור ותווית provenance על כל שורה. זה **לא** שירות סקאוטינג, לא AI, ולא מוצר דוחות למכירה.
 
-**למי:** מאמנים, סקאוטים, וסטודנטים הלומדים מדעי נתוני ספורט.
+הנוסחה גלויה במכוון — כדי שאפשר יהיה להתווכח עליה, לא כדי להעמיד פנים שהיא מדע:
 
-**מה אפשר לעשות:** פתחו את הדמו בדפדפן ישירות — ללא התקנה וללא העלאת קבצים לשרת.
+`Impact = 0.4×Grit + 0.3×Involvement + 0.3×Clutch`
 
-> הדמו הנוכחי הוא המחשת ממשק מקומית ודטרמיניסטית ואינו מנתח את הווידאו שנבחר.
+(Grit = מאמץ הגנתי / Involvement = מעורבות התקדמות ויצירה / Clutch = תפוקה ברגעים מכריעים. משקלות ידניות, לא מכוילות.)
 
-## Local demo
+## למי זה
 
-ScoutAI is an honest, deterministic browser-only interface demo. It does not
-analyze video and is not an AI, medical, recruitment, contractual, or
-professional scouting service.
+אנליסטים וסקאוטים **מתחילים בישראל** — בוגרי [קורס ספורט פאנל](https://www.sportpanel.co.il/scouting) וקהל [myscout.co.il](https://www.myscout.co.il/) — שצריכים **ללמוד איך בונים מדד**, לא לקנות מדד מוכן.
 
-## Observable behavior
+זה לא כלי לסוכן FIFA ולא תחליף ל-Wyscout / Transfermarkt / נתוני מנהלת הליגות.
 
-- A chosen video is `LOCAL_VIDEO`: the browser exposes its name and size to the
-  page, but the file is not uploaded, analyzed, retained, or shared.
-- Every displayed value and timeline event is a seeded `DEMO_METRIC`, generated
-  by `demo.js`. The same seed produces byte-for-byte equivalent metadata.
-- `VERIFIED_ANALYSIS_SERVICE` is unavailable and represents only a possible
-  future integration.
-- Account, trial, sales, PDF, email, and external sharing buttons report that
-  the action is unavailable. There is no backend or network/API submission.
+## מה עובד בדמו עכשיו
 
-Open `index.html` locally to use the demo. Run `node --test test/demo.test.js`
-to verify its safety and determinism properties.
+אחרי תיקוני היושרה והמעבדה הלימודית הדמו החי:
+
+- טוען `poc-calibrated.json`, `poc-top30.json` ו־`data/wc2018_event_aggregates.json` ב־fetch **יחסי** — בלי רשת חיצונית.
+- **בנה מדד בעצמך:** סליידרים ל-Grit/Involvement/Clutch, סף דקות, ונרמול עמדה — הדירוג מתעדכן חי מאירועי מונדיאל 2018, עם Δ מול בסיס 40/30/30, ומצב שניתן לשיתוף ב־hash.
+- **שיעור שקוף:** פירוק עברי של ציון שחקן אחד ממספרים גולמיים עד למשקל.
+- **מעבדת שבריריות:** מי זז הכי הרבה אם מוסיפים 10 נקודות למשקל אחד.
+- מסמן שורות מונדיאל עם דקות בלתי-אפשריות (>480) כ־`season data, mislabeled`.
+- באנרי יושרה: `LOCAL_VIDEO`, `DEMO_METRIC`, `VERIFIED_ANALYSIS_SERVICE` אינו זמין.
+- בדיקות: `npm test` מריץ `node --test test/demo.test.js` (גם ב-CI).
+
+סקריפטי `proof-*.js` שתלויים במנוע שהוסר נמצאים ב־`attic/` ואינם ניתנים לשחזור. אין חשבון, תשלום, PDF או שליחה החוצה.
+
+## מה המחקר מצא
+
+מחקר שוק (13.8.2026) פסק **PIVOT** — לא למכור דוחות ב-49 ₪:
+
+1. **הרישיון אוסר מסחר.** [הסכם המשתמש של StatsBomb Open Data](https://github.com/hudl/open-data/raw/master/LICENSE.pdf) (סעיף 1.2.2) אוסר ניצול מסחרי של הנתונים ושל כל ניתוח שנגזר מהם. מותר מחקר ושיתוף ציבורי עם קרדיט.
+2. **אין כיסוי ישראלי.** ב-[competitions.json](https://github.com/statsbomb/open-data/blob/master/data/competitions.json) אין ליגת על, לאומית או נוער ישראלי; גם אין עונה שוטפת בחמש הגדולות. סוכן שמחפש כישרון זול לא מחפש את מונדיאל 2018.
+3. **לכן הקהל הוא לימודי.** לא נמצא קונה שמשלם 49 ₪ על ציון מרוכב מדאטה שאסור למכור ושלא מכסה את הליגות הרלוונטיות. השקיפות כן מתאימה למי שלומד לבנות מדד (ספורט פאנל / myscout).
+
+## יושרה
+
+- הדמו אינו מנתח וידאו, אינו מפעיל AI, ואינו מספק סקאוטינג מקצועי, רפואי או חוזי.
+- ציון מרוכב 0–100 עם משקלות ידניות הוא כלי לימוד שברירי — לא טענת תוקף מדעית.
+- Open Data הוא למחקר, לא לתשתית SaaS.
+
+פתחו `index.html` דרך GitHub Pages או שרת סטטי מקומי (fetch יחסי לא יעבוד מ־`file://`).
