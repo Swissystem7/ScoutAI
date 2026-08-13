@@ -15,57 +15,10 @@
     return hash >>> 0;
   }
 
-  function createDemoFixture(seed) {
-    const hash = hashSeed(seed);
-    const value = (offset, span) => offset + (hash % span);
-    return {
-      seed: String(seed || 'scoutai-demo-001'),
-      video: { provenance: 'LOCAL_VIDEO', analyzed: false, uploaded: false },
-      service: { provenance: 'VERIFIED_ANALYSIS_SERVICE', available: false },
-      metrics: [
-        { id: 'pace-demo', label: 'קצב המחשה', value: value(61, 25), unit: '/100', provenance: 'DEMO_METRIC', measured: false },
-        { id: 'control-demo', label: 'שליטה להמחשה', value: value(55, 31), unit: '/100', provenance: 'DEMO_METRIC', measured: false },
-        { id: 'work-demo', label: 'עבודה להמחשה', value: value(58, 28), unit: '/100', provenance: 'DEMO_METRIC', measured: false }
-      ],
-      timeline: [
-        { at: '00:12', label: 'אירוע fixture א', provenance: 'DEMO_METRIC' },
-        { at: `00:${30 + (hash % 20)}`, label: 'אירוע fixture ב', provenance: 'DEMO_METRIC' },
-        { at: `01:${10 + (hash % 30)}`, label: 'אירוע fixture ג', provenance: 'DEMO_METRIC' }
-      ]
-    };
-  }
-
-  function flattenCalibrated(data) {
-    if (Array.isArray(data)) return data.slice();
-    const men = data && Array.isArray(data.men) ? data.men : [];
-    const women = data && Array.isArray(data.women) ? data.women : [];
-    return men.concat(women);
-  }
-
-  function attachBreakdowns(rows, top30) {
-    const extras = Array.isArray(top30) ? top30 : [];
-    const byId = new Map(extras.map(function (item) {
-      return [String(item.id), item];
-    }));
-    return rows.map(function (row) {
-      const extra = byId.get(String(row.id));
-      return {
-        id: row.id,
-        name: row.name,
-        team: row.team,
-        comp: row.comp,
-        category: row.category,
-        minutes: row.minutes,
-        index: row.index,
-        rank: row.rank,
-        breakdown: row.breakdown || (extra && extra.breakdown) || null,
-        explanation: row.explanation || (extra && extra.explanation) || null,
-        provenance: 'STATSBOMB_OPEN_DATA'
-      };
-    });
-  }
-
-  const WORLD_CUP_MAX_MINUTES = 480;
+  // 7 group games are impossible; 7 × 90 + 4 × 30 extra-time minutes is the
+  // hard ceiling for a World Cup run. 480 was a leftover from mixed season
+  // snapshots and would falsely flag genuine WC2018 finalists (~620 min).
+  const WORLD_CUP_MAX_MINUTES = 750;
   const SEASON_MISLABELED = 'season data, mislabeled';
 
   function isWorldCupLabel(comp) {
@@ -87,36 +40,6 @@
         hygiene: SEASON_MISLABELED
       });
     });
-  }
-
-  function rankPlayers(rows) {
-    return rows
-      .slice()
-      .filter(function (row) { return row && row.name; })
-      .sort(function (a, b) {
-        const scoreDelta = Number(b.index) - Number(a.index);
-        if (scoreDelta !== 0) return scoreDelta;
-        return String(a.name).localeCompare(String(b.name));
-      })
-      .map(function (row, i) {
-        return Object.assign({}, row, { rank: i + 1, provenance: 'STATSBOMB_OPEN_DATA' });
-      });
-  }
-
-  function preparePocRows(calibrated, top30) {
-    return flagImpossibleMinutes(rankPlayers(attachBreakdowns(flattenCalibrated(calibrated), top30)));
-  }
-
-  function formatBreakdown(breakdown) {
-    if (!breakdown || typeof breakdown !== 'object') return '';
-    const parts = [];
-    Object.keys(breakdown).forEach(function (key) {
-      const item = breakdown[key];
-      if (!item || typeof item !== 'object' || item.value == null) return;
-      const weight = item.weight != null ? ' ×' + item.weight : '';
-      parts.push(key + ' ' + item.value + weight);
-    });
-    return parts.join(' · ');
   }
 
   const DEFAULT_METRIC = Object.freeze({
@@ -321,9 +244,7 @@
   }
 
   const LAB_PATHS = Object.freeze({
-    events: 'data/wc2018_event_aggregates.json',
-    calibrated: 'poc-calibrated.json',
-    top30: 'poc-top30.json'
+    events: 'data/wc2018_event_aggregates.json'
   });
 
   function eventPlayers(dataset) {
@@ -477,9 +398,9 @@
           ? 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
           : 'Synthetic teaching file shipped with ScoutAI — not match data'
       });
-    const players = eventPlayers(rawPlayers).map(function (row) {
+    const players = flagImpossibleMinutes(eventPlayers(rawPlayers).map(function (row) {
       return preparePlayer(row, { provenance: provenance });
-    });
+    }));
     function derive(spec, baselineSpec) {
       const metric = normalizeMetricSpec(spec);
       let rows = scorePrepared(players, metric);
@@ -488,7 +409,8 @@
       if (selected && !metric.selectedId) metric.selectedId = selected.id;
       const compared = findPrepared(rows, players, metric.compareId);
       const fragility = fragilityFromPrepared(players, metric, 10);
-      const explorer = buildEventExplorer(selected);
+      const layer = { provenance: provenance, source: source };
+      const explorer = buildEventExplorer(selected, layer);
       const validation = validateMetric(players, metric, {
         outcomeId: metric.outcomeId,
         splitId: metric.splitId
@@ -498,7 +420,7 @@
         rows: rows,
         selected: selected,
         compared: compared,
-        lesson: buildLesson(selected, metric),
+        lesson: buildLesson(selected, metric, layer),
         contributions: lessonContributions(selected, metric),
         mapping: lessonMapping(selected),
         fragility: fragility,
@@ -543,14 +465,9 @@
   function loadLabSources(fetchImpl) {
     const load = fetchImpl || (typeof fetch === 'function' ? fetch : null);
     if (!load) return Promise.reject(new Error('fetch is not available'));
-    return Promise.all([
-      readJson(load, LAB_PATHS.events),
-      readJson(load, LAB_PATHS.calibrated).catch(function () { return null; }),
-      readJson(load, LAB_PATHS.top30).catch(function () { return null; })
-    ]).then(function (files) {
+    return readJson(load, LAB_PATHS.events).then(function (events) {
       return {
-        store: createStore(files[0], { provenance: OPEN_DATA_PROVENANCE, source: OPEN_DATA_SOURCE }),
-        pocRows: files[1] ? preparePocRows(files[1], files[2]) : []
+        store: createStore(events, { provenance: OPEN_DATA_PROVENANCE, source: OPEN_DATA_SOURCE })
       };
     });
   }
@@ -1033,8 +950,30 @@
     };
   }
 
-  function buildLesson(row, spec) {
+  function sourceLayer(meta, row) {
+    const extra = meta || {};
+    const provenance = extra.provenance || (row && row.provenance) || OPEN_DATA_PROVENANCE;
+    const source = extra.source || (provenance === OPEN_DATA_PROVENANCE ? OPEN_DATA_SOURCE : {
+      dataset: extra.fileName || 'user-upload'
+    });
+    return { provenance: provenance, source: source };
+  }
+
+  function sourceSentence(layer) {
+    const provenance = layer.provenance;
+    const dataset = (layer.source && layer.source.dataset) || 'user-upload';
+    if (provenance === USER_DATA_PROVENANCE) {
+      return 'מקור: USER_LICENSED_DATA, הקובץ ' + dataset + ' נשאר אצלכם. ScoutAI לא מעניק רישיון.';
+    }
+    if (provenance === SYNTHETIC_PROVENANCE) {
+      return 'מקור: SYNTHETIC_EXAMPLE, ' + dataset + ' — לא נתוני משחק ולא Open Data.';
+    }
+    return 'מקור: STATSBOMB_OPEN_DATA, מונדיאל 2018, קובץ ' + dataset + '.';
+  }
+
+  function buildLesson(row, spec, meta) {
     const metric = normalizeMetricSpec(spec);
+    const layer = sourceLayer(meta, row);
     if (!row) {
       return [{
         title: 'בחרו שחקן',
@@ -1053,7 +992,8 @@
       {
         title: '1. מי השחקן ומה המקור',
         body: row.name + ' · ' + (row.team || '') + ' · ' + (row.position || 'בלי עמדה') +
-          ' · ' + row.minutes + ' דקות. מקור: STATSBOMB_OPEN_DATA, מונדיאל 2018. זה שיעור לימודי, לא סקאוטינג מקצועי ולא מוצר מסחרי.'
+          ' · ' + row.minutes + ' דקות. ' + sourceSentence(layer) +
+          ' זה שיעור לימודי, לא סקאוטינג מקצועי ולא מוצר מסחרי.'
       },
       {
         title: '2. מספרים גולמיים ל-90 דקות',
@@ -1133,11 +1073,17 @@
     return Number.isFinite(n) ? n : null;
   }
 
-  function buildEventExplorer(player) {
+  function buildEventExplorer(player, meta) {
+    const layer = sourceLayer(meta, player);
+    const dataset = (layer.source && layer.source.dataset) || 'user-upload';
     if (!player) {
       return {
         player: null,
-        honesty: 'הקובץ המקומי הוא ספירות מצטברות מ-64 משחקים, לא יומן אירוע-אחר-אירוע. אין כאן דקה, משחק או שידור.',
+        dataset: dataset,
+        provenance: layer.provenance,
+        honesty: layer.provenance === OPEN_DATA_PROVENANCE
+          ? 'הקובץ המקומי הוא ספירות מצטברות מ-64 משחקים, לא יומן אירוע-אחר-אירוע. אין כאן דקה, משחק או שידור.'
+          : 'אין שחקן נבחר. הספירות יגיעו מהשכבה הפעילה (' + layer.provenance + '), לא מיומן אירוע.',
         rows: [],
         unused: [],
         capped: [],
@@ -1172,15 +1118,20 @@
       };
     });
     const receipt = [
-      { step: 'ספירה בקובץ', detail: player.name + ' · ' + (player.team || '') + ' · ' + minutes + ' דקות פרוקסי · STATSBOMB_OPEN_DATA' },
+      { step: 'ספירה בקובץ', detail: player.name + ' · ' + (player.team || '') + ' · ' + minutes + ' דקות פרוקסי · ' + layer.provenance + ' · ' + dataset },
       { step: 'לחיצות ל-90', detail: (counts.pressures || 0) + ' × 90 / ' + minutes + ' = ' + (rows[0] ? rows[0].per90 : 0) + (rows[0] && rows[0].capped ? ' — מעל תקרת 18, לכן הסקייל 100' : '') },
       { step: 'Grit', detail: '0.45×לחיצות + 0.30×(תיקולים+חטיפות) + 0.25×הגנה → ' + player.components.grit },
       { step: 'Involvement', detail: '0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות → ' + player.components.involvement },
       { step: 'Clutch', detail: '0.40×xG + 0.35×רחבה + 0.25×מסגרת → ' + player.components.clutch + ' (תווית לימודית, לא רגע הכרעה)' }
     ];
+    const honesty = layer.provenance === OPEN_DATA_PROVENANCE
+      ? 'אלה הספירות האמיתיות מ-' + dataset + '. אין בריפו יומן אירועים גולמי — רק המצטבר שנבנה ממנו.'
+      : 'אלה הספירות מהשכבה הפעילה ' + layer.provenance + ' (' + dataset + '). לא Open Data אלא אם התווית אומרת זאת.';
     return {
       player: { id: player.id, name: player.name, team: player.team, minutes: minutes, group: player.group },
-      honesty: 'אלה הספירות האמיתיות מ-data/wc2018_event_aggregates.json. אין בריפו יומן אירועים גולמי — רק המצטבר שנבנה ממנו.',
+      dataset: dataset,
+      provenance: layer.provenance,
+      honesty: honesty,
       rows: rows,
       unused: rows.filter(function (row) { return !row.usedInScore; }),
       capped: rows.filter(function (row) { return row.capped; }),
@@ -1696,12 +1647,6 @@
   }
 
   return {
-    createDemoFixture: createDemoFixture,
-    flattenCalibrated: flattenCalibrated,
-    attachBreakdowns: attachBreakdowns,
-    rankPlayers: rankPlayers,
-    preparePocRows: preparePocRows,
-    formatBreakdown: formatBreakdown,
     flagImpossibleMinutes: flagImpossibleMinutes,
     minutesImpossibleForCompetition: minutesImpossibleForCompetition,
     WORLD_CUP_MAX_MINUTES: WORLD_CUP_MAX_MINUTES,

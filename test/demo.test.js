@@ -5,8 +5,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const {
-  createDemoFixture,
-  preparePocRows,
   SEASON_MISLABELED,
   applyMetric,
   parseMetricHash,
@@ -39,83 +37,45 @@ const {
   outcomeValue,
   glossaryForPlayer,
   CURRICULUM_LESSONS,
-  WC2018_GROUPS
+  WC2018_GROUPS,
+  USER_DATA_PROVENANCE,
+  SYNTHETIC_PROVENANCE,
+  OPEN_DATA_PROVENANCE
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const runtime = fs.readFileSync(path.join(root, 'demo.js'), 'utf8');
 
-test('same seed yields byte-for-byte equivalent metadata', () => {
-  const first = JSON.stringify(createDemoFixture('athlete-fixture-7'));
-  const second = JSON.stringify(createDemoFixture('athlete-fixture-7'));
-  assert.equal(first, second);
-});
-
-test('fixture declares provenance and never claims video analysis', () => {
-  const fixture = createDemoFixture('provenance');
-  assert.equal(fixture.video.provenance, 'LOCAL_VIDEO');
-  assert.equal(fixture.video.analyzed, false);
-  assert.equal(fixture.video.uploaded, false);
-  assert.equal(fixture.service.provenance, 'VERIFIED_ANALYSIS_SERVICE');
-  assert.equal(fixture.service.available, false);
-  assert.ok(fixture.metrics.every(item => item.provenance === 'DEMO_METRIC' && item.measured === false));
-  assert.ok(fixture.timeline.every(item => item.provenance === 'DEMO_METRIC'));
-});
-
-test('runtime contains no external network or submission path', () => {
+test('product runtime has no video theater, no demo fixtures, and no outbound network', () => {
   const productRuntime = `${html}\n${runtime}`;
   const forbidden = [
     /XMLHttpRequest/i, /sendBeacon/i, /WebSocket/i,
     /<form\b/i, /type=["']submit/i, /mailto:/i, /https?:\/\//i,
-    /fetch\s*\(\s*['"`]https?:/i
+    /fetch\s*\(\s*['"`]https?:/i,
+    /createDemoFixture/, /poc-calibrated/, /poc-top30/,
+    /accept="video/, /LOCAL_VIDEO/, /DEMO_METRIC/, /VERIFIED_ANALYSIS_SERVICE/,
+    /יצירת חשבון/, /התחלת ניסיון/, /שליחת דוח/
   ];
   forbidden.forEach(pattern => assert.doesNotMatch(productRuntime, pattern));
-  assert.match(runtime, /poc-calibrated\.json/);
-  assert.match(runtime, /poc-top30\.json/);
   assert.match(runtime, /data\/wc2018_event_aggregates\.json/);
   assert.match(html, /loadLabSources\s*\(\s*fetch\s*\)/);
+  assert.match(html, /STATSBOMB_OPEN_DATA/);
+  assert.match(html, /NO_HELD_OUT_SEASON/);
+  assert.match(html, /לא<\/strong> סקאוטינג/);
+  assert.match(html, /לא<\/strong> AI/);
 });
 
-test('UI labels provenance and unavailable external actions', () => {
-  for (const label of ['LOCAL_VIDEO', 'DEMO_METRIC', 'VERIFIED_ANALYSIS_SERVICE', 'STATSBOMB_OPEN_DATA']) {
-    assert.match(html, new RegExp(label, 'g'));
-  }
-  assert.match(html, /אינן זמינות/);
-  assert.match(html, /דבר לא נשלח/);
-  assert.match(html, /אינו מספק סקאוטינג מקצועי/);
-});
-
-test('preparePocRows ranks calibrated players and tags StatsBomb provenance', () => {
-  const rows = preparePocRows({
-    men: [{ id: '2', name: 'B', team: 'T', comp: 'WorldCup2022', minutes: 200, index: 10 }],
-    women: [{ id: '1', name: 'A', team: 'T', comp: 'FA_WSL_2023_24', minutes: 900, index: 20 }]
-  }, [{ id: '1', breakdown: { stat: { value: 20, weight: 1 } }, explanation: 'stat driven' }]);
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0].name, 'A');
-  assert.equal(rows[0].rank, 1);
-  assert.equal(rows[0].provenance, 'STATSBOMB_OPEN_DATA');
-  assert.equal(rows[0].breakdown.stat.value, 20);
-  assert.equal(rows[1].name, 'B');
-  assert.equal(rows[1].comp, 'WorldCup2022');
-});
-
-test('World Cup rows over 480 minutes are flagged as season data, mislabeled', () => {
-  const rows = preparePocRows({
-    men: [
-      { id: 'ok', name: 'Plausible WC', team: 'Canada', comp: 'WorldCup2022', minutes: 270, index: 30 },
-      { id: 'bad', name: 'Jonas Hofmann', team: 'Germany', comp: 'WorldCup2022', minutes: 2279, index: 47.88 }
-    ],
-    women: []
-  });
-  const flagged = rows.find(row => row.name === 'Jonas Hofmann');
-  const kept = rows.find(row => row.name === 'Plausible WC');
-  assert.equal(flagged.hygiene, SEASON_MISLABELED);
-  assert.equal(flagged.comp, SEASON_MISLABELED);
-  assert.equal(flagged.labeledComp, 'WorldCup2022');
-  assert.notEqual(kept.comp, SEASON_MISLABELED);
-  assert.equal(kept.hygiene, undefined);
-  assert.doesNotMatch(html, /https?:\/\//i);
+test('stranger-facing hero states the formula and the shipped file in the first screen', () => {
+  assert.match(html, /למדו לבנות מדד כדורגל שקוף/);
+  assert.match(html, /0\.4×Grit \+ 0\.3×Involvement \+ 0\.3×Clutch/);
+  assert.match(html, /data\/wc2018_event_aggregates\.json/);
+  assert.match(html, /id="hero"/);
+  const heroAt = html.indexOf('id="hero"');
+  const courseAt = html.indexOf('id="course"');
+  const byodAt = html.indexOf('id="byod"');
+  assert.ok(heroAt > 0 && courseAt > heroAt, 'course follows the hero');
+  assert.ok(byodAt > courseAt, 'BYOD stays after the lesson, not first');
 });
 
 test('metric sliders recompute rank from event totals and keep a hash permalink', () => {
@@ -242,23 +202,16 @@ test('createStore prepares players once and derive feeds table, lesson, and frag
   assert.equal(gritView.curriculum.length, 8);
 });
 
-test('loadLabSources uses only relative static paths', async () => {
+test('loadLabSources fetches only the shipped event aggregate', async () => {
   const calls = [];
   const fake = (path) => {
     calls.push(path);
-    if (path === 'data/wc2018_event_aggregates.json') {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ players: [] }) });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ men: [], women: [] }) });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ players: [] }) });
   };
   const lab = await loadLabSources(fake);
-  assert.deepEqual(calls, [
-    'data/wc2018_event_aggregates.json',
-    'poc-calibrated.json',
-    'poc-top30.json'
-  ]);
+  assert.deepEqual(calls, ['data/wc2018_event_aggregates.json']);
   assert.ok(lab.store);
-  assert.ok(Array.isArray(lab.pocRows));
+  assert.equal(lab.pocRows, undefined);
 });
 
 const SAMPLE = {
@@ -369,21 +322,22 @@ test('permalink hash encodes and decodes metric state', () => {
   assert.ok(clamped.minMinutes >= 0);
 });
 
-test('impossible World Cup minutes are detected and not treated as tournament data', () => {
-  assert.equal(WORLD_CUP_MAX_MINUTES, 480);
-  assert.equal(minutesImpossibleForCompetition({ comp: 'WorldCup2022', minutes: 481 }), true);
-  assert.equal(minutesImpossibleForCompetition({ comp: 'World Cup 2018', minutes: 900 }), true);
-  assert.equal(minutesImpossibleForCompetition({ comp: 'WorldCup2022', minutes: 480 }), false);
+test('impossible World Cup minutes are those beyond a full knockout run, not 480', () => {
+  assert.equal(WORLD_CUP_MAX_MINUTES, 750);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'WorldCup2018', minutes: 621 }), false);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'World Cup 2018', minutes: 750 }), false);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'WorldCup2018', minutes: 751 }), true);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'World Cup 2018', minutes: 2279 }), true);
   assert.equal(minutesImpossibleForCompetition({ comp: 'FA_WSL_2023_24', minutes: 1710 }), false);
   assert.equal(minutesImpossibleForCompetition({ comp: 'Bundesliga_2023_24', minutes: 3000 }), false);
   const flagged = flagImpossibleMinutes([
-    { name: 'Ok', comp: 'WorldCup2022', minutes: 270 },
-    { name: 'Bad', comp: 'WorldCup2022', minutes: 2279 }
+    { name: 'Kanté-like', comp: 'WorldCup2018', minutes: 621 },
+    { name: 'Bad', comp: 'WorldCup2018', minutes: 2279 }
   ]);
   assert.equal(flagged[0].hygiene, undefined);
   assert.equal(flagged[1].hygiene, SEASON_MISLABELED);
   assert.equal(flagged[1].comp, SEASON_MISLABELED);
-  assert.equal(flagged[1].labeledComp, 'WorldCup2022');
+  assert.equal(flagged[1].labeledComp, 'WorldCup2018');
 });
 
 test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', () => {
@@ -400,6 +354,8 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /tabindex="0"/);
   assert.match(html, /aria-selected/);
   assert.match(html, /border-inline-start/);
+  assert.match(html, /ArrowDown/);
+  assert.match(html, /min-height:44px/);
 });
 
 const DEFENDERS = {
@@ -653,6 +609,83 @@ test('mini-curriculum has eight lessons and graduates only after honest holdout 
   assert.match(html, /id="course"/);
   assert.match(html, /id="explorer"/);
   assert.match(html, /id="validate"/);
+});
+
+test('every shipped WC2018 score is a pure function of the JSON counts', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  assert.equal(wc.source, 'StatsBomb Open Data');
+  assert.equal(wc.competitionId, 43);
+  assert.equal(wc.seasonId, 3);
+  assert.equal(wc.games, 64);
+  const store = createStore(wc);
+  assert.equal(store.players.length, wc.players.length);
+  store.players.forEach((player) => {
+    const fromFile = wc.players.find((row) => row.name === player.name && row.team === player.team);
+    assert.ok(fromFile, player.name);
+    assert.equal(player.counts.pressures, fromFile.pressures || 0);
+    assert.equal(player.minutes, fromFile.totalMinutesProxy);
+    const recomputed = componentsFromEvents(fromFile);
+    assert.equal(player.components.grit, recomputed.grit);
+    assert.equal(player.components.involvement, recomputed.involvement);
+    assert.equal(player.components.clutch, recomputed.clutch);
+    assert.ok(player.minutes <= WORLD_CUP_MAX_MINUTES, player.name + ' minutes ' + player.minutes);
+    assert.notEqual(player.hygiene, SEASON_MISLABELED);
+  });
+  const view = store.derive(DEFAULT_METRIC);
+  view.rows.forEach((row) => {
+    assert.equal(row.score, compositeScore(row.components, DEFAULT_METRIC));
+    assert.equal(row.provenance, OPEN_DATA_PROVENANCE);
+  });
+  const kante = view.rows.find((row) => /Kant/.test(row.name));
+  assert.ok(kante);
+  assert.equal(kante.counts.pressures, 183);
+  assert.equal(kante.minutes, 621);
+  assert.equal(view.explorer.dataset, 'data/wc2018_event_aggregates.json');
+  assert.match(view.lesson[0].body, /STATSBOMB_OPEN_DATA/);
+  assert.match(view.explorer.receipt[0].detail, /STATSBOMB_OPEN_DATA/);
+});
+
+test('BYOD lesson and explorer never claim the World Cup file', () => {
+  const store = createStore({
+    players: [{
+      name: 'Alpha', team: 'Home', position: 'Center Back',
+      totalMinutesProxy: 400, pressures: 40, tackles: 8, interceptions: 6,
+      defensiveActions: 20, progressiveActions: 10, keyPasses: 1, passesCompleted: 100,
+      shotXgSum: 0.1, boxTouches: 2, shotsOnTarget: 0
+    }]
+  }, {
+    provenance: USER_DATA_PROVENANCE,
+    source: { dataset: 'club.json', competition: 'USER_DATASET' }
+  });
+  const view = store.derive({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90 });
+  assert.equal(view.provenance, USER_DATA_PROVENANCE);
+  assert.doesNotMatch(view.lesson[0].body, /מונדיאל 2018/);
+  assert.match(view.lesson[0].body, /USER_LICENSED_DATA/);
+  assert.equal(view.explorer.dataset, 'club.json');
+  assert.equal(view.explorer.provenance, USER_DATA_PROVENANCE);
+  assert.doesNotMatch(view.explorer.honesty, /wc2018_event_aggregates/);
+  assert.match(view.explorer.receipt[0].detail, /USER_LICENSED_DATA/);
+  const syntheticLesson = buildLesson(view.selected, view.spec, {
+    provenance: SYNTHETIC_PROVENANCE,
+    source: { dataset: 'data/user-dataset.example.json' }
+  });
+  assert.match(syntheticLesson[0].body, /SYNTHETIC_EXAMPLE/);
+  assert.doesNotMatch(syntheticLesson[0].body, /STATSBOMB_OPEN_DATA/);
+});
+
+test('product tree has no factory SaaS, no CI workflows, and no broken root proofs', () => {
+  assert.equal(fs.existsSync(path.join(root, '.github', 'workflows')), false);
+  assert.equal(fs.existsSync(path.join(root, 'lib')), false);
+  assert.equal(fs.existsSync(path.join(root, 'proof-big5.js')), false);
+  assert.equal(fs.existsSync(path.join(root, 'poc-calibrated.json')), false);
+  assert.ok(fs.existsSync(path.join(root, 'attic', 'proof-demo.js')));
+  assert.ok(fs.existsSync(path.join(root, 'data', 'wc2018_event_aggregates.json')));
+  assert.ok(fs.existsSync(path.join(root, 'data', 'user-dataset.example.json')));
+  assert.equal(fs.existsSync(path.join(root, 'data', 'fbref_big5_2024-2025.json')), false);
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  assert.doesNotMatch(readme, /DEMO_METRIC/);
+  assert.doesNotMatch(readme, /LOCAL_VIDEO/);
+  assert.match(readme, /data\/wc2018_event_aggregates\.json/);
 });
 
 test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', () => {
