@@ -1,51 +1,29 @@
 # Test evidence
 
-Implementation evidence for issue SA-001.
-
-Commands to run from the repository root:
+Commands from the repository root:
 
 ```text
-node --check demo.js
-node --check test/demo.test.js
-node --test test/demo.test.js
+npm test
 ```
 
-Recorded on 2026-07-24:
+That runs `node --test test/demo.test.js test/trap.test.js test/byod.test.js`.
+
+Recorded on 2026-08-13 after the honesty pass (single data layer, no video theater, no factory `lib/`, BYOD provenance, shipped-file receipts):
 
 ```text
-node --check demo.js
-PASS (exit 0)
-
-node --check test/demo.test.js
-PASS (exit 0)
-
-node --test test/demo.test.js
-tests 4
-pass 4
+node --test test/demo.test.js test/trap.test.js test/byod.test.js
+tests 48
+pass 48
 fail 0
 ```
 
-Re-recorded on 2026-08-13 after merging the a11y/tests WIP and adding the
-guided exercise, raw-component radar, export, and glossary:
+The suite covers:
 
-```text
-node --check demo.js
-PASS (exit 0)
-
-node --check test/demo.test.js
-PASS (exit 0)
-
-node --test test/demo.test.js
-tests 22
-pass 22
-fail 0
-```
-
-The recorded commands above are the checks that exist in this repository:
-`node --check` on `demo.js` / `test/demo.test.js`, and `node --test test/demo.test.js`.
-The tests cover deterministic byte-equivalent fixture output, explicit
-provenance, unavailable verified analysis, absence of external network,
-API, or form-submission paths in the browser runtime (relative static JSON
-fetch is allowed), slider/hash metric state, the defender self-check,
-radar values from the same raw caps as the score, and a local non-commercial
-export/glossary with no `http(s)` URLs in the product runtime.
+- every shipped World Cup 2018 score equals `compositeScore(componentsFromEvents(fileRow))`
+- Kanté pressures 183 / 621 minutes / 26.52 per 90 / cap 100, read from the JSON
+- BYOD lesson/explorer never claim the World Cup file
+- Spearman holdout is a group split in the same tournament, not a later season
+- curriculum graduates only on honest answers
+- trap lesson uses archived hand-typed numbers, not a face model
+- no `.github/workflows/`, no product-root `lib/`, no broken `proof-*.js` at the root
+- Hebrew RTL, skip links, slider `aria-valuetext`, no `http(s)` in the product runtime

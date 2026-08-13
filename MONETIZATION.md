@@ -74,7 +74,7 @@ StatsBomb Services Ltd, חברה 10377735.
 
 ## 2. נתונים אחרים בריפו — גם הם לא «מוצר למכירה»
 
-- **FBref / Sports Reference.** בריפו יש קובץ מחקר `data/fbref_big5_2024-2025.json`. [מדיניות השימוש בנתונים](https://www.sports-reference.com/data_use.html) (נבדק 13.8.2026) מצטטת את סעיף 5 לתנאי האתר ואוסרת במפורש ליצור מאגר או שירות שמתחרה באתר או בספקי הנתונים שלו, ואוסרת שימוש בתוכן לאימון מודלי AI. המדיניות גם אומרת: «you should not create websites or tools based on data you scrape from Sports Reference». **אין למכור ניתוח על הקובץ הזה.**
+- **FBref / Sports Reference.** בריפו יש קובץ מחקר בארכיון `attic/research-data/fbref_big5_2024-2025.json` (לא נטען בדמו). [מדיניות השימוש בנתונים](https://www.sports-reference.com/data_use.html) (נבדק 13.8.2026) מצטטת את סעיף 5 לתנאי האתר ואוסרת במפורש ליצור מאגר או שירות שמתחרה באתר או בספקי הנתונים שלו, ואוסרת שימוש בתוכן לאימון מודלי AI. המדיניות גם אומרת: «you should not create websites or tools based on data you scrape from Sports Reference». **אין למכור ניתוח על הקובץ הזה.**
 - **Wyscout / Opta / Hudl Statsbomb המסחרי.** אלה מוצרים בתשלום למועדון/סקאוט. המשתמש יכול להביא *את* הייצוא שלו אם הרישיון *שלו* מתיר עיבוד מקומי. ScoutAI לא יארח ולא ימכור את הנתונים האלה.
 - **כיסוי ישראלי ב־Open Data.** ב־[competitions.json](https://github.com/hudl/open-data/blob/master/data/competitions.json) אין ליגת על, לאומית או נוער ישראלי (נבדק במחקר הקודם בריפו, 13.8.2026). גם לכן אין מה למכור לסוכן ישראלי על בסיס מונדיאל 2018.
 
@@ -176,7 +176,7 @@ StatsBomb Services Ltd, חברה 10377735.
 - 49 ₪ לדוח על Open Data (נדחה כבר ב־README).
 - מנוי לדירוג חי על מונדיאל 2018.
 - «AI סקאוטינג» או ניתוח וידאו — הדמו לא עושה את זה.
-- מכירת קבצי `data/wc2018_event_aggregates.json` או `fbref_big5_2024-2025.json`.
+- מכירת קבצי `data/wc2018_event_aggregates.json` או `attic/research-data/fbref_big5_2024-2025.json`.
 
 **אין נרשמים, אין הכנסה, אין הסכם חסות נכון ל־13.8.2026.** אם הדף מציע סדנה — זו הצעה, לא קופה.
 
