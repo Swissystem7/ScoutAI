@@ -126,8 +126,37 @@
     minMinutes: 270,
     normalizePosition: false,
     selectedId: '',
-    compareId: ''
+    compareId: '',
+    outcomeId: 'assists',
+    splitId: 'groups',
+    curriculumIndex: 0
   });
+
+  const WC2018_GROUPS = Object.freeze({
+    A: Object.freeze(['Russia', 'Saudi Arabia', 'Egypt', 'Uruguay']),
+    B: Object.freeze(['Portugal', 'Spain', 'Morocco', 'Iran']),
+    C: Object.freeze(['France', 'Australia', 'Peru', 'Denmark']),
+    D: Object.freeze(['Argentina', 'Iceland', 'Croatia', 'Nigeria']),
+    E: Object.freeze(['Brazil', 'Switzerland', 'Costa Rica', 'Serbia']),
+    F: Object.freeze(['Germany', 'Mexico', 'Sweden', 'South Korea']),
+    G: Object.freeze(['Belgium', 'Panama', 'Tunisia', 'England']),
+    H: Object.freeze(['Poland', 'Senegal', 'Colombia', 'Japan'])
+  });
+
+  const WC2018_TEAM_GROUP = (function () {
+    const map = {};
+    Object.keys(WC2018_GROUPS).forEach(function (group) {
+      WC2018_GROUPS[group].forEach(function (team) { map[team] = group; });
+    });
+    return Object.freeze(map);
+  }());
+
+  const COUNT_FIELDS = Object.freeze([
+    'pressures', 'tackles', 'interceptions', 'defensiveActions',
+    'progressiveActions', 'keyPasses', 'passesCompleted',
+    'shotXgSum', 'boxTouches', 'shotsOnTarget',
+    'shots', 'goals', 'assists', 'dribbles', 'duelsWon', 'bigChanceProxy'
+  ]);
 
   function clamp(value, lo, hi) {
     const n = Number(value);
@@ -243,8 +272,13 @@
     });
   }
 
+  const OUTCOME_IDS = Object.freeze(['assists', 'dribbles', 'duelsWon', 'goals', 'box']);
+  const CURRICULUM_LENGTH = 8;
+
   function normalizeMetricSpec(spec) {
     const src = spec || {};
+    const outcome = String(src.outcomeId || DEFAULT_METRIC.outcomeId);
+    const split = String(src.splitId || DEFAULT_METRIC.splitId);
     return {
       grit: clamp(src.grit, 0, 100),
       involvement: clamp(src.involvement, 0, 100),
@@ -252,7 +286,10 @@
       minMinutes: clamp(src.minMinutes, 0, 900),
       normalizePosition: !!src.normalizePosition,
       selectedId: src.selectedId ? String(src.selectedId) : '',
-      compareId: src.compareId ? String(src.compareId) : ''
+      compareId: src.compareId ? String(src.compareId) : '',
+      outcomeId: OUTCOME_IDS.indexOf(outcome) >= 0 ? outcome : 'assists',
+      splitId: split === 'hash' ? 'hash' : 'groups',
+      curriculumIndex: clamp(src.curriculumIndex, 0, CURRICULUM_LENGTH - 1)
     };
   }
 
@@ -279,7 +316,19 @@
     return [];
   }
 
+  function takeCount(row, key) {
+    const n = Number(row && row[key]);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function countsFromRow(row) {
+    const counts = {};
+    COUNT_FIELDS.forEach(function (key) { counts[key] = takeCount(row, key); });
+    return counts;
+  }
+
   function preparePlayer(row) {
+    const minutes = row.totalMinutesProxy || row.minutes || 0;
     return {
       id: playerKey(row),
       name: row.name,
@@ -288,8 +337,11 @@
       category: row.category,
       position: row.position || '',
       positionGroup: positionGroup(row.position),
-      minutes: row.totalMinutesProxy || row.minutes || 0,
+      minutes: minutes,
       matchesPlayed: row.matchesPlayed,
+      group: WC2018_TEAM_GROUP[row.team] || null,
+      counts: countsFromRow(row),
+      per90File: row.per90 || null,
       components: componentsFromEvents(row),
       provenance: 'STATSBOMB_OPEN_DATA'
     };
@@ -393,6 +445,11 @@
       if (selected && !metric.selectedId) metric.selectedId = selected.id;
       const compared = findPrepared(rows, players, metric.compareId);
       const fragility = fragilityFromPrepared(players, metric, 10);
+      const explorer = buildEventExplorer(selected);
+      const validation = validateMetric(players, metric, {
+        outcomeId: metric.outcomeId,
+        splitId: metric.splitId
+      });
       return {
         spec: metric,
         rows: rows,
@@ -405,7 +462,17 @@
         formula: formatFormula(metric),
         exercise: evaluateExercise(players, metric),
         radar: buildCompareRadar(selected, compared),
-        glossary: EVENT_GLOSSARY,
+        explorer: explorer,
+        validation: validation,
+        glossary: glossaryForPlayer(selected),
+        curriculum: evaluateCurriculum({
+          spec: metric,
+          selected: selected,
+          explorer: explorer,
+          validation: validation,
+          exercise: evaluateExercise(players, metric),
+          answers: {}
+        }),
         exportBundle: exportMetricBundle(metric, selected, { compared: compared })
       };
     }
@@ -449,6 +516,13 @@
     ];
     if (metric.selectedId) parts.push('sel=' + encodeURIComponent(metric.selectedId));
     if (metric.compareId) parts.push('cmp=' + encodeURIComponent(metric.compareId));
+    if (metric.outcomeId && metric.outcomeId !== DEFAULT_METRIC.outcomeId) {
+      parts.push('out=' + encodeURIComponent(metric.outcomeId));
+    }
+    if (metric.splitId && metric.splitId !== DEFAULT_METRIC.splitId) {
+      parts.push('fold=' + encodeURIComponent(metric.splitId));
+    }
+    if (metric.curriculumIndex) parts.push('cur=' + metric.curriculumIndex);
     return parts.join('&');
   }
 
@@ -468,7 +542,10 @@
       minMinutes: params.min,
       normalizePosition: params.npos === '1' || params.npos === 'true',
       selectedId: params.sel || '',
-      compareId: params.cmp || ''
+      compareId: params.cmp || '',
+      outcomeId: params.out || DEFAULT_METRIC.outcomeId,
+      splitId: params.fold || DEFAULT_METRIC.splitId,
+      curriculumIndex: params.cur
     });
   }
 
@@ -518,6 +595,10 @@
       he: 'לחיצה',
       feeds: 'Grit',
       usedInScore: true,
+      field: 'pressures',
+      per90Field: 'pressuresPer90',
+      recipeKey: 'pressures90',
+      filePath: 'players[].pressures',
       body: 'אירוע Pressure ב-StatsBomb: שחקן סוגר על מחזיק הכדור. נספר ללחיצות, ואז ל-90 דקות, ואז ל-Grit.'
     },
     {
@@ -525,6 +606,10 @@
       he: 'דו-קרב / תיקול',
       feeds: 'Grit',
       usedInScore: true,
+      field: 'tackles',
+      per90Field: 'tacklesPer90',
+      recipeKey: 'tacklesInt90',
+      filePath: 'players[].tackles',
       body: 'Duel מסוג Tackle שהסתיים ב-Won/Success. נספר לתיקולים ולפעולות הגנה. תיקול שנכשל אינו נכנס.'
     },
     {
@@ -532,6 +617,10 @@
       he: 'חטיפה',
       feeds: 'Grit',
       usedInScore: true,
+      field: 'interceptions',
+      per90Field: 'interceptionsPer90',
+      recipeKey: 'tacklesInt90',
+      filePath: 'players[].interceptions',
       body: 'אירוע Interception: ניתוק מסירה. נספר לחטיפות ולפעולות הגנה.'
     },
     {
@@ -539,6 +628,10 @@
       he: 'שחזור כדור',
       feeds: 'Grit',
       usedInScore: true,
+      field: 'defensiveActions',
+      per90Field: 'defensiveActionsPer90',
+      recipeKey: 'defensive90',
+      filePath: 'players[].defensiveActions',
       body: 'Ball Recovery נספר לפעולות הגנה בלבד, בלי תיקול או חטיפה נפרדים.'
     },
     {
@@ -546,6 +639,10 @@
       he: 'חסימה',
       feeds: 'Grit',
       usedInScore: true,
+      field: 'defensiveActions',
+      per90Field: 'defensiveActionsPer90',
+      recipeKey: 'defensive90',
+      filePath: 'players[].defensiveActions',
       body: 'Block נספר לפעולות הגנה. אין רכיב Block נפרד בנוסחה — הוא חלק מהתקרה של defensiveActions.'
     },
     {
@@ -553,6 +650,10 @@
       he: 'מסירה',
       feeds: 'Involvement',
       usedInScore: true,
+      field: 'passesCompleted',
+      per90Field: 'passesCompletedPer90',
+      recipeKey: 'passes90',
+      filePath: 'players[].passesCompleted',
       body: 'Pass בלי outcome נספר כהושלמה. shot_assist או goal_assist נספרים כמסירת מפתח. מסירה שמתקדמת במגרש נספרת גם כהתקדמות.'
     },
     {
@@ -560,6 +661,10 @@
       he: 'הובלת כדור',
       feeds: 'Involvement',
       usedInScore: true,
+      field: 'progressiveActions',
+      per90Field: 'progressiveActionsPer90',
+      recipeKey: 'progressive90',
+      filePath: 'players[].progressiveActions',
       body: 'Carry שמתקדם במגרש נספר ל-progressiveActions יחד עם מסירות מתקדמות. אין הפרדה בין מסירה להובלה ברכיב.'
     },
     {
@@ -567,6 +672,10 @@
       he: 'בעיטה ו-xG',
       feeds: 'Clutch',
       usedInScore: true,
+      field: 'shotXgSum',
+      per90Field: 'shotXgSumPer90',
+      recipeKey: 'xg90',
+      filePath: 'players[].shotXgSum',
       body: 'Shot תורם את statsbomb_xg לסכום ה-xG. Outcome Saved או Goal נספר כבעיטה למסגרת. התווית Clutch היא לימודית — זה לא מודל רגעים מכריעים.'
     },
     {
@@ -574,6 +683,10 @@
       he: 'מיקום ברחבה',
       feeds: 'Clutch',
       usedInScore: true,
+      field: 'boxTouches',
+      per90Field: 'boxTouchesPer90',
+      recipeKey: 'boxTouches90',
+      filePath: 'players[].boxTouches',
       body: 'כל אירוע שנרשם בתוך רחבת ה-16 נספר כנגיעה ברחבה. זה קירוב גס, לא נגיעת כדור מאומתת.'
     },
     {
@@ -581,6 +694,10 @@
       he: 'הרכב וחילוף',
       feeds: 'סף דקות',
       usedInScore: false,
+      field: 'totalMinutesProxy',
+      per90Field: null,
+      recipeKey: null,
+      filePath: 'players[].totalMinutesProxy',
       body: 'הדקות הן פרוקסי מקומי מאירועי הרכב וחילוף, לא שעון רשמי של פיפ״א. לכן יש סף דקות — מדגם קטן משקר.'
     },
     {
@@ -588,6 +705,10 @@
       he: 'כדרור, שער, בישול',
       feeds: 'לא בנוסחה',
       usedInScore: false,
+      field: 'dribbles',
+      per90Field: 'dribblesPer90',
+      recipeKey: null,
+      filePath: 'players[].dribbles | players[].goals | players[].assists | players[].duelsWon | players[].bigChanceProxy',
       body: 'הספירות האלה קיימות בקובץ המצטבר (dribbles, goals, assists, duelsWon, bigChanceProxy) אבל אינן נכנסות ל-Grit/Involvement/Clutch. שקיפות: מה שנאסף לא בהכרח מה שמחושב.'
     }
   ]);
@@ -893,6 +1014,485 @@
     ];
   }
 
+  const EVENT_COLUMNS = Object.freeze([
+    { key: 'pressures', label: 'לחיצות', type: 'Pressure', feeds: 'Grit', usedInScore: true, recipeKey: 'pressures90', cap: 18, weight: 0.45, per90Field: 'pressuresPer90' },
+    { key: 'tackles', label: 'תיקולים', type: 'Duel / Tackle', feeds: 'Grit', usedInScore: true, recipeKey: 'tacklesInt90', cap: 6, weight: 0.3, per90Field: 'tacklesPer90', pairWith: 'interceptions' },
+    { key: 'interceptions', label: 'חטיפות', type: 'Interception', feeds: 'Grit', usedInScore: true, recipeKey: 'tacklesInt90', cap: 6, weight: 0.3, per90Field: 'interceptionsPer90', pairWith: 'tackles' },
+    { key: 'defensiveActions', label: 'פעולות הגנה', type: 'Ball Recovery + Block', feeds: 'Grit', usedInScore: true, recipeKey: 'defensive90', cap: 14, weight: 0.25, per90Field: 'defensiveActionsPer90' },
+    { key: 'progressiveActions', label: 'התקדמות', type: 'Pass / Carry', feeds: 'Involvement', usedInScore: true, recipeKey: 'progressive90', cap: 22, weight: 0.5, per90Field: 'progressiveActionsPer90' },
+    { key: 'keyPasses', label: 'מסירות מפתח', type: 'Pass (shot/goal assist)', feeds: 'Involvement', usedInScore: true, recipeKey: 'keyPasses90', cap: 4, weight: 0.3, per90Field: 'keyPassesPer90' },
+    { key: 'passesCompleted', label: 'מסירות שהושלמו', type: 'Pass', feeds: 'Involvement', usedInScore: true, recipeKey: 'passes90', cap: 80, weight: 0.2, per90Field: 'passesCompletedPer90' },
+    { key: 'shotXgSum', label: 'סכום xG', type: 'Shot + statsbomb_xg', feeds: 'Clutch', usedInScore: true, recipeKey: 'xg90', cap: 0.6, weight: 0.4, per90Field: 'shotXgSumPer90' },
+    { key: 'boxTouches', label: 'נגיעות ברחבה', type: 'location (penalty box)', feeds: 'Clutch', usedInScore: true, recipeKey: 'boxTouches90', cap: 8, weight: 0.35, per90Field: 'boxTouchesPer90' },
+    { key: 'shotsOnTarget', label: 'בעיטות למסגרת', type: 'Shot (Saved/Goal)', feeds: 'Clutch', usedInScore: true, recipeKey: 'shotsOnTarget90', cap: 2, weight: 0.25, per90Field: 'shotsOnTargetPer90' },
+    { key: 'shots', label: 'בעיטות', type: 'Shot', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'shotsPer90' },
+    { key: 'goals', label: 'שערים', type: 'Goal', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'goalsPer90' },
+    { key: 'assists', label: 'בישולים', type: 'Assist', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'assistsPer90' },
+    { key: 'dribbles', label: 'כדרורים', type: 'Dribble', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'dribblesPer90' },
+    { key: 'duelsWon', label: 'דו-קרבות שנרכשו', type: 'Duel', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'duelsWonPer90' },
+    { key: 'bigChanceProxy', label: 'מצבים גדולים (קירוב)', type: 'Shot (big chance proxy)', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'bigChanceProxyPer90' }
+  ]);
+
+  const OUTCOMES = Object.freeze([
+    { id: 'assists', label: 'בישולים', field: 'assists', leaky: false, leakNote: 'בישול לא נכנס לנוסחה. מסירת מפתח כן — זה לא אותו שדה.' },
+    { id: 'dribbles', label: 'כדרורים', field: 'dribbles', leaky: false, leakNote: 'כדרור נאסף בקובץ ולא נכנס לציון.' },
+    { id: 'duelsWon', label: 'דו-קרבות שנרכשו', field: 'duelsWon', leaky: false, leakNote: 'דו-קרב שנרכש לא זהה לתיקול שנכנס ל-Grit.' },
+    { id: 'goals', label: 'שערים', field: 'goals', leaky: true, leakNote: 'דליפה: Clutch בנוי מ-xG ומבעיטות למסגרת, שמתואמים עם שערים.' },
+    { id: 'box', label: 'שערים+בישולים', field: 'box', leaky: true, leakNote: 'דליפה: תיבת הניקוד מתואמת עם Clutch.' }
+  ]);
+
+  function outcomeMeta(outcomeId) {
+    return OUTCOMES.find(function (item) { return item.id === outcomeId; }) || OUTCOMES[0];
+  }
+
+  function outcomeValue(player, outcomeId) {
+    const counts = player && player.counts || {};
+    if (outcomeId === 'box') return (counts.goals || 0) + (counts.assists || 0);
+    if (outcomeId === 'goals') return counts.goals || 0;
+    if (outcomeId === 'assists') return counts.assists || 0;
+    if (outcomeId === 'dribbles') return counts.dribbles || 0;
+    if (outcomeId === 'duelsWon') return counts.duelsWon || 0;
+    return 0;
+  }
+
+  function filePer90(player, field) {
+    const src = player && player.per90File;
+    if (!src || field == null) return null;
+    const n = Number(src[field]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function buildEventExplorer(player) {
+    if (!player) {
+      return {
+        player: null,
+        honesty: 'הקובץ המקומי הוא ספירות מצטברות מ-64 משחקים, לא יומן אירוע-אחר-אירוע. אין כאן דקה, משחק או שידור.',
+        rows: [],
+        unused: [],
+        capped: [],
+        receipt: []
+      };
+    }
+    const minutes = Number(player.minutes) || 0;
+    const counts = player.counts || {};
+    const raw = player.components && player.components.raw || {};
+    const rows = EVENT_COLUMNS.map(function (col) {
+      const total = col.key === 'totalMinutesProxy' ? minutes : (counts[col.key] || 0);
+      const computed90 = minutes > 0 ? round2(total * 90 / minutes) : 0;
+      const fromFile = filePer90(player, col.per90Field);
+      const scaled = col.cap ? round1(scaleCap(raw[col.recipeKey] != null ? raw[col.recipeKey] : computed90, col.cap)) : null;
+      const capped = col.cap != null && computed90 > col.cap;
+      return {
+        key: col.key,
+        label: col.label,
+        type: col.type,
+        feeds: col.feeds,
+        usedInScore: col.usedInScore,
+        filePath: 'players[].' + col.key,
+        total: col.key === 'shotXgSum' ? round2(total) : total,
+        minutes: minutes,
+        per90: computed90,
+        per90File: fromFile,
+        cap: col.cap,
+        weight: col.weight,
+        scaled: scaled,
+        capped: capped,
+        recipeKey: col.recipeKey
+      };
+    });
+    const receipt = [
+      { step: 'ספירה בקובץ', detail: player.name + ' · ' + (player.team || '') + ' · ' + minutes + ' דקות פרוקסי · STATSBOMB_OPEN_DATA' },
+      { step: 'לחיצות ל-90', detail: (counts.pressures || 0) + ' × 90 / ' + minutes + ' = ' + (rows[0] ? rows[0].per90 : 0) + (rows[0] && rows[0].capped ? ' — מעל תקרת 18, לכן הסקייל 100' : '') },
+      { step: 'Grit', detail: '0.45×לחיצות + 0.30×(תיקולים+חטיפות) + 0.25×הגנה → ' + player.components.grit },
+      { step: 'Involvement', detail: '0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות → ' + player.components.involvement },
+      { step: 'Clutch', detail: '0.40×xG + 0.35×רחבה + 0.25×מסגרת → ' + player.components.clutch + ' (תווית לימודית, לא רגע הכרעה)' }
+    ];
+    return {
+      player: { id: player.id, name: player.name, team: player.team, minutes: minutes, group: player.group },
+      honesty: 'אלה הספירות האמיתיות מ-data/wc2018_event_aggregates.json. אין בריפו יומן אירועים גולמי — רק המצטבר שנבנה ממנו.',
+      rows: rows,
+      unused: rows.filter(function (row) { return !row.usedInScore; }),
+      capped: rows.filter(function (row) { return row.capped; }),
+      receipt: receipt
+    };
+  }
+
+  function glossaryForPlayer(player) {
+    const counts = player && player.counts || {};
+    const raw = player && player.components && player.components.raw || {};
+    return EVENT_GLOSSARY.map(function (item) {
+      let selectedTotal = null;
+      if (item.field === 'totalMinutesProxy') selectedTotal = player ? player.minutes : null;
+      else if (item.field && counts) selectedTotal = counts[item.field];
+      return Object.assign({}, item, {
+        selectedName: player ? player.name : null,
+        selectedTotal: selectedTotal,
+        selectedPer90: item.recipeKey && raw[item.recipeKey] != null ? raw[item.recipeKey] : null
+      });
+    });
+  }
+
+  function rankValues(values) {
+    const indexed = values.map(function (value, i) { return { value: Number(value) || 0, i: i }; });
+    indexed.sort(function (a, b) {
+      if (a.value !== b.value) return a.value - b.value;
+      return a.i - b.i;
+    });
+    const ranks = new Array(values.length);
+    let i = 0;
+    while (i < indexed.length) {
+      let j = i;
+      while (j < indexed.length && indexed[j].value === indexed[i].value) j += 1;
+      const avg = (i + 1 + j) / 2;
+      for (let k = i; k < j; k += 1) ranks[indexed[k].i] = avg;
+      i = j;
+    }
+    return ranks;
+  }
+
+  function pearson(xs, ys) {
+    const n = xs.length;
+    if (n < 2) return null;
+    let sx = 0;
+    let sy = 0;
+    let sxx = 0;
+    let syy = 0;
+    let sxy = 0;
+    for (let i = 0; i < n; i += 1) {
+      const x = Number(xs[i]) || 0;
+      const y = Number(ys[i]) || 0;
+      sx += x;
+      sy += y;
+      sxx += x * x;
+      syy += y * y;
+      sxy += x * y;
+    }
+    const num = n * sxy - sx * sy;
+    const den = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
+    if (!den) return 0;
+    return round2(num / den);
+  }
+
+  function spearman(xs, ys) {
+    if (!xs || !ys || xs.length !== ys.length || xs.length < 2) return null;
+    return pearson(rankValues(xs), rankValues(ys));
+  }
+
+  function worldCupGroup(team) {
+    return WC2018_TEAM_GROUP[team] || null;
+  }
+
+  function assignFold(player, splitId) {
+    if (splitId === 'hash') {
+      return (hashSeed(playerKey(player)) % 2 === 0) ? 'train' : 'test';
+    }
+    const group = worldCupGroup(player.team);
+    if (!group) return 'unassigned';
+    return 'ABCD'.indexOf(group) >= 0 ? 'train' : 'test';
+  }
+
+  function foldStats(rows, outcomeId) {
+    const scores = rows.map(function (row) { return row.score; });
+    const outcomes = rows.map(function (row) { return outcomeValue(row, outcomeId); });
+    const rho = spearman(scores, outcomes);
+    const byOutcome = rows.slice().sort(function (a, b) {
+      return outcomeValue(b, outcomeId) - outcomeValue(a, outcomeId);
+    });
+    return {
+      n: rows.length,
+      rho: rho,
+      topMetric: rows.slice(0, 5).map(function (row) {
+        return { id: row.id, name: row.name, team: row.team, score: row.score, outcome: outcomeValue(row, outcomeId) };
+      }),
+      topOutcome: byOutcome.slice(0, 5).map(function (row) {
+        return { id: row.id, name: row.name, team: row.team, score: row.score, outcome: outcomeValue(row, outcomeId) };
+      }),
+      componentRho: {
+        grit: spearman(rows.map(function (row) { return row.components.grit; }), outcomes),
+        involvement: spearman(rows.map(function (row) { return row.components.involvement; }), outcomes),
+        clutch: spearman(rows.map(function (row) { return row.components.clutch; }), outcomes)
+      }
+    };
+  }
+
+  function validateMetric(prepared, spec, options) {
+    const metric = normalizeMetricSpec(spec);
+    const opts = options || {};
+    const outcomeId = opts.outcomeId || metric.outcomeId;
+    const splitId = opts.splitId || metric.splitId;
+    const meta = outcomeMeta(outcomeId);
+    const players = asPrepared(prepared);
+    const ranked = scorePrepared(players, metric);
+    const train = [];
+    const test = [];
+    const unassigned = [];
+    ranked.forEach(function (row) {
+      const fold = assignFold(row, splitId);
+      if (fold === 'train') train.push(row);
+      else if (fold === 'test') test.push(row);
+      else unassigned.push(row);
+    });
+    const trainStats = foldStats(train, outcomeId);
+    const testStats = foldStats(test, outcomeId);
+    const drop = (trainStats.rho != null && testStats.rho != null)
+      ? round2(trainStats.rho - testStats.rho)
+      : null;
+    return {
+      outcomeId: outcomeId,
+      outcomeLabel: meta.label,
+      leaky: meta.leaky,
+      leakNote: meta.leakNote,
+      splitId: splitId,
+      splitLabel: splitId === 'hash'
+        ? 'פיצול דטרמיניסטי לפי שם (לא לפי קבוצה)'
+        : 'בתים A–D אימון, E–H מבחן — אותו מונדיאל 2018',
+      heldOutSeason: false,
+      honesty: 'אין בריפו עונה שנייה של אותן ספירות אירועים. זה פיצול מדגם בתוך מונדיאל 2018, לא חיזוי עונה מוחזקת.',
+      unassigned: unassigned.length,
+      train: trainStats,
+      test: testStats,
+      rhoDrop: drop,
+      verdict: validationVerdict(trainStats, testStats, meta)
+    };
+  }
+
+  function validationVerdict(trainStats, testStats, meta) {
+    const notes = [];
+    notes.push('זו אינה עונה חדשה.');
+    if (meta.leaky) notes.push(meta.leakNote);
+    if (testStats.n < 20) notes.push('מדגם המבחן קטן — אסור להכריז על תוקף.');
+    if (trainStats.rho != null && testStats.rho != null && trainStats.rho - testStats.rho >= 0.2) {
+      notes.push('ρ באימון גבוה בהרבה מבמבחן — חשד להתאמת-יתר למדגם.');
+    }
+    if (testStats.rho == null) notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
+    else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
+    else notes.push('ρ במבחן ' + testStats.rho + ' הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג.');
+    return notes.join(' ');
+  }
+
+  const CURRICULUM_LESSONS = Object.freeze([
+    {
+      id: 'events',
+      title: '1. ספירת אירועים',
+      section: 'explorer',
+      body: 'הקובץ המקומי סופר אירועי StatsBomb לשחקן בטורניר, לא שומר יומן משחק. לחצו על שחקן וקראו את הקבלה: כמה Pressure, כמה Pass, ומה לא נכנס לציון.',
+      exercise: 'מצאו אצל השחקן הנבחר שדה שנאסף בקובץ ואינו נכנס לנוסחה.',
+      hint: null
+    },
+    {
+      id: 'per90',
+      title: '2. ל-90 דקות',
+      section: 'explorer',
+      body: 'ספירה גולמית מעדיפה מי ששיחק יותר. לכן מחלקים בדקות ומכפילים ב-90. שחקן עם מדגם קטן יכול להיראות קיצוני.',
+      exercise: 'אם לשחקן יש 90 לחיצות ב-180 דקות, כמה לחיצות ל-90 דקות?',
+      hint: null
+    },
+    {
+      id: 'caps',
+      title: '3. תקרות שרירותיות',
+      section: 'explorer',
+      body: 'כל רכיב נחתך בתקרה קבועה (לחיצות 18/90, xG 0.6/90…). מי שמעל התקרה מקבל 100. התקרה אינה כיול מדעי.',
+      exercise: 'האם שחקן עם 26.5 לחיצות ל-90 דקות (מעל תקרה 18) מקבל סקייל 100 ברכיב הלחיצות?',
+      hint: { selectedId: "N'Golo Kanté|France" }
+    },
+    {
+      id: 'weights',
+      title: '4. משקלות ידניות',
+      section: 'lab',
+      body: 'Grit / Involvement / Clutch הם תוויות לימודיות. המשקלות זזות ביד. הנוסחה גלויה כדי שאפשר להתווכח עליה.',
+      exercise: 'אשרו שהמשקלות ידניות, לא מכוילות, וששינוי שלהן משנה דירוג.',
+      hint: null
+    },
+    {
+      id: 'defenders',
+      title: '5. הטיית עמדה',
+      section: 'exercise',
+      body: 'מדד 40/30/30 מעדיף חלוצים כי Clutch בנוי מ-xG. בלם נמדד אחרת רק אם משנים משקלות או מנרמלים עמדה.',
+      exercise: 'עברו את תרגיל הבלמים החי — אותה בדיקה עצמית כמו במעבדה.',
+      hint: { grit: 70, involvement: 20, clutch: 10, minMinutes: 270, normalizePosition: true }
+    },
+    {
+      id: 'fragility',
+      title: '6. שבריריות',
+      section: 'fragility',
+      body: 'תוספת 10 נקודות למשקל אחד מזיזה את הטופ. מדד מרוכב בלי כיול הוא שברירי בכוונה.',
+      exercise: 'האם דחיפת +10 למשקל יכולה לשנות מי נמצא בחמישייה?',
+      hint: null
+    },
+    {
+      id: 'holdout',
+      title: '7. מדגם מוחזק',
+      section: 'validate',
+      body: 'אין עונה שנייה בריפו. הפיצול הכנה הוא בתים A–D מול E–H באותו מונדיאל. ρ במבחן הוא המספר שחשוב — והוא עדיין לא «העונה הבאה».',
+      exercise: 'ענו: האם פיצול הבתים הוא עונה חדשה, ומה המספר שקובע — ρ אימון או ρ מבחן?',
+      hint: null
+    },
+    {
+      id: 'honesty',
+      title: '8. יושרה',
+      section: 'glossary',
+      body: 'מה שנאסף לא בהכרח מה שמחושב. Open Data אסור למסחר. פיצ\'ר משכנע אחרי המסקנה הוא מלכודת — ראו את שיעור הפיצ\'רים.',
+      exercise: 'סמנו מונח שנאסף ולא נכנס לציון, ואשרו שהנתונים אינם למסחר.',
+      hint: null
+    }
+  ]);
+
+  function answered(value) {
+    return value != null && String(value) !== '';
+  }
+
+  function evaluateCurriculum(context) {
+    const ctx = context || {};
+    const answers = ctx.answers || {};
+    const selected = ctx.selected;
+    const explorer = ctx.explorer || buildEventExplorer(selected);
+    const validation = ctx.validation;
+    const exercise = ctx.exercise;
+    const unusedKeys = (explorer.unused || []).map(function (row) { return row.key; });
+    return CURRICULUM_LESSONS.map(function (lesson) {
+      let checks = [];
+      if (lesson.id === 'events') {
+        checks = [
+          {
+            id: 'has-player',
+            label: 'נבחר שחקן עם ספירות מהקובץ',
+            pass: !!(selected && selected.counts),
+            detail: selected ? selected.name + ' — ' + (explorer.rows || []).length + ' שדות.' : 'בחרו שורה בטבלה.'
+          },
+          {
+            id: 'unused-field',
+            label: 'זיהיתם שדה שנאסף ולא נכנס לנוסחה',
+            pass: unusedKeys.indexOf(answers.unusedField) >= 0,
+            detail: answered(answers.unusedField)
+              ? (unusedKeys.indexOf(answers.unusedField) >= 0 ? answers.unusedField + ' באמת לא בנוסחה.' : answers.unusedField + ' כן נכנס, או אינו שדה במצטבר.')
+              : 'בחרו שדה מהרשימה ליד החוקר.'
+          }
+        ];
+      } else if (lesson.id === 'per90') {
+        checks = [
+          {
+            id: 'per90-math',
+            label: '90 לחיצות ב-180 דקות = 45 ל-90 דקות',
+            pass: String(answers.per90) === '45',
+            detail: answered(answers.per90) ? 'עניתם ' + answers.per90 + '.' : 'חשבו: ספירה × 90 / דקות.'
+          },
+          {
+            id: 'minutes-floor',
+            label: 'סף דקות לפחות 270 — מדגם קטן משקר',
+            pass: !!(ctx.spec && ctx.spec.minMinutes >= 270),
+            detail: ctx.spec ? 'סף נוכחי: ' + ctx.spec.minMinutes + '.' : ''
+          }
+        ];
+      } else if (lesson.id === 'caps') {
+        const hit = (explorer.capped || []).length > 0;
+        checks = [
+          {
+            id: 'cap-quiz',
+            label: 'מעל התקרה הסקייל הוא 100, לא «עוד יותר»',
+            pass: answers.kanteCapped === 'yes',
+            detail: answered(answers.kanteCapped) ? (answers.kanteCapped === 'yes' ? 'נכון — התקרה חותכת.' : 'לא. 26.5/18 נחתך ל-100.') : 'ענו על שאלת התקרה.'
+          },
+          {
+            id: 'cap-seen',
+            label: 'אצל השחקן הנבחר יש רכיב שנתקל בתקרה, או שבחרתם את קאנטה',
+            pass: hit || (selected && /Kant/i.test(selected.name || '')),
+            detail: hit ? 'שדות מעל התקרה: ' + explorer.capped.map(function (row) { return row.label; }).join(', ') + '.' : 'בחרו שחקן עם לחיצות גבוהות, למשל קאנטה.'
+          }
+        ];
+      } else if (lesson.id === 'weights') {
+        checks = [
+          {
+            id: 'manual-weights',
+            label: 'המשקלות ידניות ושרירותיות — לא מודל מכויל',
+            pass: answers.weightsManual === 'yes',
+            detail: answered(answers.weightsManual) ? '' : 'אשרו שקראתם את נוסחת המשקלות.'
+          },
+          {
+            id: 'formula-live',
+            label: 'הנוסחה החיה מוצגת במעבדה',
+            pass: !!(ctx.spec),
+            detail: ctx.spec ? formatFormula(ctx.spec) : ''
+          }
+        ];
+      } else if (lesson.id === 'defenders') {
+        const ex = exercise || { passed: false, checks: [] };
+        checks = [
+          {
+            id: 'defender-pass',
+            label: 'תרגיל הבלמים החי עבר',
+            pass: !!ex.passed,
+            detail: ex.summary || 'הזיזו משקלות במעבדה עד שהבדיקה העצמית ירוקה.'
+          }
+        ];
+      } else if (lesson.id === 'fragility') {
+        checks = [
+          {
+            id: 'bump-moves',
+            label: 'דחיפת +10 יכולה להזיז את החמישייה',
+            pass: answers.bumpCanMove === 'yes',
+            detail: answered(answers.bumpCanMove) ? '' : 'פתחו את מעבדת השבריריות וענו.'
+          }
+        ];
+      } else if (lesson.id === 'holdout') {
+        const testN = validation && validation.test ? validation.test.n : 0;
+        checks = [
+          {
+            id: 'not-season',
+            label: 'פיצול הבתים אינו עונה חדשה',
+            pass: answers.splitIsSeason === 'no',
+            detail: answered(answers.splitIsSeason)
+              ? (answers.splitIsSeason === 'no' ? 'נכון. אותו מונדיאל, שני מדגמי קבוצות.' : 'לא. אין בריפו עונה מוחזקת.')
+              : 'ענו במעבדת האימות.'
+          },
+          {
+            id: 'test-rho',
+            label: 'המספר שקובע הוא ρ במבחן, לא באימון',
+            pass: answers.whatMatters === 'test',
+            detail: answered(answers.whatMatters) ? '' : 'בחרו מה חשוב יותר אחרי הפיצול.'
+          },
+          {
+            id: 'report-honest',
+            label: 'דוח האימות מצהיר שאין עונה מוחזקת',
+            pass: !!(validation && validation.heldOutSeason === false),
+            detail: validation ? validation.honesty : 'המעבדה עדיין לא חושבה.'
+          },
+          {
+            id: 'test-n',
+            label: 'יש שחקנים במדגם המבחן אחרי סף הדקות',
+            pass: testN > 0,
+            detail: 'n מבחן = ' + testN + '.'
+          }
+        ];
+      } else if (lesson.id === 'honesty') {
+        checks = [
+          {
+            id: 'unused-term',
+            label: 'מונח שנאסף ולא נכנס לציון',
+            pass: answers.unusedTerm === 'dribble' || answers.unusedTerm === 'Dribble / Goal / Assist',
+            detail: answered(answers.unusedTerm) ? '' : 'בחרו מהמילון מונח עם התווית «לא בנוסחה».'
+          },
+          {
+            id: 'non-commercial',
+            label: 'Open Data אסור למסחר',
+            pass: answers.commercial === 'no',
+            detail: answered(answers.commercial) ? '' : 'אשרו את מגבלת הרישיון.'
+          }
+        ];
+      }
+      const passed = checks.length > 0 && checks.every(function (item) { return item.pass; });
+      return {
+        id: lesson.id,
+        title: lesson.title,
+        section: lesson.section,
+        body: lesson.body,
+        exercise: lesson.exercise,
+        hint: lesson.hint,
+        checks: checks,
+        passed: passed
+      };
+    });
+  }
+
   function bumpSpec(spec, key, delta) {
     const next = normalizeMetricSpec(spec);
     next[key] = clamp(next[key] + delta, 0, 100);
@@ -938,6 +1538,19 @@
     buildCompareRadar: buildCompareRadar,
     radarValues: radarValues,
     methodologyParagraph: methodologyParagraph,
-    exportMetricBundle: exportMetricBundle
+    exportMetricBundle: exportMetricBundle,
+    EVENT_COLUMNS: EVENT_COLUMNS,
+    OUTCOMES: OUTCOMES,
+    WC2018_GROUPS: WC2018_GROUPS,
+    worldCupGroup: worldCupGroup,
+    assignFold: assignFold,
+    spearman: spearman,
+    pearson: pearson,
+    outcomeValue: outcomeValue,
+    buildEventExplorer: buildEventExplorer,
+    glossaryForPlayer: glossaryForPlayer,
+    validateMetric: validateMetric,
+    evaluateCurriculum: evaluateCurriculum,
+    CURRICULUM_LESSONS: CURRICULUM_LESSONS
   };
 }));
