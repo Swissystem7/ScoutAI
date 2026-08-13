@@ -29,7 +29,17 @@ const {
   methodologyParagraph,
   exportMetricBundle,
   EVENT_GLOSSARY,
-  DEFENDER_EXERCISE
+  DEFENDER_EXERCISE,
+  buildEventExplorer,
+  validateMetric,
+  evaluateCurriculum,
+  spearman,
+  worldCupGroup,
+  assignFold,
+  outcomeValue,
+  glossaryForPlayer,
+  CURRICULUM_LESSONS,
+  WC2018_GROUPS
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
@@ -226,6 +236,10 @@ test('createStore prepares players once and derive feeds table, lesson, and frag
   assert.equal(gritView.fragility.length, 3);
   assert.ok(gritView.contributions.some(item => item.key === 'grit'));
   assert.ok(gritView.mapping.some(item => item.feeds === 'Clutch'));
+  assert.ok(gritView.explorer);
+  assert.ok(gritView.validation);
+  assert.equal(gritView.validation.heldOutSeason, false);
+  assert.equal(gritView.curriculum.length, 8);
 });
 
 test('loadLabSources uses only relative static paths', async () => {
@@ -502,4 +516,150 @@ test('glossary names the StatsBomb event types that feed the score and the ones 
   assert.ok(EVENT_GLOSSARY.some(item => item.feeds === 'סף דקות'));
   assert.match(html, /מילון סוגי אירועים/);
   assert.match(html + '\n' + runtime, /לא בנוסחה/);
+});
+
+test('event explorer rebuilds Kanté\'s file counts into a per90 receipt without inventing a match log', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  assert.equal(kante.counts.pressures, 183);
+  assert.equal(kante.minutes, 621);
+  const explorer = buildEventExplorer(kante);
+  const press = explorer.rows.find(row => row.key === 'pressures');
+  assert.equal(press.total, 183);
+  assert.equal(press.per90, 26.52);
+  assert.equal(press.capped, true);
+  assert.equal(press.scaled, 100);
+  assert.equal(press.filePath, 'players[].pressures');
+  assert.ok(explorer.unused.some(row => row.key === 'dribbles'));
+  assert.ok(explorer.unused.every(row => row.usedInScore === false));
+  assert.match(explorer.honesty, /ספירות מצטברות|אין בריפו יומן/);
+  assert.doesNotMatch(explorer.honesty, /יומן אירוע-אחר-אירוע נמצא/);
+  const live = store.derive({ selectedId: kante.id }, DEFAULT_METRIC);
+  assert.equal(live.explorer.player.name, kante.name);
+  assert.match(html, /חוקר ספירות האירועים/);
+  assert.match(html, /NO_HELD_OUT_SEASON/);
+});
+
+test('glossary terms point at JSON fields and the selected player\'s live value', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const items = glossaryForPlayer(kante);
+  const pressure = items.find(item => item.type === 'Pressure');
+  assert.equal(pressure.field, 'pressures');
+  assert.equal(pressure.filePath, 'players[].pressures');
+  assert.equal(pressure.selectedTotal, 183);
+  assert.ok(pressure.selectedPer90 > 26);
+  const unused = items.find(item => item.feeds === 'לא בנוסחה');
+  assert.equal(unused.usedInScore, false);
+  assert.match(unused.filePath, /dribbles/);
+  assert.match(html, /players\[\]\.pressures|filePath/);
+});
+
+test('Spearman is 1 on a monotone pair and -1 when reversed', () => {
+  assert.equal(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1);
+  assert.equal(spearman([1, 2, 3, 4], [40, 30, 20, 10]), -1);
+  assert.equal(spearman([1], [1]), null);
+});
+
+test('WC2018 group split is a complete 16-vs-16 team holdout, not a later season', () => {
+  assert.equal(worldCupGroup('France'), 'C');
+  assert.equal(worldCupGroup('Brazil'), 'E');
+  assert.equal(assignFold({ name: 'A', team: 'France' }, 'groups'), 'train');
+  assert.equal(assignFold({ name: 'B', team: 'Brazil' }, 'groups'), 'test');
+  const listed = Object.values(WC2018_GROUPS).flat();
+  assert.equal(listed.length, 32);
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const report = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'assists', splitId: 'groups' });
+  assert.equal(report.heldOutSeason, false);
+  assert.equal(report.leaky, false);
+  assert.equal(report.train.n, 120);
+  assert.equal(report.test.n, 120);
+  assert.equal(report.unassigned, 0);
+  assert.match(report.honesty, /אין בריפו עונה שנייה/);
+  assert.ok(Number.isFinite(report.test.rho));
+  const leaky = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'goals', splitId: 'groups' });
+  assert.equal(leaky.leaky, true);
+  assert.ok(leaky.test.componentRho.clutch > leaky.test.componentRho.grit);
+  assert.match(html, /מעבדת אימות/);
+  assert.match(html, /אין בריפו עונה שנייה/);
+});
+
+test('unused outcomes stay available and SAMPLE folds France to train and Brazil to test', () => {
+  const store = createStore(SAMPLE);
+  assert.equal(outcomeValue(store.players.find(row => row.name === 'Finisher'), 'goals'), 0);
+  assert.ok(store.players[0].counts);
+  const report = validateMetric(store.players, { grit: 40, involvement: 30, clutch: 30, minMinutes: 270 }, { splitId: 'groups', outcomeId: 'dribbles' });
+  const france = store.players.find(row => row.team === 'France');
+  const brazil = store.players.find(row => row.team === 'Brazil');
+  assert.equal(assignFold(france, 'groups'), 'train');
+  assert.equal(assignFold(brazil, 'groups'), 'test');
+  assert.ok(report.train.n >= 1);
+  assert.ok(report.test.n >= 1);
+});
+
+test('mini-curriculum has eight lessons and graduates only after honest holdout answers', () => {
+  assert.equal(CURRICULUM_LESSONS.length, 8);
+  assert.equal(CURRICULUM_LESSONS[0].id, 'events');
+  assert.equal(CURRICULUM_LESSONS[7].id, 'honesty');
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const failed = evaluateCurriculum(store.derive(DEFAULT_METRIC));
+  assert.equal(failed.length, 8);
+  assert.equal(failed.find(item => item.id === 'defenders').passed, false);
+  assert.equal(failed.find(item => item.id === 'holdout').passed, false);
+  const view = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: "N'Golo Kanté|France" }));
+  const passed = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    answers: {
+      unusedField: 'dribbles',
+      per90: '45',
+      kanteCapped: 'yes',
+      weightsManual: 'yes',
+      bumpCanMove: 'yes',
+      splitIsSeason: 'no',
+      whatMatters: 'test',
+      unusedTerm: 'dribble',
+      commercial: 'no'
+    }
+  });
+  assert.ok(passed.every(item => item.passed), passed.filter(item => !item.passed).map(item => item.id).join(','));
+  const seasonLie = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    answers: {
+      unusedField: 'dribbles',
+      per90: '45',
+      kanteCapped: 'yes',
+      weightsManual: 'yes',
+      bumpCanMove: 'yes',
+      splitIsSeason: 'yes',
+      whatMatters: 'test',
+      unusedTerm: 'dribble',
+      commercial: 'no'
+    }
+  });
+  assert.equal(seasonLie.find(item => item.id === 'holdout').passed, false);
+  assert.match(html, /שיעור מלא: מאירוע למדד מאומת/);
+  assert.match(html, /id="course"/);
+  assert.match(html, /id="explorer"/);
+  assert.match(html, /id="validate"/);
+});
+
+test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', () => {
+  assert.match(html, /href="#course"/);
+  assert.match(html, /דלגו לשיעור המלא/);
+  assert.match(html, /id="outcomeSelect"/);
+  assert.match(html, /id="splitSelect"/);
+  assert.match(html, /aria-label="צעדי השיעור המלא"/);
+  assert.doesNotMatch(html + '\n' + runtime, /https?:\/\//);
 });
