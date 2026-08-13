@@ -125,7 +125,8 @@
     clutch: 30,
     minMinutes: 270,
     normalizePosition: false,
-    selectedId: ''
+    selectedId: '',
+    compareId: ''
   });
 
   function clamp(value, lo, hi) {
@@ -150,9 +151,9 @@
   function positionGroup(position) {
     const text = String(position || '');
     if (/goalkeeper/i.test(text)) return 'GK';
+    if (/midfield/i.test(text)) return 'MF';
     if (/back|defen/i.test(text)) return 'DF';
     if (/forward|wing|striker/i.test(text)) return 'FW';
-    if (/midfield/i.test(text)) return 'MF';
     return 'OT';
   }
 
@@ -250,7 +251,8 @@
       clutch: clamp(src.clutch, 0, 100),
       minMinutes: clamp(src.minMinutes, 0, 900),
       normalizePosition: !!src.normalizePosition,
-      selectedId: src.selectedId ? String(src.selectedId) : ''
+      selectedId: src.selectedId ? String(src.selectedId) : '',
+      compareId: src.compareId ? String(src.compareId) : ''
     };
   }
 
@@ -389,16 +391,22 @@
       if (baselineSpec) rows = attachDeltas(rows, scorePrepared(players, baselineSpec));
       const selected = rows.find(function (row) { return row.id === metric.selectedId; }) || rows[0] || null;
       if (selected && !metric.selectedId) metric.selectedId = selected.id;
+      const compared = findPrepared(rows, players, metric.compareId);
       const fragility = fragilityFromPrepared(players, metric, 10);
       return {
         spec: metric,
         rows: rows,
         selected: selected,
+        compared: compared,
         lesson: buildLesson(selected, metric),
         contributions: lessonContributions(selected, metric),
         mapping: lessonMapping(selected),
         fragility: fragility,
-        formula: formatFormula(metric)
+        formula: formatFormula(metric),
+        exercise: evaluateExercise(players, metric),
+        radar: buildCompareRadar(selected, compared),
+        glossary: EVENT_GLOSSARY,
+        exportBundle: exportMetricBundle(metric, selected, { compared: compared })
       };
     }
     return { players: players, derive: derive };
@@ -440,6 +448,7 @@
       'npos=' + (metric.normalizePosition ? '1' : '0')
     ];
     if (metric.selectedId) parts.push('sel=' + encodeURIComponent(metric.selectedId));
+    if (metric.compareId) parts.push('cmp=' + encodeURIComponent(metric.compareId));
     return parts.join('&');
   }
 
@@ -458,7 +467,8 @@
       clutch: params.c,
       minMinutes: params.min,
       normalizePosition: params.npos === '1' || params.npos === 'true',
-      selectedId: params.sel || ''
+      selectedId: params.sel || '',
+      compareId: params.cmp || ''
     });
   }
 
@@ -467,6 +477,368 @@
     const total = metric.grit + metric.involvement + metric.clutch;
     return 'ציון = (' + metric.grit + '×Grit + ' + metric.involvement + '×Involvement + ' +
       metric.clutch + '×Clutch) / ' + (total || 1);
+  }
+
+  const COMPONENT_RECIPE = Object.freeze({
+    grit: Object.freeze([
+      { key: 'pressures90', label: 'לחיצות /90', cap: 18, weight: 0.45 },
+      { key: 'tacklesInt90', label: 'תיקולים+חטיפות /90', cap: 6, weight: 0.3 },
+      { key: 'defensive90', label: 'פעולות הגנה /90', cap: 14, weight: 0.25 }
+    ]),
+    involvement: Object.freeze([
+      { key: 'progressive90', label: 'התקדמות /90', cap: 22, weight: 0.5 },
+      { key: 'keyPasses90', label: 'מסירות מפתח /90', cap: 4, weight: 0.3 },
+      { key: 'passes90', label: 'מסירות /90', cap: 80, weight: 0.2 }
+    ]),
+    clutch: Object.freeze([
+      { key: 'xg90', label: 'xG /90', cap: 0.6, weight: 0.4 },
+      { key: 'boxTouches90', label: 'נגיעות ברחבה /90', cap: 8, weight: 0.35 },
+      { key: 'shotsOnTarget90', label: 'בעיטות למסגרת /90', cap: 2, weight: 0.25 }
+    ])
+  });
+
+  const RADAR_AXES = Object.freeze(
+    COMPONENT_RECIPE.grit
+      .concat(COMPONENT_RECIPE.involvement, COMPONENT_RECIPE.clutch)
+      .map(function (axis, index) {
+        const feeds = index < 3 ? 'Grit' : index < 6 ? 'Involvement' : 'Clutch';
+        return Object.freeze({
+          key: axis.key,
+          label: axis.label,
+          cap: axis.cap,
+          weight: axis.weight,
+          feeds: feeds
+        });
+      })
+  );
+
+  const EVENT_GLOSSARY = Object.freeze([
+    {
+      type: 'Pressure',
+      he: 'לחיצה',
+      feeds: 'Grit',
+      usedInScore: true,
+      body: 'אירוע Pressure ב-StatsBomb: שחקן סוגר על מחזיק הכדור. נספר ללחיצות, ואז ל-90 דקות, ואז ל-Grit.'
+    },
+    {
+      type: 'Duel / Tackle',
+      he: 'דו-קרב / תיקול',
+      feeds: 'Grit',
+      usedInScore: true,
+      body: 'Duel מסוג Tackle שהסתיים ב-Won/Success. נספר לתיקולים ולפעולות הגנה. תיקול שנכשל אינו נכנס.'
+    },
+    {
+      type: 'Interception',
+      he: 'חטיפה',
+      feeds: 'Grit',
+      usedInScore: true,
+      body: 'אירוע Interception: ניתוק מסירה. נספר לחטיפות ולפעולות הגנה.'
+    },
+    {
+      type: 'Ball Recovery',
+      he: 'שחזור כדור',
+      feeds: 'Grit',
+      usedInScore: true,
+      body: 'Ball Recovery נספר לפעולות הגנה בלבד, בלי תיקול או חטיפה נפרדים.'
+    },
+    {
+      type: 'Block',
+      he: 'חסימה',
+      feeds: 'Grit',
+      usedInScore: true,
+      body: 'Block נספר לפעולות הגנה. אין רכיב Block נפרד בנוסחה — הוא חלק מהתקרה של defensiveActions.'
+    },
+    {
+      type: 'Pass',
+      he: 'מסירה',
+      feeds: 'Involvement',
+      usedInScore: true,
+      body: 'Pass בלי outcome נספר כהושלמה. shot_assist או goal_assist נספרים כמסירת מפתח. מסירה שמתקדמת במגרש נספרת גם כהתקדמות.'
+    },
+    {
+      type: 'Carry',
+      he: 'הובלת כדור',
+      feeds: 'Involvement',
+      usedInScore: true,
+      body: 'Carry שמתקדם במגרש נספר ל-progressiveActions יחד עם מסירות מתקדמות. אין הפרדה בין מסירה להובלה ברכיב.'
+    },
+    {
+      type: 'Shot + statsbomb_xg',
+      he: 'בעיטה ו-xG',
+      feeds: 'Clutch',
+      usedInScore: true,
+      body: 'Shot תורם את statsbomb_xg לסכום ה-xG. Outcome Saved או Goal נספר כבעיטה למסגרת. התווית Clutch היא לימודית — זה לא מודל רגעים מכריעים.'
+    },
+    {
+      type: 'location (penalty box)',
+      he: 'מיקום ברחבה',
+      feeds: 'Clutch',
+      usedInScore: true,
+      body: 'כל אירוע שנרשם בתוך רחבת ה-16 נספר כנגיעה ברחבה. זה קירוב גס, לא נגיעת כדור מאומתת.'
+    },
+    {
+      type: 'Starting XI / Substitution',
+      he: 'הרכב וחילוף',
+      feeds: 'סף דקות',
+      usedInScore: false,
+      body: 'הדקות הן פרוקסי מקומי מאירועי הרכב וחילוף, לא שעון רשמי של פיפ״א. לכן יש סף דקות — מדגם קטן משקר.'
+    },
+    {
+      type: 'Dribble / Goal / Assist',
+      he: 'כדרור, שער, בישול',
+      feeds: 'לא בנוסחה',
+      usedInScore: false,
+      body: 'הספירות האלה קיימות בקובץ המצטבר (dribbles, goals, assists, duelsWon, bigChanceProxy) אבל אינן נכנסות ל-Grit/Involvement/Clutch. שקיפות: מה שנאסף לא בהכרח מה שמחושב.'
+    }
+  ]);
+
+  const DEFENDER_EXERCISE = Object.freeze({
+    id: 'defenders-sensible',
+    title: 'תרגיל מודרך: מדד שמדרג בלמים באופן הגיוני',
+    prompt: 'מדד ברירת המחדל 40/30/30 מעדיף חלוצים, כי Clutch נבנה מ-xG, נגיעות ברחבה ובעיטות למסגרת. בנו מדד שבו בלמים (בלם/מגן, לא קשר הגנתי) עולים בלי להעמיד פנים שזה מודל מדעי.',
+    hint: Object.freeze({
+      grit: 70,
+      involvement: 20,
+      clutch: 10,
+      minMinutes: 270,
+      normalizePosition: true
+    })
+  });
+
+  function medianRank(rows, group) {
+    const ranks = rows
+      .filter(function (row) { return row.positionGroup === group; })
+      .map(function (row) { return row.rank; })
+      .sort(function (a, b) { return a - b; });
+    if (!ranks.length) return null;
+    return ranks[Math.floor((ranks.length - 1) / 2)];
+  }
+
+  function countGroup(rows, group) {
+    return rows.filter(function (row) { return row.positionGroup === group; }).length;
+  }
+
+  function asPrepared(input) {
+    if (Array.isArray(input)) return input;
+    return createStore(input).players;
+  }
+
+  function evaluateExercise(prepared, spec) {
+    const players = asPrepared(prepared);
+    const metric = normalizeMetricSpec(spec);
+    const current = scorePrepared(players, metric);
+    const baseline = scorePrepared(players, DEFAULT_METRIC);
+    const windowSize = Math.min(12, current.length);
+    const nowTop = current.slice(0, windowSize);
+    const baseTop = baseline.slice(0, windowSize);
+    const dfNow = countGroup(nowTop, 'DF');
+    const dfBase = countGroup(baseTop, 'DF');
+    const fwNow = countGroup(nowTop, 'FW');
+    const medianDf = medianRank(current, 'DF');
+    const medianFw = medianRank(current, 'FW');
+    const checks = [
+      {
+        id: 'minutes',
+        label: 'סף דקות לפחות 270 — כדי לא לדרג מחליף של משחק אחד',
+        pass: metric.minMinutes >= 270,
+        detail: 'סף נוכחי: ' + metric.minMinutes + ' דקות.'
+      },
+      {
+        id: 'grit-over-clutch',
+        label: 'Grit גבוה מ-Clutch — בלם לא נמדד בעיקר ב-xG',
+        pass: metric.grit > metric.clutch,
+        detail: 'Grit ' + metric.grit + ' מול Clutch ' + metric.clutch + '.'
+      },
+      {
+        id: 'defenders-surface',
+        label: 'יותר בלמים ב-12 הראשונים מאשר במדד הבסיס 40/30/30',
+        pass: dfNow > dfBase,
+        detail: 'עכשיו ' + dfNow + ' בלמים בחלון, בבסיס היו ' + dfBase + '.'
+      },
+      {
+        id: 'fair-comparison',
+        label: 'נרמול עמדה או משקל מאמץ דומיננטי (Grit ≥ 60)',
+        pass: metric.normalizePosition || metric.grit >= 60,
+        detail: metric.normalizePosition
+          ? 'נרמול עמדה דולק: בלם מושווה לבלמים, לא לחלוץ.'
+          : 'בלי נרמול צריך Grit גבוה, אחרת xG של חלוצים שולט.'
+      },
+      {
+        id: 'not-just-attackers',
+        label: 'בחלון העליון יש לפחות אותו מספר בלמים כמו חלוצים',
+        pass: windowSize === 0 || dfNow >= fwNow,
+        detail: 'בלמים ' + dfNow + ' · חלוצים ' + fwNow +
+          (medianDf != null && medianFw != null ? ' · חציון דירוג DF #' + medianDf + ' / FW #' + medianFw : '') + '.'
+      }
+    ];
+    const passed = checks.every(function (item) { return item.pass; });
+    return {
+      id: DEFENDER_EXERCISE.id,
+      title: DEFENDER_EXERCISE.title,
+      prompt: DEFENDER_EXERCISE.prompt,
+      hint: DEFENDER_EXERCISE.hint,
+      checks: checks,
+      passed: passed,
+      windowSize: windowSize,
+      dfNow: dfNow,
+      dfBase: dfBase,
+      fwNow: fwNow,
+      medianDf: medianDf,
+      medianFw: medianFw,
+      summary: passed
+        ? 'עברתם את הבדיקה העצמית. זה עדיין מדד ידני — לא הוכחה שמצאתם בלם טוב.'
+        : 'עוד לא. המדד עדיין מתנהג כמו מדד חלוצים, או שהמדגם קטן מדי.'
+    };
+  }
+
+  function radarValues(row) {
+    const raw = row && row.components && row.components.raw || {};
+    return RADAR_AXES.map(function (axis) {
+      const value = Number(raw[axis.key]);
+      return {
+        key: axis.key,
+        label: axis.label,
+        feeds: axis.feeds,
+        cap: axis.cap,
+        raw: Number.isFinite(value) ? value : 0,
+        scaled: round1(scaleCap(Number.isFinite(value) ? value : 0, axis.cap))
+      };
+    });
+  }
+
+  function polarPoint(index, total, value, cx, cy, radius) {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index / total);
+    const r = radius * clamp(value, 0, 100) / 100;
+    return {
+      x: round2(cx + Math.cos(angle) * r),
+      y: round2(cy + Math.sin(angle) * r)
+    };
+  }
+
+  function radarPolygon(values, cx, cy, radius) {
+    return values.map(function (item, index) {
+      return polarPoint(index, values.length, item.scaled, cx, cy, radius);
+    });
+  }
+
+  function pointsToAttr(points) {
+    return points.map(function (point) { return point.x + ',' + point.y; }).join(' ');
+  }
+
+  function findPrepared(rows, prepared, id) {
+    if (!id) return null;
+    return (rows || []).find(function (row) { return row.id === id; }) ||
+      (prepared || []).find(function (row) { return row.id === id; }) ||
+      null;
+  }
+
+  function buildCompareRadar(rowA, rowB, options) {
+    const cx = options && options.cx != null ? options.cx : 160;
+    const cy = options && options.cy != null ? options.cy : 160;
+    const radius = options && options.radius != null ? options.radius : 110;
+    const aValues = radarValues(rowA);
+    const bValues = rowB ? radarValues(rowB) : null;
+    const axisGuide = aValues.map(function (item, index) {
+      const tip = polarPoint(index, aValues.length, 100, cx, cy, radius);
+      const labelAt = polarPoint(index, aValues.length, 118, cx, cy, radius);
+      return {
+        key: item.key,
+        label: item.label,
+        feeds: item.feeds,
+        x: tip.x,
+        y: tip.y,
+        labelX: labelAt.x,
+        labelY: labelAt.y
+      };
+    });
+    return {
+      cx: cx,
+      cy: cy,
+      radius: radius,
+      axes: axisGuide,
+      a: rowA ? {
+        id: rowA.id,
+        name: rowA.name,
+        team: rowA.team,
+        positionGroup: rowA.positionGroup,
+        values: aValues,
+        points: pointsToAttr(radarPolygon(aValues, cx, cy, radius))
+      } : null,
+      b: rowB ? {
+        id: rowB.id,
+        name: rowB.name,
+        team: rowB.team,
+        positionGroup: rowB.positionGroup,
+        values: bValues,
+        points: pointsToAttr(radarPolygon(bValues, cx, cy, radius))
+      } : null
+    };
+  }
+
+  function methodologyParagraph(spec, selected) {
+    const metric = normalizeMetricSpec(spec);
+    const playerBit = selected
+      ? ' דוגמת השחקן בשיעור: ' + selected.name + ' (' + (selected.team || '') + '), ציון ' +
+        selected.score + ', דירוג #' + selected.rank + '.'
+      : '';
+    return 'המדד חושב במעבדת ScoutAI ככלי לימוד לאנליסט מתחיל, לא כהמלצת סקאוטינג, לא כחוות דעת רפואית או חוזית, ולא כמוצר למכירה. ' +
+      'המקור הוא קובץ ספירות מקומי שנבנה מ-StatsBomb Open Data למונדיאל 2018 (תחרות 43, עונה 3). ' +
+      'הרישיון מתיר מחקר ושיתוף ציבורי עם קרדיט, ואוסר שימוש מסחרי בנתונים ובכל ניתוח שנגזר מהם. ' +
+      formatFormula(metric) +
+      '. Grit = 0.45×לחיצות + 0.30×(תיקולים+חטיפות) + 0.25×פעולות הגנה, אחרי נרמול לתקרות קבועות ל-90 דקות. ' +
+      'Involvement = 0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות שהושלמו. ' +
+      'Clutch = 0.40×xG + 0.35×נגיעות ברחבה + 0.25×בעיטות למסגרת — התווית לימודית, לא מודל רגעים מכריעים. ' +
+      'סף הדקות הוא ' + metric.minMinutes +
+      (metric.normalizePosition ? '; הרכיבים הם אחוזון בתוך קבוצת עמדה.' : '; בלי נרמול עמדה.') +
+      ' המשקלות ידניות ושרירותיות, בלי כיול מדעי.' + playerBit;
+  }
+
+  function exportMetricBundle(spec, selected, extras) {
+    const metric = normalizeMetricSpec(spec);
+    const extra = extras || {};
+    return {
+      tool: 'ScoutAI',
+      purpose: 'educational metric lab',
+      commercial: false,
+      provenance: 'STATSBOMB_OPEN_DATA',
+      source: {
+        dataset: 'data/wc2018_event_aggregates.json',
+        competition: 'FIFA World Cup 2018',
+        competitionId: 43,
+        seasonId: 3,
+        license: 'StatsBomb Open Data — research and public sharing with credit; commercial use prohibited'
+      },
+      metric: {
+        grit: metric.grit,
+        involvement: metric.involvement,
+        clutch: metric.clutch,
+        minMinutes: metric.minMinutes,
+        normalizePosition: metric.normalizePosition
+      },
+      formula: formatFormula(metric),
+      recipe: COMPONENT_RECIPE,
+      selected: selected ? {
+        id: selected.id,
+        name: selected.name,
+        team: selected.team,
+        position: selected.position,
+        positionGroup: selected.positionGroup,
+        minutes: selected.minutes,
+        rank: selected.rank,
+        score: selected.score,
+        components: selected.components
+      } : null,
+      compared: extra.compared ? {
+        id: extra.compared.id,
+        name: extra.compared.name,
+        team: extra.compared.team,
+        positionGroup: extra.compared.positionGroup,
+        components: extra.compared.components
+      } : null,
+      methodologyHe: methodologyParagraph(metric, selected),
+      citationEn: 'ScoutAI educational metric lab on StatsBomb Open Data, FIFA World Cup 2018 (competition 43, season 3). Non-commercial research/education only. Weights are manual and uncalibrated; not a scouting recommendation.',
+      generatedLocally: true
+    };
   }
 
   function buildLesson(row, spec) {
@@ -557,6 +929,15 @@
     buildLesson: buildLesson,
     fragilityReport: fragilityReport,
     normalizeMetricSpec: normalizeMetricSpec,
-    playerKey: playerKey
+    playerKey: playerKey,
+    EVENT_GLOSSARY: EVENT_GLOSSARY,
+    RADAR_AXES: RADAR_AXES,
+    COMPONENT_RECIPE: COMPONENT_RECIPE,
+    DEFENDER_EXERCISE: DEFENDER_EXERCISE,
+    evaluateExercise: evaluateExercise,
+    buildCompareRadar: buildCompareRadar,
+    radarValues: radarValues,
+    methodologyParagraph: methodologyParagraph,
+    exportMetricBundle: exportMetricBundle
   };
 }));

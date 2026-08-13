@@ -10,8 +10,8 @@
     .skip:focus{inset-inline-start:8px}.shell{max-width:980px;margin:auto;padding:24px}.banner{position:sticky;top:0;z-index:2;background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
     .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
-    label{display:block;margin:14px 0 6px;font-weight:700}input,button{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
-    input[type=file]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
+    label{display:block;margin:14px 0 6px;font-weight:700}input,button,select{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
+    input[type=file],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.actions button{margin-inline-end:8px}.status{min-height:1.5em;font-weight:700}
     .formula{font-size:.95rem;color:#0f3d26;margin:12px 0;font-weight:700}
     .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}caption{text-align:start;font-weight:700;padding:8px 0;color:#17211b}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
@@ -30,7 +30,21 @@
     :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
     input[type=range]:focus-visible{outline:3px solid #0b3d28;outline-offset:4px}
     .lab-note{font-size:.9rem;color:#3d4a42}footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
-    @media(max-width:650px){.slider-row,.bar-row{grid-template-columns:1fr}}
+    .checks{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px}
+    .checks li{border-radius:12px;padding:10px 12px;border:1px solid #c5d0c6}
+    .checks li.pass{background:#e6f3ea;border-color:#145c3d}
+    .checks li.fail{background:#f8ecec;border-color:#8a1f1f}
+    .check-flag{font-weight:700;margin-inline-end:8px}
+    tr.compared td,tr.compared th{outline:2px dashed #8a5a00;background:#fff8e8}
+    .radar-layout{display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start}
+    .radar-wrap{direction:ltr;text-align:center}
+    .radar-wrap svg{width:100%;max-width:320px;height:auto}
+    .legend{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0;font-weight:700}
+    .swatch{display:inline-block;width:14px;height:14px;border-radius:3px;margin-inline-end:6px;vertical-align:middle}
+    .export-box{white-space:pre-wrap;background:#f3f6f1;border-radius:12px;padding:12px;max-height:240px;overflow:auto;font-size:.9rem}
+    .glossary{display:grid;gap:10px}dt{font-weight:700}dd{margin:4px 0 0}
+    .unused{opacity:.92}
+    @media(max-width:650px){.slider-row,.bar-row,.radar-layout{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -45,7 +59,7 @@
 
   <section class="card">
     <h1>ScoutAI — מעבדת המחשה מקומית</h1>
-    <p>מעבדה אחת, שכבת נתונים אחת: בוחרים שחקן, מפרקים את הציון לגורמים (כמו שיעור xG על בעיטה אחת), משנים משקל, ורואים את אותו שחקן זז. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד.</p>
+    <p>מעבדה אחת, שכבת נתונים אחת: בונים מדד, בודקים אותו בתרגיל בלמים, משווים שני שחקנים על רכיבים גולמיים, ומייצאים פסקת מתודולוגיה. הוא אינו מנתח וידאו, אינו מפעיל AI ואינו מספק סקאוטינג מקצועי. Open Data — לימוד/מחקר בלבד, לא למסחר.</p>
     <label for="video">בחירת וידאו מקומי (אופציונלי)</label>
     <input id="video" type="file" accept="video/*">
     <p id="videoStatus" class="status">LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.</p>
@@ -83,6 +97,15 @@
     <p id="hashStatus" class="status" role="status" aria-live="polite"></p>
   </section>
 
+  <section class="card" id="exercise" aria-live="polite">
+    <h2>תרגיל מודרך</h2>
+    <p id="exercisePrompt"></p>
+    <p class="muted">בדיקה עצמית מול אותה שכבת מונדיאל 2018 — לא מבחן סקאוטינג ואין תשובה מדעית אחת.</p>
+    <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
+    <p id="exerciseSummary" class="status" role="status"></p>
+    <ul id="exerciseChecks" class="checks"></ul>
+  </section>
+
   <section class="card" aria-live="polite">
     <h2>דירוג חי לפי המדד שלכם</h2>
     <p>מקור: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
@@ -98,10 +121,44 @@
   </section>
 
   <section class="card" aria-live="polite">
+    <h2>מכ״ם השוואה מרכיבים גולמיים</h2>
+    <p>אותם תשעת הגורמים שנכנסים לנוסחה, אחרי אותן תקרות ל-90 דקות. לא מודל חיצוני ולא רדאר Wyscout.</p>
+    <label for="compareSelect">השוו את השחקן הנבחר מול</label>
+    <select id="compareSelect"></select>
+    <p id="radarStatus" class="lab-note"></p>
+    <div class="legend">
+      <span><span class="swatch" style="background:#145c3d"></span>נבחר</span>
+      <span><span class="swatch" style="background:#8a5a00"></span>השוואה (קו מקווקו)</span>
+    </div>
+    <div class="radar-layout">
+      <div id="radarRoot" class="radar-wrap"></div>
+      <div id="radarTable" class="table-wrap"></div>
+    </div>
+  </section>
+
+  <section class="card" aria-live="polite">
     <h2>מעבדת שבריריות משקלות</h2>
     <p>אותה שכבת נתונים, אותו שחקן נבחר. מוסיפים 10 נקודות למשקל אחד — מי קופץ, ומה קורה לשחקן שבחרתם.</p>
     <p id="selectedSwing" class="lab-note"></p>
     <div id="fragilityRoot" class="lesson"></div>
+  </section>
+
+  <section class="card">
+    <h2>ייצוא המדד ופסקת מתודולוגיה</h2>
+    <p>ההורדה נשארת במחשב שלכם. אין שליחה לשרת, אין PDF מעוצב, ואין ציטוט שמותר למכור — רק תיעוד לימודי עם קרדיט ל-StatsBomb Open Data.</p>
+    <button id="copyMethod" class="secondary" type="button">העתיקו פסקת מתודולוגיה</button>
+    <button id="downloadJson" class="secondary" type="button">הורידו JSON מקומי</button>
+    <p id="exportStatus" class="status" role="status" aria-live="polite"></p>
+    <h3>פסקה לציטוט</h3>
+    <p id="methodText" class="export-box"></p>
+    <h3>JSON</h3>
+    <pre id="exportJson" class="export-box" dir="ltr"></pre>
+  </section>
+
+  <section class="card">
+    <h2>מילון סוגי אירועים של StatsBomb</h2>
+    <p>רק הסוגים שנכנסו לספירות המקומיות. מה שכתוב «לא בנוסחה» קיים בקובץ ולא נכנס לציון — זה חלק מהשיעור.</p>
+    <dl id="glossaryRoot" class="glossary"></dl>
   </section>
 
   <section class="card actions">
@@ -128,6 +185,7 @@
   const lessonNav = document.getElementById('lessonNav');
   const fragilityRoot = document.getElementById('fragilityRoot');
   const selectedSwing = document.getElementById('selectedSwing');
+  const compareSelect = document.getElementById('compareSelect');
   let store = null;
   let view = null;
   let writingHash = false;
@@ -148,7 +206,8 @@
       clutch: document.getElementById('wClutch').value,
       minMinutes: document.getElementById('minMinutes').value,
       normalizePosition: document.getElementById('normPos').checked,
-      selectedId: tableRoot.dataset.selected || ''
+      selectedId: tableRoot.dataset.selected || '',
+      compareId: compareSelect.value || ''
     });
   }
 
@@ -164,6 +223,7 @@
     syncSlider('wClutch', metric.clutch, 'Clutch, ' + Math.round(metric.clutch) + ' אחוז');
     syncSlider('minMinutes', metric.minMinutes, 'סף דקות, ' + Math.round(metric.minMinutes));
     tableRoot.dataset.selected = metric.selectedId || '';
+    compareSelect.value = metric.compareId || '';
   }
 
   function syncSlider(id, value, text) {
@@ -202,8 +262,11 @@
     tableStatus.textContent = 'STATSBOMB_OPEN_DATA: ' + rows.length + ' שחקנים ממונדיאל 2018 אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
     const body = rows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
+      const compared = spec.compareId && row.id === spec.compareId;
+      const cls = selected ? 'selected' : compared ? 'compared' : '';
       return '<tr data-id="' + escapeHtml(row.id) + '" tabindex="0"' +
-        (selected ? ' class="selected" aria-selected="true"' : ' aria-selected="false"') + '>' +
+        (cls ? ' class="' + cls + '"' : '') +
+        ' aria-selected="' + (selected ? 'true' : 'false') + '">' +
         '<th scope="row">' + escapeHtml(row.rank) + '<div class="muted">' + deltaCell(row.deltaRank) + '</div></th>' +
         '<td>' + escapeHtml(row.name) + '<div class="muted">' + escapeHtml(row.positionGroup) + ' · ' + escapeHtml(row.position || '') + '</div></td>' +
         '<td>' + escapeHtml(row.team || '—') + '</td>' +
@@ -250,6 +313,94 @@
     lessonRoot.innerHTML = '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' + escapeHtml(step.body) + '</p>' + extra + '</article>';
   }
 
+  function renderExercise(current) {
+    const exercise = current.exercise;
+    if (!exercise) return;
+    document.getElementById('exercisePrompt').textContent = exercise.prompt;
+    document.getElementById('exerciseSummary').textContent = (exercise.passed ? 'עברתם. ' : 'עדיין לא. ') + exercise.summary;
+    document.getElementById('exerciseChecks').innerHTML = exercise.checks.map(function (item) {
+      return '<li class="' + (item.pass ? 'pass' : 'fail') + '">' +
+        '<span class="check-flag">' + (item.pass ? 'עבר' : 'לא עבר') + '</span>' +
+        escapeHtml(item.label) +
+        '<div class="muted">' + escapeHtml(item.detail) + '</div></li>';
+    }).join('');
+  }
+
+  function renderRadar(current) {
+    const radar = current.radar;
+    const rows = current.rows || [];
+    const spec = current.spec;
+    const previous = compareSelect.value;
+    compareSelect.innerHTML = '<option value="">— בלי השוואה —</option>' + rows.map(function (row) {
+      return '<option value="' + escapeHtml(row.id) + '">' +
+        escapeHtml(row.name) + ' (' + escapeHtml(row.team || '') + ', ' + escapeHtml(row.positionGroup) + ')</option>';
+    }).join('');
+    const keep = spec.compareId || previous;
+    if (keep && rows.some(function (row) { return row.id === keep; })) compareSelect.value = keep;
+    if (!radar || !radar.a) {
+      document.getElementById('radarRoot').innerHTML = '';
+      document.getElementById('radarTable').innerHTML = '';
+      document.getElementById('radarStatus').textContent = 'בחרו שחקן בטבלה כדי לבנות מכ״ם.';
+      return;
+    }
+    document.getElementById('radarStatus').textContent = radar.b
+      ? radar.a.name + ' מול ' + radar.b.name + ' — ערכים גולמיים אחרי אותן תקרות, לא אחוזון ליגה.'
+      : radar.a.name + ' — בחרו שחקן שני מהרשימה כדי להשוות.';
+    const guides = (radar.axes || []).map(function (axis) {
+      return '<line x1="' + radar.cx + '" y1="' + radar.cy + '" x2="' + axis.x + '" y2="' + axis.y + '" stroke="#c5d0c6"></line>' +
+        '<text x="' + axis.labelX + '" y="' + axis.labelY + '" font-size="9" text-anchor="middle" fill="#2d3a32">' +
+        escapeHtml(axis.label.replace(' /90', '')) + '</text>';
+    }).join('');
+    const rings = [25, 50, 75, 100].map(function (pct) {
+      const pts = (radar.axes || []).map(function (_, index) {
+        const angle = -Math.PI / 2 + (2 * Math.PI * index / radar.axes.length);
+        const r = radar.radius * pct / 100;
+        return (radar.cx + Math.cos(angle) * r) + ',' + (radar.cy + Math.sin(angle) * r);
+      }).join(' ');
+      return '<polygon points="' + pts + '" fill="none" stroke="#d5ddd4"></polygon>';
+    }).join('');
+    const polyA = radar.a
+      ? '<polygon points="' + radar.a.points + '" fill="rgba(20,92,61,0.28)" stroke="#145c3d" stroke-width="2"></polygon>'
+      : '';
+    const polyB = radar.b
+      ? '<polygon points="' + radar.b.points + '" fill="rgba(138,90,0,0.18)" stroke="#8a5a00" stroke-width="2" stroke-dasharray="6 4"></polygon>'
+      : '';
+    document.getElementById('radarRoot').innerHTML =
+      '<svg viewBox="0 0 320 320" role="img" aria-label="מכ״ם השוואת רכיבים גולמיים">' +
+      rings + guides + polyA + polyB + '</svg>';
+    const axes = radar.a.values;
+    document.getElementById('radarTable').innerHTML =
+      '<table><caption>רכיבים גולמיים אחרי תקרה, אותה נוסחה כמו הציון</caption><thead><tr>' +
+        '<th scope="col">רכיב</th><th scope="col">נכנס ל</th>' +
+        '<th scope="col">' + escapeHtml(radar.a.name) + '</th>' +
+        (radar.b ? '<th scope="col">' + escapeHtml(radar.b.name) + '</th>' : '') +
+      '</tr></thead><tbody>' +
+      axes.map(function (item, index) {
+        const other = radar.b ? radar.b.values[index] : null;
+        return '<tr><td>' + escapeHtml(item.label) + '</td><td>' + escapeHtml(item.feeds) + '</td><td>' +
+          escapeHtml(item.raw) + ' → ' + escapeHtml(item.scaled) +
+          (other ? '</td><td>' + escapeHtml(other.raw) + ' → ' + escapeHtml(other.scaled) : '') +
+          '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function renderExport(current) {
+    const bundle = current.exportBundle;
+    if (!bundle) return;
+    document.getElementById('methodText').textContent = bundle.methodologyHe;
+    document.getElementById('exportJson').textContent = JSON.stringify(bundle, null, 2);
+  }
+
+  function renderGlossary(current) {
+    const items = current.glossary || ScoutAIDemo.EVENT_GLOSSARY;
+    document.getElementById('glossaryRoot').innerHTML = items.map(function (item) {
+      return '<div class="' + (item.usedInScore ? '' : 'unused') + '"><dt>' +
+        escapeHtml(item.type) + ' — ' + escapeHtml(item.he) +
+        ' <span class="badge">' + escapeHtml(item.feeds) + '</span></dt><dd>' +
+        escapeHtml(item.body) + '</dd></div>';
+    }).join('');
+  }
+
   function renderFragility(current) {
     const selectedId = current.selected && current.selected.id;
     const notes = [];
@@ -281,7 +432,11 @@
     if (current.selected) tableRoot.dataset.selected = current.selected.id;
     renderTable(current);
     renderLesson(current);
+    renderExercise(current);
+    renderRadar(current);
     renderFragility(current);
+    renderExport(current);
+    renderGlossary(current);
     persistHash(current.spec);
   }
 
@@ -304,6 +459,35 @@
     document.getElementById(id).addEventListener('input', recompute);
   });
   document.getElementById('normPos').addEventListener('change', recompute);
+  compareSelect.addEventListener('change', recompute);
+  document.getElementById('applyHint').addEventListener('click', function () {
+    const hint = ScoutAIDemo.DEFENDER_EXERCISE.hint;
+    writeSpecToControls(Object.assign({}, readSpecFromControls(), hint));
+    recompute();
+  });
+  document.getElementById('copyMethod').addEventListener('click', function () {
+    const text = document.getElementById('methodText').textContent;
+    const status = document.getElementById('exportStatus');
+    const done = function () { status.textContent = 'פסקת המתודולוגיה הועתקה. לא נשלח דבר.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        status.textContent = 'העתיקו ידנית את הפסקה מהתיבה.';
+      });
+    } else {
+      status.textContent = 'העתיקו ידנית את הפסקה מהתיבה.';
+    }
+  });
+  document.getElementById('downloadJson').addEventListener('click', function () {
+    if (!view || !view.exportBundle) return;
+    const blob = new Blob([JSON.stringify(view.exportBundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'scoutai-metric.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    document.getElementById('exportStatus').textContent = 'הקובץ ירד למחשב המקומי. Open Data — לא למסחר.';
+  });
   tableRoot.addEventListener('click', function (event) {
     const row = event.target.closest('tr[data-id]');
     if (!row) return;

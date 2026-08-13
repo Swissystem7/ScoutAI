@@ -22,7 +22,14 @@ const {
   flagImpossibleMinutes,
   WORLD_CUP_MAX_MINUTES,
   normalizeMetricSpec,
-  positionGroup
+  positionGroup,
+  evaluateExercise,
+  buildCompareRadar,
+  radarValues,
+  methodologyParagraph,
+  exportMetricBundle,
+  EVENT_GLOSSARY,
+  DEFENDER_EXERCISE
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
@@ -379,4 +386,120 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /tabindex="0"/);
   assert.match(html, /aria-selected/);
   assert.match(html, /border-inline-start/);
+});
+
+const DEFENDERS = {
+  players: [
+    {
+      name: 'Stopper', team: 'Uruguay', position: 'Center Back',
+      totalMinutesProxy: 500, pressures: 90, tackles: 18, interceptions: 14,
+      defensiveActions: 70, progressiveActions: 12, keyPasses: 0, passesCompleted: 180,
+      shotXgSum: 0.05, boxTouches: 1, shotsOnTarget: 0
+    },
+    {
+      name: 'Fullback', team: 'France', position: 'Left Back',
+      totalMinutesProxy: 480, pressures: 70, tackles: 10, interceptions: 8,
+      defensiveActions: 50, progressiveActions: 30, keyPasses: 2, passesCompleted: 220,
+      shotXgSum: 0.1, boxTouches: 4, shotsOnTarget: 0
+    },
+    {
+      name: 'Poacher', team: 'England', position: 'Center Forward',
+      totalMinutesProxy: 500, pressures: 18, tackles: 1, interceptions: 0,
+      defensiveActions: 6, progressiveActions: 20, keyPasses: 3, passesCompleted: 70,
+      shotXgSum: 4.1, boxTouches: 38, shotsOnTarget: 9
+    },
+    {
+      name: 'Winger', team: 'Belgium', position: 'Right Wing',
+      totalMinutesProxy: 450, pressures: 25, tackles: 2, interceptions: 1,
+      defensiveActions: 8, progressiveActions: 35, keyPasses: 6, passesCompleted: 90,
+      shotXgSum: 2.4, boxTouches: 22, shotsOnTarget: 5
+    },
+    {
+      name: 'Holder', team: 'Brazil', position: 'Center Defensive Midfield',
+      totalMinutesProxy: 500, pressures: 100, tackles: 16, interceptions: 12,
+      defensiveActions: 60, progressiveActions: 18, keyPasses: 1, passesCompleted: 250,
+      shotXgSum: 0.08, boxTouches: 1, shotsOnTarget: 0
+    }
+  ]
+};
+
+test('position labels put center-backs with defenders and CDM with midfielders', () => {
+  assert.equal(positionGroup('Center Back'), 'DF');
+  assert.equal(positionGroup('Left Back'), 'DF');
+  assert.equal(positionGroup('Left Wing Back'), 'DF');
+  assert.equal(positionGroup('Center Defensive Midfield'), 'MF');
+  assert.equal(positionGroup('Right Wing'), 'FW');
+});
+
+test('guided defender exercise fails the default 40/30/30 and passes a grit-first metric', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const failed = evaluateExercise(wc, DEFAULT_METRIC);
+  const passed = evaluateExercise(wc, DEFENDER_EXERCISE.hint);
+  assert.equal(failed.id, 'defenders-sensible');
+  assert.equal(failed.passed, false);
+  assert.ok(failed.checks.some(item => item.id === 'defenders-surface' && item.pass === false));
+  assert.ok(failed.checks.some(item => item.id === 'not-just-attackers' && item.pass === false));
+  assert.equal(passed.passed, true);
+  assert.ok(passed.dfNow > failed.dfNow);
+  assert.ok(passed.checks.every(item => item.pass));
+  const gritOnly = applyMetric(DEFENDERS, { grit: 80, involvement: 15, clutch: 5, minMinutes: 270 });
+  const stopper = gritOnly.find(row => row.name === 'Stopper');
+  const poacher = gritOnly.find(row => row.name === 'Poacher');
+  assert.ok(stopper.rank < poacher.rank);
+  assert.equal(stopper.positionGroup, 'DF');
+  assert.match(html, /תרגיל מודרך/);
+  assert.match(html, /בדיקה עצמית/);
+});
+
+test('comparison radar is built from the same raw caps as the score recipe', () => {
+  const store = createStore(DEFENDERS);
+  const view = store.derive({
+    grit: 70, involvement: 20, clutch: 10, minMinutes: 270,
+    selectedId: 'Stopper|Uruguay', compareId: 'Poacher|England'
+  }, DEFAULT_METRIC);
+  assert.ok(view.radar.a);
+  assert.ok(view.radar.b);
+  assert.equal(view.radar.a.values.length, 9);
+  const stopperPress = view.radar.a.values.find(item => item.key === 'pressures90');
+  const poacherXg = view.radar.b.values.find(item => item.key === 'xg90');
+  assert.ok(stopperPress.scaled > 50);
+  assert.ok(poacherXg.scaled > 50);
+  const same = buildCompareRadar(view.selected, view.selected);
+  assert.equal(same.a.points, same.b.points);
+  const values = radarValues(view.selected);
+  assert.ok(values.every(item => Number.isFinite(item.scaled) && item.scaled >= 0 && item.scaled <= 100));
+  assert.match(html, /מכ״ם השוואה/);
+  const hashed = serializeMetricHash(view.spec);
+  assert.match(hashed, /cmp=/);
+  assert.equal(parseMetricHash(hashed).compareId, 'Poacher|England');
+});
+
+test('metric export is local, non-commercial, and citation-ready without a network URL', () => {
+  const store = createStore(DEFENDERS);
+  const view = store.derive(DEFENDER_EXERCISE.hint, DEFAULT_METRIC);
+  const bundle = exportMetricBundle(view.spec, view.selected, { compared: view.compared });
+  assert.equal(bundle.commercial, false);
+  assert.equal(bundle.generatedLocally, true);
+  assert.equal(bundle.provenance, 'STATSBOMB_OPEN_DATA');
+  assert.equal(bundle.source.competitionId, 43);
+  assert.match(bundle.methodologyHe, /לא כהמלצת סקאוטינג/);
+  assert.match(bundle.methodologyHe, /אוסר שימוש מסחרי/);
+  assert.match(bundle.methodologyHe, /מונדיאל 2018/);
+  assert.match(bundle.citationEn, /Non-commercial/);
+  assert.doesNotMatch(bundle.methodologyHe, /https?:\/\//);
+  assert.doesNotMatch(JSON.stringify(bundle), /https?:\/\//);
+  assert.match(methodologyParagraph(view.spec, view.selected), /משקלות ידניות/);
+  assert.match(html, /ייצוא המדד/);
+  assert.match(html, /scoutai-metric\.json/);
+});
+
+test('glossary names the StatsBomb event types that feed the score and the ones that do not', () => {
+  const types = EVENT_GLOSSARY.map(item => item.type);
+  for (const needed of ['Pressure', 'Duel / Tackle', 'Interception', 'Ball Recovery', 'Block', 'Pass', 'Carry', 'Shot + statsbomb_xg']) {
+    assert.ok(types.includes(needed), needed);
+  }
+  assert.ok(EVENT_GLOSSARY.some(item => item.usedInScore === false && /Dribble/.test(item.type)));
+  assert.ok(EVENT_GLOSSARY.some(item => item.feeds === 'סף דקות'));
+  assert.match(html, /מילון סוגי אירועים/);
+  assert.match(html + '\n' + runtime, /לא בנוסחה/);
 });
