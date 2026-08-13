@@ -17,7 +17,12 @@ const {
   buildLesson,
   fragilityReport,
   createStore,
-  loadLabSources
+  loadLabSources,
+  minutesImpossibleForCompetition,
+  flagImpossibleMinutes,
+  WORLD_CUP_MAX_MINUTES,
+  normalizeMetricSpec,
+  positionGroup
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
@@ -233,4 +238,145 @@ test('loadLabSources uses only relative static paths', async () => {
   ]);
   assert.ok(lab.store);
   assert.ok(Array.isArray(lab.pocRows));
+});
+
+const SAMPLE = {
+  players: [
+    {
+      name: 'Grinder', team: 'France', position: 'Center Defensive Midfield',
+      totalMinutesProxy: 500, pressures: 120, tackles: 20, interceptions: 15,
+      defensiveActions: 80, progressiveActions: 20, keyPasses: 1, passesCompleted: 200,
+      shotXgSum: 0.1, boxTouches: 2, shotsOnTarget: 0
+    },
+    {
+      name: 'Finisher', team: 'Brazil', position: 'Center Forward',
+      totalMinutesProxy: 500, pressures: 20, tackles: 2, interceptions: 1,
+      defensiveActions: 10, progressiveActions: 40, keyPasses: 8, passesCompleted: 80,
+      shotXgSum: 3.2, boxTouches: 40, shotsOnTarget: 8
+    },
+    {
+      name: 'Bench', team: 'Peru', position: 'Left Wing',
+      totalMinutesProxy: 90, pressures: 10, tackles: 1, interceptions: 0,
+      defensiveActions: 4, progressiveActions: 5, keyPasses: 1, passesCompleted: 20,
+      shotXgSum: 0.4, boxTouches: 6, shotsOnTarget: 1
+    },
+    {
+      name: 'MF-low', team: 'Croatia', position: 'Left Center Midfield',
+      totalMinutesProxy: 400, pressures: 15, tackles: 1, interceptions: 1,
+      defensiveActions: 8, progressiveActions: 10, keyPasses: 1, passesCompleted: 80,
+      shotXgSum: 0.05, boxTouches: 1, shotsOnTarget: 0
+    }
+  ]
+};
+
+test('composite weights mix grit, involvement, and clutch and ignore a zero total', () => {
+  const parts = { grit: 80, involvement: 20, clutch: 10 };
+  assert.equal(compositeScore(parts, { grit: 100, involvement: 0, clutch: 0 }), 80);
+  assert.equal(compositeScore(parts, { grit: 0, involvement: 100, clutch: 0 }), 20);
+  assert.equal(compositeScore(parts, { grit: 0, involvement: 0, clutch: 100 }), 10);
+  assert.equal(compositeScore(parts, { grit: 50, involvement: 50, clutch: 0 }), 50);
+  assert.equal(compositeScore(parts, { grit: 0, involvement: 0, clutch: 0 }), 0);
+  const gritOnly = applyMetric(SAMPLE, { grit: 100, involvement: 0, clutch: 0, minMinutes: 270 });
+  const clutchOnly = applyMetric(SAMPLE, { grit: 0, involvement: 0, clutch: 100, minMinutes: 270 });
+  assert.equal(gritOnly[0].name, 'Grinder');
+  assert.equal(clutchOnly[0].name, 'Finisher');
+});
+
+test('minutes threshold drops players below the cutoff', () => {
+  const loose = applyMetric(SAMPLE, { grit: 40, involvement: 30, clutch: 30, minMinutes: 90 });
+  const tight = applyMetric(SAMPLE, { grit: 40, involvement: 30, clutch: 30, minMinutes: 270 });
+  assert.ok(loose.some(row => row.name === 'Bench'));
+  assert.ok(!tight.some(row => row.name === 'Bench'));
+  assert.ok(tight.every(row => row.minutes >= 270));
+  assert.ok(loose.length > tight.length);
+});
+
+test('position normalization rescales components inside a position group', () => {
+  const peers = {
+    players: [
+      {
+        name: 'MF-high', team: 'France', position: 'Right Center Midfield',
+        totalMinutesProxy: 500, pressures: 120, tackles: 20, interceptions: 15,
+        defensiveActions: 80, progressiveActions: 20, keyPasses: 1, passesCompleted: 200,
+        shotXgSum: 0.1, boxTouches: 2, shotsOnTarget: 0
+      },
+      {
+        name: 'MF-low', team: 'Croatia', position: 'Left Center Midfield',
+        totalMinutesProxy: 400, pressures: 15, tackles: 1, interceptions: 1,
+        defensiveActions: 8, progressiveActions: 10, keyPasses: 1, passesCompleted: 80,
+        shotXgSum: 0.05, boxTouches: 1, shotsOnTarget: 0
+      }
+    ]
+  };
+  const raw = applyMetric(peers, { grit: 100, involvement: 0, clutch: 0, minMinutes: 270, normalizePosition: false });
+  const norm = applyMetric(peers, { grit: 100, involvement: 0, clutch: 0, minMinutes: 270, normalizePosition: true });
+  const rawLow = raw.find(row => row.name === 'MF-low');
+  const normLow = norm.find(row => row.name === 'MF-low');
+  const normHigh = norm.find(row => row.name === 'MF-high');
+  assert.equal(positionGroup('Right Center Midfield'), 'MF');
+  assert.equal(positionGroup('Center Forward'), 'FW');
+  assert.equal(positionGroup('Goalkeeper'), 'GK');
+  assert.notEqual(rawLow.components.grit, normLow.components.grit);
+  assert.ok(normLow.components.normalized);
+  assert.ok(normHigh.components.grit > normLow.components.grit);
+});
+
+test('permalink hash encodes and decodes metric state', () => {
+  const empty = parseMetricHash('');
+  assert.deepEqual(normalizeMetricSpec(empty), normalizeMetricSpec(DEFAULT_METRIC));
+  assert.equal(parseMetricHash('#').grit, DEFAULT_METRIC.grit);
+  const hashed = serializeMetricHash({
+    grit: 12,
+    involvement: 34,
+    clutch: 56,
+    minMinutes: 360,
+    normalizePosition: true,
+    selectedId: 'N\'Golo Kanté|France'
+  });
+  const parsed = parseMetricHash('#' + hashed);
+  assert.equal(parsed.grit, 12);
+  assert.equal(parsed.involvement, 34);
+  assert.equal(parsed.clutch, 56);
+  assert.equal(parsed.minMinutes, 360);
+  assert.equal(parsed.normalizePosition, true);
+  assert.equal(parsed.selectedId, 'N\'Golo Kanté|France');
+  assert.equal(serializeMetricHash(parsed), hashed);
+  const clamped = parseMetricHash('g=999&i=-4&c=abc&min=40&npos=0');
+  assert.equal(clamped.grit, 100);
+  assert.equal(clamped.involvement, 0);
+  assert.equal(clamped.normalizePosition, false);
+  assert.ok(clamped.minMinutes >= 0);
+});
+
+test('impossible World Cup minutes are detected and not treated as tournament data', () => {
+  assert.equal(WORLD_CUP_MAX_MINUTES, 480);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'WorldCup2022', minutes: 481 }), true);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'World Cup 2018', minutes: 900 }), true);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'WorldCup2022', minutes: 480 }), false);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'FA_WSL_2023_24', minutes: 1710 }), false);
+  assert.equal(minutesImpossibleForCompetition({ comp: 'Bundesliga_2023_24', minutes: 3000 }), false);
+  const flagged = flagImpossibleMinutes([
+    { name: 'Ok', comp: 'WorldCup2022', minutes: 270 },
+    { name: 'Bad', comp: 'WorldCup2022', minutes: 2279 }
+  ]);
+  assert.equal(flagged[0].hygiene, undefined);
+  assert.equal(flagged[1].hygiene, SEASON_MISLABELED);
+  assert.equal(flagged[1].comp, SEASON_MISLABELED);
+  assert.equal(flagged[1].labeledComp, 'WorldCup2022');
+});
+
+test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', () => {
+  assert.match(html, /lang="he"/);
+  assert.match(html, /dir="rtl"/);
+  assert.match(html, /aria-valuetext="Grit, 40 אחוז"/);
+  assert.match(html, /aria-valuetext="Involvement, 30 אחוז"/);
+  assert.match(html, /aria-valuetext="Clutch, 30 אחוז"/);
+  assert.match(html, /aria-valuetext="סף דקות, 270"/);
+  assert.match(html, /:focus-visible/);
+  assert.match(html, /class="skip"/);
+  assert.match(html, /scope=["']col["']/);
+  assert.match(html, /<caption>/);
+  assert.match(html, /tabindex="0"/);
+  assert.match(html, /aria-selected/);
+  assert.match(html, /border-inline-start/);
 });

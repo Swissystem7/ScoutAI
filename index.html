@@ -6,31 +6,35 @@
   <title>ScoutAI — מעבדת מדד שקופה</title>
   <style>
     :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
-    body{margin:0}.shell{max-width:980px;margin:auto;padding:24px}.banner{position:sticky;top:0;z-index:2;background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
-    .banner code,.badge{background:#dff4e7;color:#174d32;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
+    body{margin:0}.skip{position:absolute;inset-inline-start:-999px;top:8px;background:#fff;color:#10281d;padding:8px 12px;border-radius:8px;z-index:5}
+    .skip:focus{inset-inline-start:8px}.shell{max-width:980px;margin:auto;padding:24px}.banner{position:sticky;top:0;z-index:2;background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
-    label{display:block;margin:14px 0 6px;font-weight:700}input,button{font:inherit;padding:11px;border-radius:10px;border:1px solid #b8c7bc}
-    input[type=file]{width:100%}button{background:#176b48;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
-    .notice{border-right:4px solid #cf8b00;background:#fff6dd;padding:12px}.actions button{margin-left:8px}.status{min-height:1.5em;font-weight:700}
-    .formula{font-size:.95rem;color:#174d32;margin:12px 0;font-weight:700}
-    .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:right;padding:10px 8px;border-bottom:1px solid #e4ebe3;vertical-align:top}
-    th{font-size:.8rem;letter-spacing:.02em;color:#59675e}tr:hover td{background:#f7faf6}.muted{color:#59675e;font-size:.85rem}
+    label{display:block;margin:14px 0 6px;font-weight:700}input,button{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
+    input[type=file]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.actions button{margin-inline-end:8px}.status{min-height:1.5em;font-weight:700}
+    .formula{font-size:.95rem;color:#0f3d26;margin:12px 0;font-weight:700}
+    .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}caption{text-align:start;font-weight:700;padding:8px 0;color:#17211b}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    th{font-size:.85rem;color:#2d3a32}tr:hover td,tr:hover th{background:#eef4ee}.muted{color:#3d4a42;font-size:.85rem}
     .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
-    .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0}
+    .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0;accent-color:#145c3d}
     .toggle{display:flex;gap:10px;align-items:center;font-weight:700;margin:10px 0}
-    .toggle input{width:auto}.up{color:#176b48;font-weight:700}.down{color:#8a2b2b;font-weight:700}
+    .toggle input{width:auto}.up{color:#0f3d26;font-weight:700}.down{color:#8a1f1f;font-weight:700}
     .lesson{display:grid;gap:12px}.lesson-step{background:#f3f6f1;border-radius:12px;padding:14px}
     .lesson-step h3{margin:0 0 6px;font-size:1rem}.lesson-nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-    .lesson-nav button{margin-top:0;padding:8px 12px}.lesson-nav button.active{outline:2px solid #10281d}
+    .lesson-nav button{margin-top:0;padding:8px 12px}.lesson-nav button[aria-current="step"]{outline:3px solid #10281d}
     .bars{display:grid;gap:8px;margin-top:10px}.bar-row{display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center}
-    .bar-track{background:#e4ebe3;border-radius:999px;height:12px;overflow:hidden}
-    .bar-fill{background:#176b48;height:100%;border-radius:999px}
-    tr.selected td{outline:2px solid #176b48;background:#eef8f1}button.secondary{background:#fff;color:#176b48}
-    .lab-note{font-size:.9rem;color:#59675e}footer{color:#59675e;font-size:.9rem;margin:22px 0}
+    .bar-track{background:#d5ddd4;border-radius:999px;height:12px;overflow:hidden}
+    .bar-fill{background:#145c3d;height:100%;border-radius:999px}
+    tr.selected td,tr.selected th{outline:3px solid #145c3d;background:#e6f3ea}button.secondary{background:#fff;color:#145c3d;border:2px solid #145c3d}
+    :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
+    input[type=range]:focus-visible{outline:3px solid #0b3d28;outline-offset:4px}
+    .lab-note{font-size:.9rem;color:#3d4a42}footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
     @media(max-width:650px){.slider-row,.bar-row{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
+<a class="skip" href="#lab">דלגו למעבדת המדד</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
     <code>STATSBOMB_OPEN_DATA</code> שכבת הנתונים היחידה היא <code>data/wc2018_event_aggregates.json</code>; דירוג, שיעור ושבריריות נגזרים ממנה.
@@ -47,49 +51,49 @@
     <p id="videoStatus" class="status">LOCAL_VIDEO: לא נבחר קובץ. שום קובץ לא נשלח.</p>
   </section>
 
-  <section class="card">
+  <section class="card" id="lab">
     <h2>בנה מדד בעצמך</h2>
     <p>שנו משקלות ביד. הדירוג מחושב מחדש מיד מ־<code>data/wc2018_event_aggregates.json</code> (מונדיאל 2018, מספרים גולמיים מקומיים). <span class="badge">STATSBOMB_OPEN_DATA</span> המשקלות שרירותיות בכוונה — זה השיעור.</p>
     <div class="sliders">
       <div class="slider-row">
-        <label for="wGrit">Grit — מאמץ</label>
-        <input id="wGrit" type="range" min="0" max="100" value="40">
-        <strong id="wGritVal">40</strong>
+        <label id="wGritLabel" for="wGrit">Grit — מאמץ</label>
+        <input id="wGrit" type="range" min="0" max="100" value="40" aria-labelledby="wGritLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-valuetext="Grit, 40 אחוז">
+        <strong id="wGritVal" aria-hidden="true">40</strong>
       </div>
       <div class="slider-row">
-        <label for="wInv">Involvement — מעורבות</label>
-        <input id="wInv" type="range" min="0" max="100" value="30">
-        <strong id="wInvVal">30</strong>
+        <label id="wInvLabel" for="wInv">Involvement — מעורבות</label>
+        <input id="wInv" type="range" min="0" max="100" value="30" aria-labelledby="wInvLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30" aria-valuetext="Involvement, 30 אחוז">
+        <strong id="wInvVal" aria-hidden="true">30</strong>
       </div>
       <div class="slider-row">
-        <label for="wClutch">Clutch — הכרעה</label>
-        <input id="wClutch" type="range" min="0" max="100" value="30">
-        <strong id="wClutchVal">30</strong>
+        <label id="wClutchLabel" for="wClutch">Clutch — הכרעה</label>
+        <input id="wClutch" type="range" min="0" max="100" value="30" aria-labelledby="wClutchLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30" aria-valuetext="Clutch, 30 אחוז">
+        <strong id="wClutchVal" aria-hidden="true">30</strong>
       </div>
       <div class="slider-row">
-        <label for="minMinutes">סף דקות מינימלי</label>
-        <input id="minMinutes" type="range" min="90" max="630" step="30" value="270">
-        <strong id="minMinutesVal">270</strong>
+        <label id="minMinutesLabel" for="minMinutes">סף דקות מינימלי</label>
+        <input id="minMinutes" type="range" min="90" max="630" step="30" value="270" aria-labelledby="minMinutesLabel" aria-valuemin="90" aria-valuemax="630" aria-valuenow="270" aria-valuetext="סף דקות, 270">
+        <strong id="minMinutesVal" aria-hidden="true">270</strong>
       </div>
     </div>
     <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון בתוך GK/DF/MF/FW)</label>
     <p id="formulaLine" class="formula"></p>
     <p class="muted">Δ מול מדד הבסיס 40/30/30 בלי נרמול עמדה. שיתוף: המצב נשמר ב־hash של הכתובת — העתיקו מהדפדפן או בלחיצה.</p>
     <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
-    <p id="hashStatus" class="status"></p>
+    <p id="hashStatus" class="status" role="status" aria-live="polite"></p>
   </section>
 
   <section class="card" aria-live="polite">
     <h2>דירוג חי לפי המדד שלכם</h2>
     <p>מקור: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
-    <p id="tableStatus" class="status">טוען קבצי PoC מקומיים…</p>
+    <p id="tableStatus" class="status" aria-live="polite">טוען קבצי PoC מקומיים…</p>
     <div id="playerTable" class="table-wrap"></div>
   </section>
 
   <section class="card" aria-live="polite">
     <h2>שיעור שקוף</h2>
     <p>יחידת הלימוד היא <strong>שחקן אחד</strong>, כמו בעיטה אחת בשיעור xG: קודם הגורמים, אחר כך ההסתברות/הציון, ורק אז מה קורה אם משנים מודל.</p>
-    <div id="lessonNav" class="lesson-nav"></div>
+    <div id="lessonNav" class="lesson-nav" role="toolbar" aria-label="צעדי השיעור השקוף"></div>
     <div id="lessonRoot" class="lesson"></div>
   </section>
 
@@ -155,11 +159,21 @@
     document.getElementById('wClutch').value = metric.clutch;
     document.getElementById('minMinutes').value = metric.minMinutes;
     document.getElementById('normPos').checked = metric.normalizePosition;
-    document.getElementById('wGritVal').textContent = Math.round(metric.grit);
-    document.getElementById('wInvVal').textContent = Math.round(metric.involvement);
-    document.getElementById('wClutchVal').textContent = Math.round(metric.clutch);
-    document.getElementById('minMinutesVal').textContent = Math.round(metric.minMinutes);
+    syncSlider('wGrit', metric.grit, 'Grit, ' + Math.round(metric.grit) + ' אחוז');
+    syncSlider('wInv', metric.involvement, 'Involvement, ' + Math.round(metric.involvement) + ' אחוז');
+    syncSlider('wClutch', metric.clutch, 'Clutch, ' + Math.round(metric.clutch) + ' אחוז');
+    syncSlider('minMinutes', metric.minMinutes, 'סף דקות, ' + Math.round(metric.minMinutes));
     tableRoot.dataset.selected = metric.selectedId || '';
+  }
+
+  function syncSlider(id, value, text) {
+    const input = document.getElementById(id);
+    const rounded = Math.round(value);
+    input.value = rounded;
+    input.setAttribute('aria-valuenow', String(rounded));
+    input.setAttribute('aria-valuetext', text);
+    const readout = document.getElementById(id + 'Val');
+    if (readout) readout.textContent = rounded;
   }
 
   function deltaCell(value) {
@@ -188,8 +202,9 @@
     tableStatus.textContent = 'STATSBOMB_OPEN_DATA: ' + rows.length + ' שחקנים ממונדיאל 2018 אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
     const body = rows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
-      return '<tr data-id="' + escapeHtml(row.id) + '"' + (selected ? ' class="selected"' : '') + '>' +
-        '<td>' + escapeHtml(row.rank) + '<div class="muted">' + deltaCell(row.deltaRank) + '</div></td>' +
+      return '<tr data-id="' + escapeHtml(row.id) + '" tabindex="0"' +
+        (selected ? ' class="selected" aria-selected="true"' : ' aria-selected="false"') + '>' +
+        '<th scope="row">' + escapeHtml(row.rank) + '<div class="muted">' + deltaCell(row.deltaRank) + '</div></th>' +
         '<td>' + escapeHtml(row.name) + '<div class="muted">' + escapeHtml(row.positionGroup) + ' · ' + escapeHtml(row.position || '') + '</div></td>' +
         '<td>' + escapeHtml(row.team || '—') + '</td>' +
         '<td>' + escapeHtml(row.minutes) + '</td>' +
@@ -200,16 +215,19 @@
       '</tr>';
     }).join('');
     tableRoot.innerHTML =
-      '<table><thead><tr>' +
-        '<th># / Δדירוג</th><th>שם</th><th>קבוצה</th><th>דקות</th><th>ציון / Δ</th><th>Grit</th><th>Inv</th><th>Clutch</th>' +
-      '</tr></thead><tbody>' + body + '</tbody></table>';
+      '<table aria-describedby="tableStatus">' +
+        '<caption>דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018</caption>' +
+        '<thead><tr>' +
+          '<th scope="col">דירוג ושינוי</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">דקות</th>' +
+          '<th scope="col">ציון ושינוי</th><th scope="col">Grit</th><th scope="col">Involvement</th><th scope="col">Clutch</th>' +
+        '</tr></thead><tbody>' + body + '</tbody></table>';
   }
 
   function renderLesson(current) {
     const steps = current.lesson || [];
     if (lessonIndex >= steps.length) lessonIndex = 0;
     lessonNav.innerHTML = steps.map(function (step, i) {
-      return '<button type="button" data-step="' + i + '"' + (i === lessonIndex ? ' class="active"' : '') + '>' + (i + 1) + '</button>';
+      return '<button type="button" data-step="' + i + '"' + (i === lessonIndex ? ' aria-current="step"' : '') + ' aria-label="שלב ' + (i + 1) + '">' + (i + 1) + '</button>';
     }).join('') +
       '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
       '<button type="button" class="secondary" data-step="next">הבא</button>';
@@ -223,7 +241,7 @@
     }).join('');
     let extra = '';
     if (lessonIndex === 1 || lessonIndex === 2) {
-      extra = '<table><thead><tr><th>גורם גולמי</th><th>/90</th><th>נכנס ל</th></tr></thead><tbody>' +
+      extra = '<table><caption>גורמים גולמיים ל-90 דקות</caption><thead><tr><th scope="col">גורם גולמי</th><th scope="col">ל-90 דקות</th><th scope="col">נכנס ל</th></tr></thead><tbody>' +
         (current.mapping || []).map(function (row) {
           return '<tr><td>' + escapeHtml(row.factor) + '</td><td>' + escapeHtml(row.value) + '</td><td>' + escapeHtml(row.feeds) + '</td></tr>';
         }).join('') + '</tbody></table>';
@@ -256,10 +274,10 @@
   }
 
   function renderAll(current) {
-    document.getElementById('wGritVal').textContent = Math.round(current.spec.grit);
-    document.getElementById('wInvVal').textContent = Math.round(current.spec.involvement);
-    document.getElementById('wClutchVal').textContent = Math.round(current.spec.clutch);
-    document.getElementById('minMinutesVal').textContent = Math.round(current.spec.minMinutes);
+    syncSlider('wGrit', current.spec.grit, 'Grit, ' + Math.round(current.spec.grit) + ' אחוז');
+    syncSlider('wInv', current.spec.involvement, 'Involvement, ' + Math.round(current.spec.involvement) + ' אחוז');
+    syncSlider('wClutch', current.spec.clutch, 'Clutch, ' + Math.round(current.spec.clutch) + ' אחוז');
+    syncSlider('minMinutes', current.spec.minMinutes, 'סף דקות, ' + Math.round(current.spec.minMinutes));
     if (current.selected) tableRoot.dataset.selected = current.selected.id;
     renderTable(current);
     renderLesson(current);
@@ -291,6 +309,15 @@
     if (!row) return;
     tableRoot.dataset.selected = row.getAttribute('data-id') || '';
     recompute();
+  });
+  tableRoot.addEventListener('keydown', function (event) {
+    const row = event.target.closest('tr[data-id]');
+    if (!row) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      tableRoot.dataset.selected = row.getAttribute('data-id') || '';
+      recompute();
+    }
   });
   lessonNav.addEventListener('click', function (event) {
     const button = event.target.closest('button[data-step]');
