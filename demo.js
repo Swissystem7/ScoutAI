@@ -81,6 +81,12 @@
     'shots', 'goals', 'assists', 'dribbles', 'duelsWon', 'bigChanceProxy'
   ]);
 
+  const COMPONENT_INPUT_FIELDS = Object.freeze({
+    grit: Object.freeze(['pressures', 'tackles', 'interceptions', 'defensiveActions']),
+    involvement: Object.freeze(['progressiveActions', 'keyPasses', 'passesCompleted']),
+    clutch: Object.freeze(['shotXgSum', 'boxTouches', 'shotsOnTarget'])
+  });
+
   const USER_DATASET_COLUMNS = Object.freeze(
     ['name', 'team', 'position', 'minutes'].concat(COUNT_FIELDS)
   );
@@ -144,68 +150,167 @@
     return per90(player[totalKey], minutes);
   }
 
+  function inputPresent(player, totalKey, per90Key) {
+    if (takeCount(player, totalKey) != null) return true;
+    if (player && player.per90 && Number.isFinite(Number(player.per90[per90Key]))) return true;
+    return false;
+  }
+
+  function componentAvailableOnPlayer(player, name) {
+    const fields = COMPONENT_INPUT_FIELDS[name] || [];
+    const per90Keys = {
+      pressures: 'pressuresPer90',
+      tackles: 'tacklesPer90',
+      interceptions: 'interceptionsPer90',
+      defensiveActions: 'defensiveActionsPer90',
+      progressiveActions: 'progressiveActionsPer90',
+      keyPasses: 'keyPassesPer90',
+      passesCompleted: 'passesCompletedPer90',
+      shotXgSum: 'shotXgSumPer90',
+      boxTouches: 'boxTouchesPer90',
+      shotsOnTarget: 'shotsOnTargetPer90'
+    };
+    for (let i = 0; i < fields.length; i += 1) {
+      const key = fields[i];
+      if (inputPresent(player, key, per90Keys[key])) return true;
+    }
+    return false;
+  }
+
   function componentsFromEvents(player) {
     const press = rawPer90(player, 'pressures', 'pressuresPer90');
     const tackles = rawPer90(player, 'tackles', 'tacklesPer90');
     const intercepts = rawPer90(player, 'interceptions', 'interceptionsPer90');
     const defense = rawPer90(player, 'defensiveActions', 'defensiveActionsPer90');
-    const grit = round1(scaleCap(press, 18) * 0.45 + scaleCap(tackles + intercepts, 6) * 0.3 + scaleCap(defense, 14) * 0.25);
+    const gritAvailable = componentAvailableOnPlayer(player, 'grit');
+    const grit = gritAvailable
+      ? round1(scaleCap(press, 18) * 0.45 + scaleCap(tackles + intercepts, 6) * 0.3 + scaleCap(defense, 14) * 0.25)
+      : null;
 
     const prog = rawPer90(player, 'progressiveActions', 'progressiveActionsPer90');
     const keyPasses = rawPer90(player, 'keyPasses', 'keyPassesPer90');
     const passes = rawPer90(player, 'passesCompleted', 'passesCompletedPer90');
-    const involvement = round1(scaleCap(prog, 22) * 0.5 + scaleCap(keyPasses, 4) * 0.3 + scaleCap(passes, 80) * 0.2);
+    const involvementAvailable = componentAvailableOnPlayer(player, 'involvement');
+    const involvement = involvementAvailable
+      ? round1(scaleCap(prog, 22) * 0.5 + scaleCap(keyPasses, 4) * 0.3 + scaleCap(passes, 80) * 0.2)
+      : null;
 
     const xg = rawPer90(player, 'shotXgSum', 'shotXgSumPer90');
     const box = rawPer90(player, 'boxTouches', 'boxTouchesPer90');
     const onTarget = rawPer90(player, 'shotsOnTarget', 'shotsOnTargetPer90');
-    const clutch = round1(scaleCap(xg, 0.6) * 0.4 + scaleCap(box, 8) * 0.35 + scaleCap(onTarget, 2) * 0.25);
+    const clutchAvailable = componentAvailableOnPlayer(player, 'clutch');
+    const clutch = clutchAvailable
+      ? round1(scaleCap(xg, 0.6) * 0.4 + scaleCap(box, 8) * 0.35 + scaleCap(onTarget, 2) * 0.25)
+      : null;
 
     return {
       grit: grit,
       involvement: involvement,
       clutch: clutch,
       raw: {
-        pressures90: round2(press),
-        tacklesInt90: round2(tackles + intercepts),
-        defensive90: round2(defense),
-        progressive90: round2(prog),
-        keyPasses90: round2(keyPasses),
-        passes90: round2(passes),
-        xg90: round2(xg),
-        boxTouches90: round2(box),
-        shotsOnTarget90: round2(onTarget)
+        pressures90: gritAvailable ? round2(press) : null,
+        tacklesInt90: gritAvailable ? round2(tackles + intercepts) : null,
+        defensive90: gritAvailable ? round2(defense) : null,
+        progressive90: involvementAvailable ? round2(prog) : null,
+        keyPasses90: involvementAvailable ? round2(keyPasses) : null,
+        passes90: involvementAvailable ? round2(passes) : null,
+        xg90: clutchAvailable ? round2(xg) : null,
+        boxTouches90: clutchAvailable ? round2(box) : null,
+        shotsOnTarget90: clutchAvailable ? round2(onTarget) : null
       }
     };
   }
 
+  // Mid-rank percentile via rankValues. Full-group ties share the average
+  // rank (five zeros → 50). Partial ties use the floor of the tie block so a
+  // zero-tied majority below positive peers is not inflated toward 100 (the
+  // old <= count bug that put GK Clutch at 92.6).
+  function percentileCells(peers) {
+    const n = peers.length;
+    if (!n) return [];
+    const ranks = rankValues(peers);
+    const nums = peers.map(function (v) { return Number(v) || 0; });
+    return ranks.map(function (avgRank, i) {
+      const value = nums[i];
+      let tiedPeers = 0;
+      for (let j = 0; j < n; j += 1) {
+        if (nums[j] === value) tiedPeers += 1;
+      }
+      // Full-group tie → mid-rank; otherwise floor of the tie block.
+      const reportRank = tiedPeers === n
+        ? avgRank
+        : avgRank - (tiedPeers - 1) / 2;
+      return {
+        value: round1((reportRank - 0.5) / n * 100),
+        tiedPeers: tiedPeers,
+        groupN: n
+      };
+    });
+  }
+
   function percentile(value, peers) {
-    if (!peers.length) return 50;
-    let below = 0;
-    for (let i = 0; i < peers.length; i += 1) {
-      if (peers[i] <= value) below += 1;
+    if (value == null || !Number.isFinite(Number(value))) return null;
+    const usable = (peers || []).filter(function (p) {
+      return p != null && Number.isFinite(Number(p));
+    });
+    if (!usable.length) return null;
+    const cells = percentileCells(usable);
+    const target = Number(value);
+    for (let i = 0; i < usable.length; i += 1) {
+      if (Number(usable[i]) === target) return cells[i].value;
     }
-    return round1(below / peers.length * 100);
+    return cells[0] ? cells[0].value : null;
   }
 
   function normalizeByPosition(rows) {
     const groups = {};
-    rows.forEach(function (row) {
+    rows.forEach(function (row, rowIndex) {
       const key = row.positionGroup || 'OT';
-      if (!groups[key]) groups[key] = { grit: [], involvement: [], clutch: [] };
-      groups[key].grit.push(row.components.grit);
-      groups[key].involvement.push(row.components.involvement);
-      groups[key].clutch.push(row.components.clutch);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(rowIndex);
     });
-    return rows.map(function (row) {
-      const peers = groups[row.positionGroup || 'OT'];
+    const cellMaps = rows.map(function () { return {}; });
+    Object.keys(groups).forEach(function (key) {
+      const idxs = groups[key];
+      ['grit', 'involvement', 'clutch'].forEach(function (comp) {
+        const finiteIdxs = [];
+        const vals = [];
+        idxs.forEach(function (ri) {
+          const v = rows[ri].components[comp];
+          if (v != null && Number.isFinite(Number(v))) {
+            finiteIdxs.push(ri);
+            vals.push(Number(v));
+          }
+        });
+        const cells = vals.length ? percentileCells(vals) : [];
+        finiteIdxs.forEach(function (ri, j) {
+          cellMaps[ri][comp] = cells[j];
+        });
+      });
+    });
+    return rows.map(function (row, ri) {
+      const map = cellMaps[ri];
+      function cell(name) {
+        return map[name] || { value: null, tiedPeers: 0, groupN: 0 };
+      }
+      const gritCell = cell('grit');
+      const involvementCell = cell('involvement');
+      const clutchCell = cell('clutch');
+      const gritIn = row.components.grit;
+      const involvementIn = row.components.involvement;
+      const clutchIn = row.components.clutch;
       return Object.assign({}, row, {
         components: {
-          grit: percentile(row.components.grit, peers.grit),
-          involvement: percentile(row.components.involvement, peers.involvement),
-          clutch: percentile(row.components.clutch, peers.clutch),
+          grit: (gritIn == null || !Number.isFinite(Number(gritIn))) ? null : gritCell.value,
+          involvement: (involvementIn == null || !Number.isFinite(Number(involvementIn))) ? null : involvementCell.value,
+          clutch: (clutchIn == null || !Number.isFinite(Number(clutchIn))) ? null : clutchCell.value,
           raw: row.components.raw,
-          normalized: true
+          normalized: true,
+          ties: {
+            grit: { tiedPeers: gritCell.tiedPeers, groupN: gritCell.groupN },
+            involvement: { tiedPeers: involvementCell.tiedPeers, groupN: involvementCell.groupN },
+            clutch: { tiedPeers: clutchCell.tiedPeers, groupN: clutchCell.groupN }
+          }
         }
       });
     });
@@ -234,13 +339,16 @@
 
   function compositeScore(components, spec) {
     const weights = normalizeMetricSpec(spec);
-    const total = weights.grit + weights.involvement + weights.clutch;
+    const parts = components || {};
+    let total = 0;
+    let sum = 0;
+    ['grit', 'involvement', 'clutch'].forEach(function (key) {
+      if (parts[key] == null || !Number.isFinite(Number(parts[key]))) return;
+      total += weights[key];
+      sum += Number(parts[key]) * weights[key];
+    });
     if (!total) return 0;
-    return round2(
-      (components.grit * weights.grit +
-        components.involvement * weights.involvement +
-        components.clutch * weights.clutch) / total
-    );
+    return round2(sum / total);
   }
 
   const LAB_PATHS = Object.freeze({
@@ -254,14 +362,84 @@
   }
 
   function takeCount(row, key) {
-    const n = Number(row && row[key]);
-    return Number.isFinite(n) ? n : 0;
+    if (!row) return null;
+    const raw = row[key];
+    if (raw === undefined || raw === null || raw === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
   }
 
   function countsFromRow(row) {
     const counts = {};
-    COUNT_FIELDS.forEach(function (key) { counts[key] = takeCount(row, key); });
+    COUNT_FIELDS.forEach(function (key) {
+      counts[key] = takeCount(row, key);
+    });
     return counts;
+  }
+
+  function buildCoverage(players) {
+    const rows = Array.isArray(players) ? players : [];
+    const n = rows.length;
+    const fields = {};
+    COUNT_FIELDS.forEach(function (key) {
+      let present = 0;
+      for (let i = 0; i < rows.length; i += 1) {
+        if (takeCount(rows[i], key) != null) present += 1;
+      }
+      fields[key] = {
+        present: present,
+        absent: n - present,
+        fillRate: n ? round2(present / n) : 0
+      };
+    });
+    function componentCoverage(name) {
+      const needed = COMPONENT_INPUT_FIELDS[name] || [];
+      const missingFields = needed.filter(function (key) {
+        return !fields[key] || fields[key].present === 0;
+      });
+      return {
+        available: missingFields.length < needed.length,
+        missingFields: missingFields.slice()
+      };
+    }
+    const components = {
+      grit: componentCoverage('grit'),
+      involvement: componentCoverage('involvement'),
+      clutch: componentCoverage('clutch')
+    };
+    const outcomes = {};
+    ['assists', 'dribbles', 'duelsWon', 'goals'].forEach(function (key) {
+      outcomes[key] = {
+        available: !!(fields[key] && fields[key].present > 0),
+        missingFields: (fields[key] && fields[key].present > 0) ? [] : [key]
+      };
+    });
+    const boxGoals = fields.goals && fields.goals.present > 0;
+    const boxAssists = fields.assists && fields.assists.present > 0;
+    outcomes.box = {
+      available: boxGoals || boxAssists,
+      missingFields: [].concat(boxGoals ? [] : ['goals'], boxAssists ? [] : ['assists'])
+    };
+    return {
+      fields: fields,
+      components: components,
+      outcomes: outcomes,
+      banner: coverageBannerText(components)
+    };
+  }
+
+  function coverageBannerText(components) {
+    const missing = [];
+    const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
+    ['grit', 'involvement', 'clutch'].forEach(function (key) {
+      const c = components && components[key];
+      if (c && !c.available && c.missingFields && c.missingFields.length) {
+        missing.push(labels[key] + ': ' + c.missingFields.join(', '));
+      }
+    });
+    if (!missing.length) return null;
+    return 'רכיבים חסרים בקובץ (מוצגים כ«לא זמין», המשקל מנורמל מחדש בין הרכיבים הזמינים): ' +
+      missing.join(' · ');
   }
 
   function preparePlayer(row, options) {
@@ -325,12 +503,25 @@
   function lessonContributions(row, spec) {
     if (!row || !row.components) return [];
     const metric = normalizeMetricSpec(spec);
-    const total = metric.grit + metric.involvement + metric.clutch || 1;
-    return [
-      { key: 'grit', label: 'Grit', value: row.components.grit, weight: metric.grit, share: round2(row.components.grit * metric.grit / total) },
-      { key: 'involvement', label: 'Involvement', value: row.components.involvement, weight: metric.involvement, share: round2(row.components.involvement * metric.involvement / total) },
-      { key: 'clutch', label: 'Clutch', value: row.components.clutch, weight: metric.clutch, share: round2(row.components.clutch * metric.clutch / total) }
-    ];
+    const keys = ['grit', 'involvement', 'clutch'];
+    const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
+    let total = 0;
+    keys.forEach(function (key) {
+      if (row.components[key] != null && Number.isFinite(Number(row.components[key]))) total += metric[key];
+    });
+    if (!total) total = 1;
+    return keys.map(function (key) {
+      const value = row.components[key];
+      const available = value != null && Number.isFinite(Number(value));
+      return {
+        key: key,
+        label: labels[key],
+        value: available ? value : null,
+        weight: metric[key],
+        share: available ? round2(Number(value) * metric[key] / total) : null,
+        available: available
+      };
+    });
   }
 
   function lessonMapping(row) {
@@ -375,11 +566,102 @@
     });
   }
 
+  // א6: rank swing for the selected player under each +delta weight bump
+  // (same scorePrepared/bumpSpec path as fragilityFromPrepared).
+  function selectedWeightSwing(prepared, spec, selectedId, delta) {
+    const step = delta == null ? 10 : delta;
+    if (!prepared || !selectedId) return [];
+    const baseRows = scorePrepared(prepared, spec);
+    const prev = baseRows.find(function (row) { return row.id === selectedId; });
+    if (!prev) return [];
+    const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
+    return ['grit', 'involvement', 'clutch'].map(function (key) {
+      const ranked = scorePrepared(prepared, bumpSpec(spec, key, step));
+      const row = ranked.find(function (item) { return item.id === selectedId; });
+      const to = row ? row.rank : prev.rank;
+      return {
+        key: key,
+        label: labels[key] + ' +' + step,
+        from: prev.rank,
+        to: to,
+        deltaRank: prev.rank - to
+      };
+    });
+  }
+
+  function bestHelpfulBump(swings) {
+    let best = null;
+    (swings || []).forEach(function (row) {
+      if (row.deltaRank > 0 && (!best || row.deltaRank > best.deltaRank)) best = row;
+    });
+    return best ? best.key : 'none';
+  }
+
+  function nearNumber(answer, expected, tolerance) {
+    const a = Number(String(answer == null ? '' : answer).trim());
+    const e = Number(expected);
+    if (!Number.isFinite(a) || !Number.isFinite(e)) return false;
+    const tol = tolerance == null ? 0.05 : Number(tolerance);
+    return Math.abs(a - e) <= tol;
+  }
+
+  // Abbreviated FNV-1a hashes of the 605 shipped name|team pairs from
+  // data/wc2018_event_aggregates.json. Hashes only — no names republished here.
+  // Used by looksLikeOpenDataPayload / parseUserDataset to reject Open Data
+  // re-imports after JSON→CSV / metadata stripping. Not a warranty: altered
+  // names still pass.
+  const OPEN_DATA_PAIR_HASHES = Object.freeze([3402295,17982568,30628002,36264985,43664628,49952631,50989188,62214482,73012815,103582407,121761618,121821095,122967694,126108370,134940375,139827721,141573744,141991555,158534505,159238821,171503129,171644639,173765583,173874685,174515382,180543043,180722012,182001117,193794494,195188370,204281010,220414680,224791094,233335982,238848997,246160701,246687877,261289167,265184516,273856228,281876617,299103923,299491445,303446044,320283342,323634349,327973451,333441680,335946533,345182793,351413416,353897638,359147528,376992819,379540838,380679064,384363093,390144562,413875858,420283453,420480008,426830037,442943677,455500882,478738466,479033382,493282182,504062007,504524605,505784612,508801073,516979727,517974634,537885475,563578340,579799126,609545190,610014018,612622652,613288160,613779094,614323552,621811889,622923308,634873014,639170530,643380090,645496968,649291855,650021681,650971047,652954658,663023860,669275556,671895809,688033359,688524047,708353003,708871169,716368645,718763985,721564515,729451221,743052737,748101774,761536380,766324834,768083771,778732435,782819844,785391516,787870529,803595454,814326472,818604885,824840899,831325227,833087500,836371393,846059972,852503628,875707831,894942765,896086314,898819835,901501267,907570132,937229210,943210868,943787449,944333867,958324528,959806107,961665701,962071473,968622923,973725616,977625482,980872705,992106674,1001906244,1002394021,1022480848,1023064938,1033421109,1037385313,1037889396,1041246530,1056640028,1061077049,1069107852,1077714957,1082218538,1084177616,1089542013,1092796602,1092857550,1094600610,1099123145,1106540672,1113537656,1128436879,1128912726,1129956345,1135838036,1136032440,1138327879,1140679282,1148795881,1151323329,1159132682,1162497080,1174467531,1178889769,1183630914,1196990436,1233573757,1238535786,1239880742,1259111536,1261068160,1265670642,1269615137,1273991267,1281026374,1294151557,1307695630,1312755830,1320577288,1324250389,1336887824,1337258612,1346345114,1346873999,1357208476,1359912433,1362204612,1378312107,1378646708,1381214879,1383475247,1390025156,1395333809,1400731097,1404177072,1405319699,1406115166,1413029381,1419029336,1430584523,1438454270,1443585354,1448068271,1459426009,1463260578,1478669678,1480382800,1481169346,1487209298,1487920882,1501366362,1512619258,1521408795,1529023811,1533870747,1543220902,1545683763,1549829822,1565337729,1569183915,1583408102,1587528117,1587978521,1593543109,1604678627,1609806226,1627884835,1630354584,1636740797,1637472436,1642328745,1645295576,1661412534,1661885897,1675529678,1677670193,1679877382,1684873200,1690254486,1702885909,1713607646,1721625689,1724417588,1726598501,1729482716,1742349761,1743108074,1753865629,1766113046,1766476960,1783990279,1799356216,1825454906,1830894242,1843457062,1845036757,1845301835,1847583035,1854040310,1862413638,1880508381,1881421326,1883948548,1892424806,1902646618,1903969264,1905162998,1914098928,1914303089,1929304831,1931758398,1933900185,1943632157,1952432830,1957221335,1957852423,1965982137,1969111536,1976397825,1980521336,1990710765,2003785900,2025087993,2026198000,2042224098,2044929915,2046533752,2046974380,2066663890,2074654130,2076114419,2094576789,2098764636,2108126367,2110959151,2123895132,2128375809,2139512192,2142254530,2146737657,2150176516,2159206952,2159944450,2166157933,2173265092,2175213189,2175786064,2176497695,2181619352,2193599805,2201315397,2208937401,2211851872,2212194962,2212330171,2212519195,2228004912,2234265814,2238276784,2251497212,2251949709,2262664827,2264884288,2286242101,2293128143,2298713439,2301126154,2303277888,2303695713,2318980008,2328806384,2331677070,2339414051,2340959210,2344034673,2358398673,2383145100,2384846217,2386251702,2391074103,2408302884,2425112794,2428606381,2434158277,2439797451,2440276720,2454610854,2466057819,2471261091,2471407689,2473896700,2482915498,2488959289,2490867040,2494354264,2506111052,2515194826,2516549503,2554339270,2561509353,2563356044,2567794205,2568996482,2581177248,2599927746,2605424772,2605557427,2618664448,2623017958,2623294582,2637017083,2646229486,2648248985,2661885203,2666967782,2696455033,2706867317,2710483325,2737490341,2740339209,2740407900,2748260554,2770646079,2778985679,2787449450,2804596923,2818503958,2824622943,2830434900,2832860449,2834902856,2838670751,2851690208,2881541467,2882802515,2901279285,2904452409,2906561057,2915106458,2916347400,2926238993,2931169997,2938722360,2943193911,2944601076,2945647744,2947558776,2958411163,2962892680,2963174571,2965694512,2966211729,2988593078,2994794678,2997849944,3006113466,3013136352,3013301334,3013879380,3014222723,3017439692,3020321009,3031602415,3047098721,3050897804,3079592504,3086257518,3090850741,3102564456,3103158011,3104778436,3105186353,3112870609,3117673873,3140997548,3141777519,3147208987,3150226372,3151132107,3153824880,3157627369,3172889328,3175607326,3190218360,3201632164,3201704829,3207336173,3207886813,3213349813,3229934949,3233563516,3237268821,3237422466,3241699543,3250149292,3254370738,3255362318,3259968821,3262825636,3267675632,3267739881,3274918842,3278139825,3282570578,3328384951,3339635708,3340810051,3356976692,3361964525,3368495002,3383262198,3394358285,3399741904,3408201895,3417762312,3422564537,3442344521,3447437836,3464529524,3468694118,3479313432,3484368409,3487663394,3487972040,3491840578,3499299805,3547380585,3549750598,3573777790,3575126505,3585272000,3596692510,3610140395,3613928575,3614752531,3622626368,3625629290,3632944332,3633891530,3639080099,3648847476,3650302411,3651815446,3654057199,3654208711,3661587520,3672020132,3673047353,3693914690,3697054480,3698395473,3701624248,3707902994,3712152087,3726523748,3757704288,3759903142,3763957625,3769100721,3785802577,3791013987,3804224117,3815449586,3827741647,3835216308,3836592253,3838261270,3844958469,3847101527,3856695765,3857684998,3872054716,3880976956,3888895346,3893616028,3894540257,3896471385,3910836741,3914679374,3918254364,3918562208,3922998689,3931169104,3933469261,3943290485,3943691521,3957906816,3966551456,3974054563,3974392573,3982577538,4000256985,4002057701,4008011073,4020350394,4028099372,4030332170,4036835904,4042515006,4052155293,4070613137,4081783416,4083456089,4085581677,4104228656,4105107102,4106936507,4107029522,4112342362,4113179313,4117408803,4123073083,4130285872,4130891177,4131616892,4151761989,4164225818,4175230843,4179823937,4186277334,4199817043,4200101470,4204924813,4211671900,4215961647,4232996538,4240341696,4241207600,4260940734,4279352141,4282959539,4285495849,4288775646,4290479707,4293096867]);
+  let openDataPairHashSet = null;
+  function openDataPairHashLookup() {
+    if (!openDataPairHashSet) {
+      openDataPairHashSet = new Set(OPEN_DATA_PAIR_HASHES);
+    }
+    return openDataPairHashSet;
+  }
+
+  function openDataPairKey(row) {
+    return String(row && row.name || '').trim().toLowerCase() + '|' +
+      String(row && row.team || '').trim().toLowerCase();
+  }
+
+  function openDataPairHash(row) {
+    return hashSeed(openDataPairKey(row));
+  }
+
+  /** Reject when overlap ≥ min(20, ceil(0.30 * rowCount)). */
+  function openDataRejectThreshold(rowCount) {
+    const n = Number(rowCount) || 0;
+    if (n <= 0) return 0;
+    return Math.min(20, Math.ceil(0.30 * n));
+  }
+
+  function openDataPairOverlap(players) {
+    const rows = Array.isArray(players) ? players : [];
+    const set = openDataPairHashLookup();
+    let hits = 0;
+    for (let i = 0; i < rows.length; i += 1) {
+      if (set.has(openDataPairHash(rows[i]))) hits += 1;
+    }
+    return hits;
+  }
+
+  function openDataContentFingerprintMatch(players) {
+    const rows = Array.isArray(players) ? players : [];
+    if (!rows.length) return false;
+    return openDataPairOverlap(rows) >= openDataRejectThreshold(rows.length);
+  }
+
   function looksLikeOpenDataPayload(dataset) {
-    if (!dataset || typeof dataset !== 'object' || Array.isArray(dataset)) return false;
-    const source = String(dataset.source || dataset.license || '').toLowerCase();
-    if (source.indexOf('statsbomb') >= 0) return true;
-    if (Number(dataset.competitionId) === 43 && Number(dataset.seasonId) === 3) return true;
+    if (!dataset || typeof dataset !== 'object') return false;
+    if (!Array.isArray(dataset)) {
+      const source = String(dataset.source || dataset.license || '').toLowerCase();
+      if (source.indexOf('statsbomb') >= 0) return true;
+      if (Number(dataset.competitionId) === 43 && Number(dataset.seasonId) === 3) return true;
+    }
+    // Content fingerprint after JSON/CSV unification (players[] or bare array).
+    // Catches Open Data re-imports after Excel→CSV or metadata stripping.
+    // Does NOT catch altered names — that gap is intentional and documented.
+    if (openDataContentFingerprintMatch(eventPlayers(dataset))) return true;
     return false;
   }
 
@@ -398,7 +680,9 @@
           ? 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
           : 'Synthetic teaching file shipped with ScoutAI — not match data'
       });
-    const players = flagImpossibleMinutes(eventPlayers(rawPlayers).map(function (row) {
+    const rawList = eventPlayers(rawPlayers);
+    const coverage = buildCoverage(rawList);
+    const players = flagImpossibleMinutes(rawList.map(function (row) {
       return preparePlayer(row, { provenance: provenance });
     }));
     function derive(spec, baselineSpec) {
@@ -436,6 +720,7 @@
           explorer: explorer,
           validation: validation,
           exercise: evaluateExercise(players, metric),
+          players: players,
           answers: {}
         }),
         exportBundle: exportMetricBundle(metric, selected, {
@@ -445,10 +730,18 @@
         }),
         provenance: provenance,
         source: source,
-        commercialAllowed: provenance === USER_DATA_PROVENANCE
+        commercialAllowed: provenance === USER_DATA_PROVENANCE,
+        coverage: coverage,
+        coverageBanner: coverage.banner
       };
     }
-    return { players: players, derive: derive, provenance: provenance, source: source };
+    return {
+      players: players,
+      derive: derive,
+      provenance: provenance,
+      source: source,
+      coverage: coverage
+    };
   }
 
   function applyMetric(dataset, spec, baselineSpec) {
@@ -748,7 +1041,7 @@
         label: 'נרמול עמדה או משקל מאמץ דומיננטי (Grit ≥ 60)',
         pass: metric.normalizePosition || metric.grit >= 60,
         detail: metric.normalizePosition
-          ? 'נרמול עמדה דולק: בלם מושווה לבלמים, לא לחלוץ.'
+          ? 'נרמול עמדה דולק (אחוזון mid-rank): בלם מושווה לבלמים, לא לחלוץ.'
           : 'בלי נרמול צריך Grit גבוה, אחרת xG של חלוצים שולט.'
       },
       {
@@ -877,7 +1170,7 @@
       'Involvement = 0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות שהושלמו. ' +
       'Clutch = 0.40×xG + 0.35×נגיעות ברחבה + 0.25×בעיטות למסגרת — התווית לימודית, לא מודל רגעים מכריעים. ' +
       'סף הדקות הוא ' + metric.minMinutes +
-      (metric.normalizePosition ? '; הרכיבים הם אחוזון בתוך קבוצת עמדה.' : '; בלי נרמול עמדה.') +
+      (metric.normalizePosition ? '; הרכיבים הם אחוזון mid-rank בתוך קבוצת עמדה (תיקו מקבל דרגה ממוצעת).' : '; בלי נרמול עמדה.') +
       ' המשקלות ידניות ושרירותיות, בלי כיול מדעי.' + playerBit;
     if (provenance === USER_DATA_PROVENANCE) {
       return 'המדד חושב במעבדת ScoutAI ככלי לימוד, לא כהמלצת סקאוטינג ולא כחוות דעת רפואית או חוזית. ' +
@@ -981,12 +1274,13 @@
       }];
     }
     const raw = row.components && row.components.raw || {};
-    const total = metric.grit + metric.involvement + metric.clutch || 1;
-    const gritPart = round2(row.components.grit * metric.grit / total);
-    const invPart = round2(row.components.involvement * metric.involvement / total);
-    const clutchPart = round2(row.components.clutch * metric.clutch / total);
+    const contrib = lessonContributions(row, metric);
+    const gritPart = contrib[0] ? contrib[0].share : null;
+    const invPart = contrib[1] ? contrib[1].share : null;
+    const clutchPart = contrib[2] ? contrib[2].share : null;
+    function showComp(v) { return v == null ? 'לא זמין' : v; }
     const scaleNote = row.components.normalized
-      ? 'אחרי נרמול עמדה כל רכיב הוא אחוזון 0–100 בתוך קבוצת העמדה ' + row.positionGroup + '.'
+      ? 'אחרי נרמול עמדה כל רכיב הוא אחוזון mid-rank 0–100 בתוך קבוצת העמדה ' + row.positionGroup + ' (תיקו משמר tiedPeers/groupN).'
       : 'בלי נרמול עמדה הרכיבים הם סקייל 0–100 מול תקרות קבועות (לא כיול מדעי).';
     return [
       {
@@ -1005,9 +1299,9 @@
       },
       {
         title: '3. תרגום לשלושה רכיבים',
-        body: 'Grit נבנה מלחיצות/תיקולים/הגנה → ' + row.components.grit +
-          '. Involvement מפעולות התקדמות ומסירות מפתח → ' + row.components.involvement +
-          '. Clutch מ-xG, נגיעות ברחבה ובעיטות למסגרת → ' + row.components.clutch +
+        body: 'Grit נבנה מלחיצות/תיקולים/הגנה → ' + showComp(row.components.grit) +
+          '. Involvement מפעולות התקדמות ומסירות מפתח → ' + showComp(row.components.involvement) +
+          '. Clutch מ-xG, נגיעות ברחבה ובעיטות למסגרת → ' + showComp(row.components.clutch) +
           '. ' + scaleNote
       },
       {
@@ -1044,13 +1338,95 @@
     { key: 'bigChanceProxy', label: 'מצבים גדולים (קירוב)', type: 'Shot (big chance proxy)', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'bigChanceProxyPer90' }
   ]);
 
+  // leaky on each row is a declared hint only. validateMetric overwrites it from
+  // auditOutcome (Spearman vs scoring-input counts; |ρ|≥LEAKY_RHO ⇒ copy).
+  const LEAKY_RHO = 0.95;
   const OUTCOMES = Object.freeze([
     { id: 'assists', label: 'בישולים', field: 'assists', leaky: false, leakNote: 'בישול לא נכנס לנוסחה. מסירת מפתח כן — זה לא אותו שדה.' },
     { id: 'dribbles', label: 'כדרורים', field: 'dribbles', leaky: false, leakNote: 'כדרור נאסף בקובץ ולא נכנס לציון.' },
-    { id: 'duelsWon', label: 'דו-קרבות שנרכשו', field: 'duelsWon', leaky: false, leakNote: 'דו-קרב שנרכש לא זהה לתיקול שנכנס ל-Grit.' },
-    { id: 'goals', label: 'שערים', field: 'goals', leaky: true, leakNote: 'דליפה: Clutch בנוי מ-xG ומבעיטות למסגרת, שמתואמים עם שערים.' },
-    { id: 'box', label: 'שערים+בישולים', field: 'box', leaky: true, leakNote: 'דליפה: תיבת הניקוד מתואמת עם Clutch.' }
+    { id: 'duelsWon', label: 'דו-קרבות שנרכשו', field: 'duelsWon', leaky: true, leakNote: 'דליפה נמדדת: העמודה זהה ל-tackles (קלט Grit) ב-605/605 שורות.' },
+    { id: 'goals', label: 'שערים', field: 'goals', leaky: false, leakNote: 'תלות רעיונית ב-Clutch/xG אינה סף העתקה (≥0.95 מול קלט יחיד).' },
+    { id: 'box', label: 'שערים+בישולים', field: 'box', leaky: false, leakNote: 'תלות רעיונית ב-Clutch אינה סף העתקה (≥0.95 מול קלט יחיד).' }
   ]);
+
+  // Count fields that feed the nine RADAR_AXES recipe keys. tackles and
+  // interceptions both feed tacklesInt90, so the list has ten keys.
+  function scoringInputFields() {
+    return EVENT_COLUMNS.filter(function (col) { return col.usedInScore; })
+      .map(function (col) { return col.key; });
+  }
+
+  function auditOutcome(prepared, outcomeId) {
+    const players = asPrepared(prepared);
+    const n = players.length;
+    const ys = players.map(function (row) { return outcomeValue(row, outcomeId); });
+    const fields = scoringInputFields();
+    let maxRho = null;
+    let maxField = null;
+    let identicalRows = 0;
+    const overlaps = [];
+    fields.forEach(function (field) {
+      const xs = players.map(function (row) {
+        const v = row && row.counts ? row.counts[field] : 0;
+        return Number(v) || 0;
+      });
+      const rho = n >= 2 ? spearman(xs, ys) : null;
+      let same = 0;
+      for (let i = 0; i < n; i += 1) {
+        if (xs[i] === ys[i]) same += 1;
+      }
+      overlaps.push({ field: field, rho: rho, identicalRows: same });
+      if (rho == null) return;
+      const better = maxRho == null
+        || Math.abs(rho) > Math.abs(maxRho)
+        || (Math.abs(rho) === Math.abs(maxRho) && same > identicalRows);
+      if (better) {
+        maxRho = rho;
+        maxField = field;
+        identicalRows = same;
+      }
+    });
+    const leaky = maxRho != null && Math.abs(maxRho) >= LEAKY_RHO;
+    const meta = outcomeMeta(outcomeId);
+    let leakNote;
+    if (leaky) {
+      leakNote = 'דליפה נמדדת: היעד חופף לקלט ציון «' + maxField +
+        '» (Spearman ρ=' + maxRho +
+        (n > 0 && identicalRows === n ? ', זהה ב-' + identicalRows + '/' + n + ' שורות' : '') +
+        '). סף העתקה ≥' + LEAKY_RHO + '.';
+    } else {
+      leakNote = (meta && meta.leakNote)
+        ? meta.leakNote
+        : ('אין חפיפה ≥' + LEAKY_RHO + ' מול קלטי הציון.');
+    }
+    return {
+      outcomeId: outcomeId,
+      n: n,
+      maxRho: maxRho,
+      maxField: maxField,
+      identicalRows: identicalRows,
+      leaky: leaky,
+      threshold: LEAKY_RHO,
+      leakNote: leakNote,
+      overlaps: overlaps
+    };
+  }
+
+  function redactFoldIfLeaky(stats, leaky) {
+    if (!leaky || !stats) return stats;
+    return {
+      n: stats.n,
+      rho: null,
+      minutesRho: null,
+      outcomeMissing: stats.outcomeMissing,
+      topMetric: stats.topMetric,
+      topOutcome: stats.topOutcome,
+      componentRho: { grit: null, involvement: null, clutch: null },
+      bestComponent: null,
+      redacted: true,
+      reason: 'leaky-outcome'
+    };
+  }
 
   function outcomeMeta(outcomeId) {
     return OUTCOMES.find(function (item) { return item.id === outcomeId; }) || OUTCOMES[0];
@@ -1058,12 +1434,21 @@
 
   function outcomeValue(player, outcomeId) {
     const counts = player && player.counts || {};
-    if (outcomeId === 'box') return (counts.goals || 0) + (counts.assists || 0);
-    if (outcomeId === 'goals') return counts.goals || 0;
-    if (outcomeId === 'assists') return counts.assists || 0;
-    if (outcomeId === 'dribbles') return counts.dribbles || 0;
-    if (outcomeId === 'duelsWon') return counts.duelsWon || 0;
-    return 0;
+    function read(field) {
+      if (counts[field] == null) return null;
+      return counts[field];
+    }
+    if (outcomeId === 'box') {
+      const g = read('goals');
+      const a = read('assists');
+      if (g == null && a == null) return null;
+      return (g || 0) + (a || 0);
+    }
+    if (outcomeId === 'goals') return read('goals');
+    if (outcomeId === 'assists') return read('assists');
+    if (outcomeId === 'dribbles') return read('dribbles');
+    if (outcomeId === 'duelsWon') return read('duelsWon');
+    return null;
   }
 
   function filePer90(player, field) {
@@ -1094,7 +1479,7 @@
     const counts = player.counts || {};
     const raw = player.components && player.components.raw || {};
     const rows = EVENT_COLUMNS.map(function (col) {
-      const total = col.key === 'totalMinutesProxy' ? minutes : (counts[col.key] || 0);
+      const total = col.key === 'totalMinutesProxy' ? minutes : (counts[col.key] == null ? 0 : counts[col.key]);
       const computed90 = minutes > 0 ? round2(total * 90 / minutes) : 0;
       const fromFile = filePer90(player, col.per90Field);
       const scaled = col.cap ? round1(scaleCap(raw[col.recipeKey] != null ? raw[col.recipeKey] : computed90, col.cap)) : null;
@@ -1119,10 +1504,10 @@
     });
     const receipt = [
       { step: 'ספירה בקובץ', detail: player.name + ' · ' + (player.team || '') + ' · ' + minutes + ' דקות פרוקסי · ' + layer.provenance + ' · ' + dataset },
-      { step: 'לחיצות ל-90', detail: (counts.pressures || 0) + ' × 90 / ' + minutes + ' = ' + (rows[0] ? rows[0].per90 : 0) + (rows[0] && rows[0].capped ? ' — מעל תקרת 18, לכן הסקייל 100' : '') },
-      { step: 'Grit', detail: '0.45×לחיצות + 0.30×(תיקולים+חטיפות) + 0.25×הגנה → ' + player.components.grit },
-      { step: 'Involvement', detail: '0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות → ' + player.components.involvement },
-      { step: 'Clutch', detail: '0.40×xG + 0.35×רחבה + 0.25×מסגרת → ' + player.components.clutch + ' (תווית לימודית, לא רגע הכרעה)' }
+      { step: 'לחיצות ל-90', detail: (counts.pressures == null ? 'לא זמין' : counts.pressures) + ' × 90 / ' + minutes + ' = ' + (rows[0] ? rows[0].per90 : 0) + (rows[0] && rows[0].capped ? ' — מעל תקרת 18, לכן הסקייל 100' : '') },
+      { step: 'Grit', detail: '0.45×לחיצות + 0.30×(תיקולים+חטיפות) + 0.25×הגנה → ' + (player.components.grit == null ? 'לא זמין' : player.components.grit) },
+      { step: 'Involvement', detail: '0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות → ' + (player.components.involvement == null ? 'לא זמין' : player.components.involvement) },
+      { step: 'Clutch', detail: '0.40×xG + 0.35×רחבה + 0.25×מסגרת → ' + (player.components.clutch == null ? 'לא זמין' : player.components.clutch) + ' (תווית לימודית, לא רגע הכרעה)' }
     ];
     const honesty = layer.provenance === OPEN_DATA_PROVENANCE
       ? 'אלה הספירות האמיתיות מ-' + dataset + '. אין בריפו יומן אירועים גולמי — רק המצטבר שנבנה ממנו.'
@@ -1213,27 +1598,136 @@
     return 'ABCD'.indexOf(group) >= 0 ? 'train' : 'test';
   }
 
+
+  function createRng(seed) {
+    let state = hashSeed(seed);
+    return function next() {
+      state |= 0;
+      state = (state + 0x6D2B79F5) | 0;
+      let t = Math.imul(state ^ (state >>> 15), 1 | state);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function shuffleInPlace(arr, rng) {
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  function percentileSorted(sorted, q) {
+    if (!sorted.length) return null;
+    const idx = Math.floor((sorted.length - 1) * q);
+    return round2(sorted[idx]);
+  }
+
+  function bestComponentEntry(componentRho) {
+    const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
+    let best = null;
+    Object.keys(labels).forEach(function (id) {
+      const rho = componentRho ? componentRho[id] : null;
+      if (rho == null || !Number.isFinite(rho)) return;
+      if (!best || Math.abs(rho) > Math.abs(best.rho) ||
+          (Math.abs(rho) === Math.abs(best.rho) && rho > best.rho)) {
+        best = { id: id, label: labels[id], rho: rho };
+      }
+    });
+    return best;
+  }
+
+  function nullBandFromPermutation(scores, outcomes, seed, permutations) {
+    const nPerm = permutations || 200;
+    const rng = createRng(seed);
+    const absRhos = [];
+    for (let p = 0; p < nPerm; p += 1) {
+      const shuffled = outcomes.slice();
+      shuffleInPlace(shuffled, rng);
+      const rho = spearman(scores, shuffled);
+      absRhos.push(Math.abs(rho == null ? 0 : rho));
+    }
+    absRhos.sort(function (a, b) { return a - b; });
+    return {
+      p50: percentileSorted(absRhos, 0.5),
+      p95: percentileSorted(absRhos, 0.95),
+      permutations: nPerm,
+      seed: String(seed)
+    };
+  }
+
+  function defenderHintBaseline(players, testRows, outcomeId, splitId) {
+    const hintMetric = normalizeMetricSpec(DEFENDER_EXERCISE.hint);
+    const hintRanked = scorePrepared(players, hintMetric);
+    const wanted = {};
+    testRows.forEach(function (row) { wanted[row.id] = true; });
+    const hintTest = hintRanked.filter(function (row) { return wanted[row.id]; });
+    const outcomes = hintTest.map(function (row) { return outcomeValue(row, outcomeId); });
+    return {
+      rho: spearman(hintTest.map(function (row) { return row.score; }), outcomes),
+      n: hintTest.length,
+      splitId: splitId,
+      outcomeId: outcomeId,
+      metric: {
+        grit: hintMetric.grit,
+        involvement: hintMetric.involvement,
+        clutch: hintMetric.clutch,
+        minMinutes: hintMetric.minMinutes,
+        normalizePosition: hintMetric.normalizePosition
+      },
+      label: 'תרגיל הבלמים (רמז) על אותו מדגם מבחן'
+    };
+  }
+
   function foldStats(rows, outcomeId) {
     const scores = rows.map(function (row) { return row.score; });
     const outcomes = rows.map(function (row) { return outcomeValue(row, outcomeId); });
+    const minutes = rows.map(function (row) { return row.minutes; });
+    const outcomeMissing = rows.length > 0 && outcomes.every(function (v) { return v == null; });
+    if (outcomeMissing) {
+      return {
+        n: rows.length,
+        rho: null,
+        minutesRho: null,
+        outcomeMissing: true,
+        topMetric: rows.slice(0, 5).map(function (row) {
+          return { id: row.id, name: row.name, team: row.team, score: row.score, outcome: null };
+        }),
+        topOutcome: [],
+        componentRho: { grit: null, involvement: null, clutch: null },
+        bestComponent: null
+      };
+    }
     const rho = spearman(scores, outcomes);
     const byOutcome = rows.slice().sort(function (a, b) {
-      return outcomeValue(b, outcomeId) - outcomeValue(a, outcomeId);
+      return (outcomeValue(b, outcomeId) || 0) - (outcomeValue(a, outcomeId) || 0);
     });
+    function componentRhoFor(key) {
+      const xs = rows.map(function (row) { return row.components[key]; });
+      if (xs.every(function (v) { return v == null; })) return null;
+      return spearman(xs.map(function (v) { return v == null ? 0 : v; }), outcomes);
+    }
+    const componentRho = {
+      grit: componentRhoFor('grit'),
+      involvement: componentRhoFor('involvement'),
+      clutch: componentRhoFor('clutch')
+    };
     return {
       n: rows.length,
       rho: rho,
+      minutesRho: spearman(minutes, outcomes),
+      outcomeMissing: false,
       topMetric: rows.slice(0, 5).map(function (row) {
         return { id: row.id, name: row.name, team: row.team, score: row.score, outcome: outcomeValue(row, outcomeId) };
       }),
       topOutcome: byOutcome.slice(0, 5).map(function (row) {
         return { id: row.id, name: row.name, team: row.team, score: row.score, outcome: outcomeValue(row, outcomeId) };
       }),
-      componentRho: {
-        grit: spearman(rows.map(function (row) { return row.components.grit; }), outcomes),
-        involvement: spearman(rows.map(function (row) { return row.components.involvement; }), outcomes),
-        clutch: spearman(rows.map(function (row) { return row.components.clutch; }), outcomes)
-      }
+      componentRho: componentRho,
+      bestComponent: bestComponentEntry(componentRho)
     };
   }
 
@@ -1242,8 +1736,11 @@
     const opts = options || {};
     const outcomeId = opts.outcomeId || metric.outcomeId;
     const splitId = opts.splitId || metric.splitId;
+    const seed = opts.seed || 'scoutai-demo-001';
+    const permutations = opts.permutations || 200;
     const meta = outcomeMeta(outcomeId);
     const players = asPrepared(prepared);
+    const audit = auditOutcome(players, outcomeId);
     const ranked = scorePrepared(players, metric);
     const train = [];
     const test = [];
@@ -1254,16 +1751,38 @@
       else if (fold === 'test') test.push(row);
       else unassigned.push(row);
     });
-    const trainStats = foldStats(train, outcomeId);
-    const testStats = foldStats(test, outcomeId);
-    const drop = (trainStats.rho != null && testStats.rho != null)
-      ? round2(trainStats.rho - testStats.rho)
+    // Always compute folds; redact ρ when leaky so UI/BYOD never show
+    // holdout Spearman before the copy flag.
+    const trainRaw = foldStats(train, outcomeId);
+    const testRaw = foldStats(test, outcomeId);
+    const trainStats = redactFoldIfLeaky(trainRaw, audit.leaky);
+    const testStats = redactFoldIfLeaky(testRaw, audit.leaky);
+    const drop = (!audit.leaky && trainRaw.rho != null && testRaw.rho != null)
+      ? round2(trainRaw.rho - testRaw.rho)
       : null;
+    const testOutcomes = test.map(function (row) { return outcomeValue(row, outcomeId); });
+    const testScores = test.map(function (row) { return row.score; });
+    const baselines = {
+      minutes: {
+        rho: testRaw.minutesRho,
+        label: 'דירוג לפי דקות בלבד מול אותו יעד'
+      },
+      bestComponent: testRaw.bestComponent,
+      nullBand: (testRaw.outcomeMissing || audit.leaky)
+        ? null
+        : nullBandFromPermutation(testScores, testOutcomes, seed, permutations),
+      defenderHint: (testRaw.outcomeMissing || audit.leaky)
+        ? null
+        : defenderHintBaseline(players, test, outcomeId, splitId)
+    };
+    const beatsMinutes = !!(testRaw.rho != null && baselines.minutes.rho != null &&
+      testRaw.rho > baselines.minutes.rho);
     return {
       outcomeId: outcomeId,
       outcomeLabel: meta.label,
-      leaky: meta.leaky,
-      leakNote: meta.leakNote,
+      leaky: audit.leaky,
+      leakNote: audit.leakNote,
+      audit: audit,
       splitId: splitId,
       splitLabel: splitId === 'hash'
         ? 'פיצול דטרמיניסטי לפי שם (לא לפי קבוצה)'
@@ -1274,14 +1793,33 @@
       train: trainStats,
       test: testStats,
       rhoDrop: drop,
-      verdict: validationVerdict(trainStats, testStats, meta)
+      baselines: baselines,
+      beatsMinutes: beatsMinutes,
+      seed: String(seed),
+      verdict: validationVerdict(trainStats, testStats, meta, audit, baselines)
     };
   }
 
-  function validationVerdict(trainStats, testStats, meta) {
+  function validationVerdict(trainStats, testStats, meta, audit, baselines) {
     const notes = [];
+    if ((trainStats && trainStats.outcomeMissing) || (testStats && testStats.outcomeMissing)) {
+      const field = meta && meta.field ? meta.field : (meta && meta.id) || 'assists';
+      const label = meta && meta.label ? meta.label : field;
+      notes.push('עמודת היעד «' + label + '» (' + field + ') חסרה בקובץ — לא מחושב Spearman. זה לא אומר שהמדד אינו חוזה.');
+      return notes.join(' ');
+    }
     notes.push('זו אינה עונה חדשה.');
-    if (meta.leaky) notes.push(meta.leakNote);
+    if (audit && audit.leaky) {
+      notes.push(audit.leakNote);
+      notes.push('ρ מול היעד מוסתר עד לתיקון הדליפה.');
+      return notes.join(' ');
+    }
+    if (audit && audit.maxRho != null) {
+      notes.push('ביקורת חפיפה: מקסימום ρ=' + audit.maxRho +
+        (audit.maxField ? (' מול «' + audit.maxField + '»') : '') +
+        ' (מתחת לסף ' + (audit.threshold != null ? audit.threshold : LEAKY_RHO) + ').');
+    }
+    if (meta && meta.leakNote && !(audit && audit.leaky)) notes.push(meta.leakNote);
     if (testStats.n < 20) notes.push('מדגם המבחן קטן — אסור להכריז על תוקף.');
     if (trainStats.rho != null && testStats.rho != null && trainStats.rho - testStats.rho >= 0.2) {
       notes.push('ρ באימון גבוה בהרבה מבמבחן — חשד להתאמת-יתר למדגם.');
@@ -1289,6 +1827,25 @@
     if (testStats.rho == null) notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
     else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
     else notes.push('ρ במבחן ' + testStats.rho + ' הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג.');
+    if (baselines && baselines.minutes && baselines.minutes.rho != null && testStats.rho != null) {
+      if (testStats.rho > baselines.minutes.rho) {
+        notes.push('המדד עוקף את קו־הבסיס של דקות בלבד (ρ=' + baselines.minutes.rho + ').');
+      } else {
+        notes.push('המדד לא עוקף את קו־הבסיס של דקות בלבד (ρ=' + baselines.minutes.rho + ').');
+      }
+    }
+    if (baselines && baselines.nullBand && baselines.nullBand.p95 != null && testStats.rho != null) {
+      notes.push('רצועת האפס (פרמוטציה, p95 של |ρ|) ≈ ' + baselines.nullBand.p95 +
+        '; המדד יושב רק מעט מעליה אם בכלל.');
+    }
+    if (baselines && baselines.bestComponent && baselines.bestComponent.rho != null) {
+      notes.push('רכיב בודד חזק ביותר במבחן: ' + baselines.bestComponent.label +
+        ' ρ=' + baselines.bestComponent.rho + '.');
+    }
+    if (baselines && baselines.defenderHint && baselines.defenderHint.rho != null) {
+      notes.push('רמז תרגיל הבלמים על אותו מדגם מבחן: ρ=' + baselines.defenderHint.rho +
+        ' (אי־התאמה ליעד התקפי אינה כישלון — זה שיעור).');
+    }
     return notes.join(' ');
   }
 
@@ -1305,16 +1862,16 @@
       id: 'per90',
       title: '2. ל-90 דקות',
       section: 'explorer',
-      body: 'ספירה גולמית מעדיפה מי ששיחק יותר. לכן מחלקים בדקות ומכפילים ב-90. שחקן עם מדגם קטן יכול להיראות קיצוני.',
-      exercise: 'אם לשחקן יש 90 לחיצות ב-180 דקות, כמה לחיצות ל-90 דקות?',
+      body: 'ספירה גולמית מעדיפה מי ששיחק יותר. לכן מחלקים בדקות ומכפילים ב-90. השאלה קשורה לשחקן הנבחר בטבלה — לא לתרגיל קבוע.',
+      exercise: 'השחקן הנבחר רשם לחיצות בדקות שלו — חשבו לחיצות ל-90 לפי הקבלה בחוקר.',
       hint: null
     },
     {
       id: 'caps',
       title: '3. תקרות שרירותיות',
       section: 'explorer',
-      body: 'כל רכיב נחתך בתקרה קבועה (לחיצות 18/90, xG 0.6/90…). מי שמעל התקרה מקבל 100. התקרה אינה כיול מדעי.',
-      exercise: 'האם שחקן עם 26.5 לחיצות ל-90 דקות (מעל תקרה 18) מקבל סקייל 100 ברכיב הלחיצות?',
+      body: 'כל רכיב נחתך בתקרה קבועה (לחיצות 18/90, xG 0.6/90…). מי שמעל התקרה מקבל 100. התקרה אינה כיול מדעי. בדקו מה נחתך אצל השחקן הנבחר.',
+      exercise: 'איזה רכיב אצל השחקן הנבחר נחתך בתקרה? אם כלום — סמנו «שום דבר לא נחתך».',
       hint: { selectedId: "N'Golo Kanté|France" }
     },
     {
@@ -1337,16 +1894,16 @@
       id: 'fragility',
       title: '6. שבריריות',
       section: 'fragility',
-      body: 'תוספת 10 נקודות למשקל אחד מזיזה את הטופ. מדד מרוכב בלי כיול הוא שברירי בכוונה.',
-      exercise: 'האם דחיפת +10 למשקל יכולה לשנות מי נמצא בחמישייה?',
+      body: 'תוספת 10 נקודות למשקל אחד מזיזה דירוגים. נבאו לפני הגילוי איזו דחיפה משפרת את השחקן הנבחר — ואז בדקו במעבדת השבריריות.',
+      exercise: 'לפני הגילוי: איזו דחיפת +10 תשפר הכי הרבה את דירוג השחקן הנבחר?',
       hint: null
     },
     {
       id: 'holdout',
       title: '7. מדגם מוחזק',
       section: 'validate',
-      body: 'אין עונה שנייה בריפו. הפיצול הכנה הוא בתים A–D מול E–H באותו מונדיאל. ρ במבחן הוא המספר שחשוב — והוא עדיין לא «העונה הבאה».',
-      exercise: 'ענו: האם פיצול הבתים הוא עונה חדשה, ומה המספר שקובע — ρ אימון או ρ מבחן?',
+      body: 'אין עונה שנייה בריפו. הפיצול הכנה הוא בתים A–D מול E–H באותו מונדיאל. ρ במבחן הוא המספר שחשוב — אבל בלי נקודות ייחוס הוא נשמע כמו אישור. השוו לדקות בלבד, לרכיב בודד ולרצועת אפס מפרמוטציה עם seed קבוע.',
+      exercise: 'ענו: האם פיצול הבתים הוא עונה חדשה, מה המספר שקובע (ρ מבחן), והאם המדד שלכם עוקף את קו־הבסיס של דקות בלבד?',
       hint: null
     },
     {
@@ -1391,12 +1948,22 @@
           }
         ];
       } else if (lesson.id === 'per90') {
+        const pressRow = (explorer.rows || []).find(function (row) { return row.key === 'pressures'; });
+        const expected90 = pressRow ? pressRow.per90 : null;
+        const pressTotal = selected && selected.counts ? (selected.counts.pressures || 0) : 0;
+        const mins = selected ? (selected.minutes || 0) : 0;
         checks = [
           {
             id: 'per90-math',
-            label: '90 לחיצות ב-180 דקות = 45 ל-90 דקות',
-            pass: String(answers.per90) === '45',
-            detail: answered(answers.per90) ? 'עניתם ' + answers.per90 + '.' : 'חשבו: ספירה × 90 / דקות.'
+            label: selected
+              ? (selected.name + ' רשם ' + pressTotal + ' לחיצות ב-' + mins + ' דקות — הזינו ל-90')
+              : 'בחרו שחקן וחשבו לחיצות ל-90 לפי הקבלה',
+            pass: expected90 != null && nearNumber(answers.per90, expected90, 0.05),
+            detail: answered(answers.per90)
+              ? (expected90 != null && nearNumber(answers.per90, expected90, 0.05)
+                ? 'נכון — ' + pressTotal + ' × 90 / ' + mins + ' ≈ ' + expected90 + '.'
+                : 'עניתם ' + answers.per90 + '; הקבלה אצל השחקן הנבחר נותנת ' + expected90 + '.')
+              : 'חשבו: ספירה × 90 / דקות לפי השחקן הנבחר (לא תרגיל קבוע).'
           },
           {
             id: 'minutes-floor',
@@ -1406,19 +1973,34 @@
           }
         ];
       } else if (lesson.id === 'caps') {
-        const hit = (explorer.capped || []).length > 0;
+        const cappedRows = explorer.capped || [];
+        const cappedKeys = cappedRows.map(function (row) { return row.key; });
+        const capAnswer = answers.cappedField;
+        const capPass = cappedKeys.length === 0
+          ? capAnswer === 'none'
+          : cappedKeys.indexOf(capAnswer) >= 0;
         checks = [
           {
             id: 'cap-quiz',
-            label: 'מעל התקרה הסקייל הוא 100, לא «עוד יותר»',
-            pass: answers.kanteCapped === 'yes',
-            detail: answered(answers.kanteCapped) ? (answers.kanteCapped === 'yes' ? 'נכון — התקרה חותכת.' : 'לא. 26.5/18 נחתך ל-100.') : 'ענו על שאלת התקרה.'
+            label: selected
+              ? ('איזה רכיב אצל ' + selected.name + ' נחתך בתקרה?')
+              : 'איזה רכיב אצל השחקן הנבחר נחתך בתקרה?',
+            pass: answered(capAnswer) && capPass,
+            detail: answered(capAnswer)
+              ? (capPass
+                ? (cappedKeys.length
+                  ? 'נכון — נחתך: ' + cappedRows.map(function (row) { return row.label; }).join(', ') + '.'
+                  : 'נכון — אצל השחקן הנבחר שום דבר לא נחתך.')
+                : (cappedKeys.length
+                  ? 'לא. אצל השחקן הנבחר נחתכו: ' + cappedRows.map(function (row) { return row.label; }).join(', ') + '.'
+                  : 'לא. אצל השחקן הנבחר שום דבר לא נחתך.'))
+              : 'בחרו רכיב מהקבלה, או «שום דבר לא נחתך».'
           },
           {
             id: 'cap-seen',
-            label: 'אצל השחקן הנבחר יש רכיב שנתקל בתקרה, או שבחרתם את קאנטה',
-            pass: hit || (selected && /Kant/i.test(selected.name || '')),
-            detail: hit ? 'שדות מעל התקרה: ' + explorer.capped.map(function (row) { return row.label; }).join(', ') + '.' : 'בחרו שחקן עם לחיצות גבוהות, למשל קאנטה.'
+            label: 'הקבלה בחוקר שייכת לשחקן הנבחר',
+            pass: !!(selected && explorer && explorer.player && explorer.player.id === selected.id),
+            detail: selected ? selected.name + ' · ' + cappedKeys.length + ' רכיבים מעל תקרה.' : 'בחרו שחקן בטבלה.'
           }
         ];
       } else if (lesson.id === 'weights') {
@@ -1447,16 +2029,44 @@
           }
         ];
       } else if (lesson.id === 'fragility') {
+        const swings = (ctx.players && selected && ctx.spec)
+          ? selectedWeightSwing(ctx.players, ctx.spec, selected.id, 10)
+          : (ctx.selectedFragility || []);
+        const expectedBump = bestHelpfulBump(swings);
+        // Also keep a global honesty note from fragilityFromPrepared when available.
+        const topMoves = ctx.fragility || (ctx.players && ctx.spec
+          ? fragilityFromPrepared(ctx.players, ctx.spec, 10)
+          : []);
+        const anyTopSwing = topMoves.some(function (variant) {
+          return variant.swings && variant.swings.length > 0;
+        });
         checks = [
           {
+            id: 'predict-selected',
+            label: selected
+              ? ('ניבאתם איזו דחיפת +10 משפרת הכי את דירוג ' + selected.name)
+              : 'ניבאתם איזו דחיפת +10 משפרת את דירוג השחקן הנבחר',
+            pass: answered(answers.fragilityPredict) && answers.fragilityPredict === expectedBump,
+            detail: answered(answers.fragilityPredict)
+              ? (answers.fragilityPredict === expectedBump
+                ? 'נכון — לפני הגילוי: ' + (expectedBump === 'none' ? 'שום דחיפה לא משפרת' : expectedBump) + '.'
+                : 'לא. אצל השחקן הנבחר התשובה היא ' + (expectedBump === 'none' ? 'שום דחיפה לא משפרת' : expectedBump) + '.')
+              : 'נבאו לפני הגילוי במעבדת השבריריות.'
+          },
+          {
             id: 'bump-moves',
-            label: 'דחיפת +10 יכולה להזיז את החמישייה',
-            pass: answers.bumpCanMove === 'yes',
-            detail: answered(answers.bumpCanMove) ? '' : 'פתחו את מעבדת השבריריות וענו.'
+            label: 'דחיפת +10 באמת מזיזה דירוגים בטבלה',
+            pass: anyTopSwing,
+            detail: anyTopSwing ? 'יש תזוזות בטופ אחרי +10 — המדד שברירי.' : 'חשבו שבריריות עם השחקנים והמדד הנוכחיים.'
           }
         ];
       } else if (lesson.id === 'holdout') {
         const testN = validation && validation.test ? validation.test.n : 0;
+        const minutesRho = validation && validation.baselines && validation.baselines.minutes
+          ? validation.baselines.minutes.rho
+          : null;
+        const liveBeats = !!(validation && validation.beatsMinutes);
+        const expectedBeat = liveBeats ? 'yes' : 'no';
         checks = [
           {
             id: 'not-season',
@@ -1471,6 +2081,20 @@
             label: 'המספר שקובע הוא ρ במבחן, לא באימון',
             pass: answers.whatMatters === 'test',
             detail: answered(answers.whatMatters) ? '' : 'בחרו מה חשוב יותר אחרי הפיצול.'
+          },
+          {
+            id: 'beats-minutes',
+            label: liveBeats
+              ? 'המדד עוקף את קו־הבסיס של דקות (לפי המעבדה החיה)'
+              : 'המדד לא עוקף את קו־הבסיס של דקות (לפי המעבדה החיה)',
+            pass: answers.beatsMinutes === expectedBeat,
+            detail: answered(answers.beatsMinutes)
+              ? (answers.beatsMinutes === expectedBeat
+                ? ('נכון. ρ מבחן=' + (validation && validation.test ? validation.test.rho : '?') +
+                  ' מול דקות ρ=' + minutesRho + '.')
+                : ('לא תואם את המעבדה החיה — המדד ' + (liveBeats ? 'עוקף' : 'לא עוקף') +
+                  ' דקות בלבד (ρ=' + minutesRho + ').'))
+              : 'ענו האם המדד עוקף את קו־הבסיס של דקות בלבד.'
           },
           {
             id: 'report-honest',
@@ -1502,12 +2126,22 @@
         ];
       }
       const passed = checks.length > 0 && checks.every(function (item) { return item.pass; });
+      let exerciseText = lesson.exercise;
+      if (lesson.id === 'per90' && selected) {
+        const pt = selected.counts ? (selected.counts.pressures || 0) : 0;
+        exerciseText = selected.name + ' רשם ' + pt + ' לחיצות ב-' + (selected.minutes || 0) +
+          ' דקות — הזינו כמה זה ל-90 דקות לפי הקבלה.';
+      } else if (lesson.id === 'caps' && selected) {
+        exerciseText = 'איזה רכיב אצל ' + selected.name + ' נחתך בתקרה? אם כלום — «שום דבר לא נחתך».';
+      } else if (lesson.id === 'fragility' && selected) {
+        exerciseText = 'לפני הגילוי: איזו דחיפת +10 תשפר הכי הרבה את דירוג ' + selected.name + '?';
+      }
       return {
         id: lesson.id,
         title: lesson.title,
         section: lesson.section,
         body: lesson.body,
-        exercise: lesson.exercise,
+        exercise: exerciseText,
         hint: lesson.hint,
         checks: checks,
         passed: passed
@@ -1603,13 +2237,25 @@
       dataset = { players: csv.players };
       parseErrors = csv.errors || [];
     }
+    // Unification point: both JSON and CSV branches have produced dataset.
+    // Metadata keys OR content overlap fingerprint ⇒ reject; never USER_LICENSED_DATA.
     if (looksLikeOpenDataPayload(dataset)) {
+      const overlap = openDataPairOverlap(eventPlayers(dataset));
+      const detail = overlap > 0
+        ? (' חפיפת תוכן: ' + overlap + ' זוגות name|team מול הקובץ שסופק בריפו (סף ' +
+          openDataRejectThreshold(eventPlayers(dataset).length) + ').')
+        : '';
       return {
         ok: false,
-        errors: ['הקובץ מזוהה כ-StatsBomb Open Data. הרישיון אוסר ניצול מסחרי. חזרו למצב הדמו החינמי.'],
+        errors: [
+          'הקובץ מזוהה כ-StatsBomb Open Data' + detail +
+          ' הרישיון אוסר ניצול מסחרי. חזרו למצב הדמו החינמי. ' +
+          'שימו לב: שמות ששונו במכוון אינם נתפסים — זו אינה אחריות מוחלטת.'
+        ],
         players: [],
         provenance: OPEN_DATA_PROVENANCE,
-        detected: OPEN_DATA_PROVENANCE
+        detected: OPEN_DATA_PROVENANCE,
+        openDataOverlap: overlap
       };
     }
     const synthetic = opts.synthetic === true ||
@@ -1629,12 +2275,17 @@
       return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
     }
     const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
+    const coverage = buildCoverage(players);
+    const warnings = [];
+    if (players.length < 2) warnings.push('שחקן אחד — הדירוג יהיה טריוויאלי');
+    if (coverage.banner) warnings.push(coverage.banner);
     return {
       ok: true,
       errors: parseErrors,
-      warnings: players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [],
+      warnings: warnings,
       players: players,
       provenance: provenance,
+      coverage: coverage,
       source: {
         dataset: opts.fileName || (synthetic ? 'data/user-dataset.example.json' : 'user-upload'),
         competition: (dataset && !Array.isArray(dataset) && (dataset.competition || dataset.comp)) ||
@@ -1678,19 +2329,31 @@
     exportMetricBundle: exportMetricBundle,
     EVENT_COLUMNS: EVENT_COLUMNS,
     OUTCOMES: OUTCOMES,
+    LEAKY_RHO: LEAKY_RHO,
     WC2018_GROUPS: WC2018_GROUPS,
     worldCupGroup: worldCupGroup,
     assignFold: assignFold,
     spearman: spearman,
     pearson: pearson,
     outcomeValue: outcomeValue,
+    scoringInputFields: scoringInputFields,
+    auditOutcome: auditOutcome,
     buildEventExplorer: buildEventExplorer,
     glossaryForPlayer: glossaryForPlayer,
     validateMetric: validateMetric,
     evaluateCurriculum: evaluateCurriculum,
+    selectedWeightSwing: selectedWeightSwing,
+    bestHelpfulBump: bestHelpfulBump,
+    nearNumber: nearNumber,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
+    buildCoverage: buildCoverage,
+    takeCount: takeCount,
+    COMPONENT_INPUT_FIELDS: COMPONENT_INPUT_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
+    openDataPairOverlap: openDataPairOverlap,
+    openDataRejectThreshold: openDataRejectThreshold,
+    openDataContentFingerprintMatch: openDataContentFingerprintMatch,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
     OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,
     USER_DATA_PROVENANCE: USER_DATA_PROVENANCE,
