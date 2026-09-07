@@ -1,0 +1,28 @@
+name: validate
+# Runs the repository's own test suite on every push and pull request.
+# Added 2026-09-07 by the local dev factory so GitHub itself checks every Draft PR.
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install (only if a lockfile exists)
+        run: |
+          if [ -f package-lock.json ]; then npm ci; elif [ -f package.json ]; then npm install --no-audit --no-fund; fi
+      - name: Test
+        run: |
+          if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts && require('./package.json').scripts.test ? 0 : 1)"; then
+            npm test
+          else
+            node --test
+          fi
