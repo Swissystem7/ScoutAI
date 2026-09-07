@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>דף משתתף — ScoutAI</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#fff}*{box-sizing:border-box}
+    body{margin:0}.shell{max-width:800px;margin:auto;padding:20px}
+    h1,h2{margin-top:0}p,li{line-height:1.55}
+    .banner{border:2px solid #10281d;border-radius:12px;padding:12px;margin-bottom:16px}
+    .banner code{background:#eef4ee;border-radius:6px;padding:2px 6px;font-weight:700}
+    .card{border:1px solid #c5d0c6;border-radius:12px;padding:14px;margin:12px 0}
+    table{width:100%;border-collapse:collapse;font-size:.92rem}th,td{border:1px solid #c5d0c6;padding:8px;text-align:start;vertical-align:top}
+    .notice{background:#fff6dd;border-inline-start:4px solid #8a5a00;padding:10px}
+    footer{font-size:.85rem;color:#3d4a42;margin-top:18px}
+    @media print{
+      body{background:#fff;color:#000}
+      .shell{max-width:none;padding:0}
+      .banner,.card{break-inside:avoid}
+      a[href]::after{content:""}
+      nav{display:none}
+    }
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header class="banner">
+    <h1>ScoutAI — דף משתתף (הדפסה)</h1>
+    <p><code>NO_AI</code> · <code>NO_HELD_OUT_SEASON</code> · משקלות ידניות · <strong>לא תעודת מנהלת</strong></p>
+    <nav aria-label="קישורים מקומיים">
+      <a href="SYLLABUS.md">סילבוס</a> ·
+      <a href="../index.html">המעבדה</a> ·
+      <a href="../offer.html">הצעת סדנה</a>
+    </nav>
+  </header>
+
+  <section class="card">
+    <h2>מה לומדים (~3 שעות)</h2>
+    <ol>
+      <li><code>events</code> / <code>per90</code> — מספירה ל-90 דקות</li>
+      <li><code>caps</code> / <code>weights</code> — תקרות ומשקלות ידניות</li>
+      <li><code>defenders</code> / <code>fragility</code> — הטיית עמדה ושבריריות</li>
+      <li><code>holdout</code> / <code>honesty</code> — מדגם מוחזק באותו טורניר ויושרת רישיון</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>תרגיל בית (קצר)</h2>
+    <p>במעבדה המקומית: עברו את שמונת הצעדים, כתבו הגנה בתיבה, והורידו רשומת השלמה מקומית. הרשומה היא דיווח עצמי (<code>accredited:false</code>) — לא תעודה רשמית.</p>
+    <div class="notice">Open Data אסור למסחר. נתונים בתשלום/ייעוץ — רק אם רישיתם בעצמכם (BYOD) או הדוגמה הסינתטית.</div>
+  </section>
+
+  <section class="card">
+    <h2>טבלת סימון עצמי</h2>
+    <table>
+      <thead><tr><th>מזהה</th><th>עבר?</th><th>הערה</th></tr></thead>
+      <tbody>
+        <tr><td>events</td><td>☐</td><td>שדה שלא בנוסחה</td></tr>
+        <tr><td>per90</td><td>☐</td><td>לחיצות ל-90 + סף ≥270</td></tr>
+        <tr><td>caps</td><td>☐</td><td>מה נחתך / «שום דבר»</td></tr>
+        <tr><td>weights</td><td>☐</td><td>משקלות ידניות</td></tr>
+        <tr><td>defenders</td><td>☐</td><td>תרגיל בלמים</td></tr>
+        <tr><td>fragility</td><td>☐</td><td>ניבוי +10</td></tr>
+        <tr><td>holdout</td><td>☐</td><td>נעילה · לא עונה חדשה</td></tr>
+        <tr><td>honesty</td><td>☐</td><td>לא למסחר</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>ScoutAI · דף משתתף להדפסה · בלי CDN · בלי שליחה לשרת</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>מפתח מנחה — ScoutAI</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
+    body{margin:0}.shell{max-width:980px;margin:auto;padding:24px}
+    .banner{background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700;display:inline-block;margin:2px}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700}
+    .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2,h3{margin-top:0}p,li{line-height:1.65}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}
+    .danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
+    .ok{border-inline-start:4px solid #145c3d;background:#e6f3ea;padding:12px;color:#0f3d26}
+    table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    code{background:#eef4ee;padding:1px 6px;border-radius:6px}
+    footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
+  </style>
+</head>
+<body>
+<main class="shell">
+  <aside class="banner" aria-label="סיווג">
+    <code>FACILITATOR</code> מפתח מנחה מקומי — לא תעודה.
+    <code>NO_CDN</code> בלי רשת חיצונית בדף הזה.
+    <nav class="nav" aria-label="ניווט">
+      <a href="SYLLABUS.md">סילבוס</a>
+      <a href="handout.html">דף משתתף</a>
+      <a href="../index.html">המעבדה</a>
+      <a href="../offer.html">הצעת סדנה</a>
+    </nav>
+  </aside>
+
+  <section class="card">
+    <h1>מפתח תשובות — לפי תנאי pass של evaluateCurriculum</h1>
+    <p>הבדיקה העצמית חיה במעבדה. המפתח מסכם מה נחשב «עבר» לכל מזהה שיעור. רשומת ההשלמה (`buildCompletionRecord`) היא דיווח עצמי מקומי עם <strong>accredited:false</strong> — <strong>לא תעודת מנהלת</strong>.</p>
+  </section>
+
+  <section class="card">
+    <h2>כשקובץ המשתתף קטן מדי</h2>
+    <div class="notice">
+      <ul>
+        <li><strong>פחות משני שחקנים:</strong> הדירוג טריוויאלי (`parseUserDataset` מזהיר). טענו `data/user-dataset.example.json` (סינתטי) או חזרו לדמו Open Data החינמי לתרגול — לא כמוצר בתשלום.</li>
+        <li><strong>קבוצת עמדה &lt; 5 עמיתים:</strong> נרמול עמדה מדולג (`MIN_POSITION_PEERS`). הסבירו את באנר הנרמול; אל תמציאו עמיתים.</li>
+        <li><strong>חסרות עמודות קלט:</strong> רכיב «לא זמין» + באנר כיסוי — לא דוחים את הריצה. אל תמלאו אפסים בשקט.</li>
+        <li><strong>נראה כמו Open Data:</strong> דחייה ב־BYOD. בסדנה בתשלום — רק נתונים שרישה המשתתף, או הדוגמה הסינתטית.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>events</h2>
+    <ul>
+      <li><code>has-player</code> — נבחר שחקן עם <code>counts</code>.</li>
+      <li><code>unused-field</code> — תשובה בשדה שנאסף ולא נכנס לנוסחה (רשימת <code>explorer.unused</code>).</li>
+    </ul>
+    <h2>per90</h2>
+    <ul>
+      <li><code>per90-math</code> — לחיצות×90/דקות של השחקן הנבחר (±0.05).</li>
+      <li><code>minutes-floor</code> — סף דקות ≥ 270.</li>
+    </ul>
+    <h2>caps</h2>
+    <ul>
+      <li><code>cap-quiz</code> — רכיב שנחתך אצל הנבחר, או <code>none</code> אם כלום לא נחתך.</li>
+      <li><code>cap-seen</code> — הקבלה שייכת לשחקן הנבחר.</li>
+    </ul>
+    <h2>weights</h2>
+    <ul>
+      <li><code>manual-weights</code> — אישור <code>weightsManual === 'yes'</code>.</li>
+      <li><code>formula-live</code> — יש spec חי במעבדה.</li>
+    </ul>
+    <h2>defenders</h2>
+    <ul>
+      <li><code>defender-pass</code> — תרגיל הבלמים החי עבר (<code>evaluateExercise.passed</code>) כולל הצהרת פשרה.</li>
+    </ul>
+    <h2>fragility</h2>
+    <ul>
+      <li><code>predict-selected</code> — ניבוי דחיפת +10 הנכונה לשחקן הנבחר לפני הגילוי.</li>
+      <li><code>bump-moves</code> — יש תזוזות דירוג אחרי +10.</li>
+    </ul>
+    <h2>holdout</h2>
+    <ul>
+      <li><code>weights-locked</code> — נעילת משקלים לפני קריאת ρ מבחן.</li>
+      <li><code>not-season</code> — <code>splitIsSeason === 'no'</code> (פיצול בתים ≠ עונה חדשה).</li>
+      <li><code>test-rho</code> — <code>whatMatters === 'test'</code>.</li>
+      <li><code>beats-minutes</code> — אחרי נעילה: האם המדד עוקף דקות בלבד (תואם את המעבדה החיה).</li>
+      <li><code>report-honest</code> — <code>validation.heldOutSeason === false</code> · באנר <code>NO_HELD_OUT_SEASON</code>.</li>
+      <li><code>test-n</code> — n מבחן &gt; 0 אחרי סף דקות.</li>
+    </ul>
+    <h2>honesty</h2>
+    <ul>
+      <li><code>unused-term</code> — מונח שנאסף ולא בנוסחה (למשל dribble).</li>
+      <li><code>non-commercial</code> — <code>commercial === 'no'</code>.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>רשומת השלמה</h2>
+    <p class="danger">הורידו JSON מקומי מהמעבדה. זה דיווח עצמי · <code>accredited:false</code> · לא תעודת מנהלת · נושא אזהרת משקלות ידניות ו־<code>NO_HELD_OUT_SEASON</code>. בשכבת <code>STATSBOMB_OPEN_DATA</code> הרשומה <strong>לא</strong> כוללת שורות שחקנים, ועם חותמת לא־מסחרית.</p>
+  </section>
+  <footer>ScoutAI · מפתח מנחה מקומי · בלי CDN</footer>
+</main>
+</body>
+</html>

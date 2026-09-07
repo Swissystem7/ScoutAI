@@ -3,6 +3,6 @@
   "private": true,
   "description": "Hebrew RTL educational lab: build a transparent football metric on StatsBomb Open Data",
   "scripts": {
-    "test": "node --test test/demo.test.js test/trap.test.js test/byod.test.js"
+    "test": "node --test test/demo.test.js test/trap.test.js test/byod.test.js test/ui.test.js test/derive-golden.test.js"
   }
 }
