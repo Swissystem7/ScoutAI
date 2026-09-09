@@ -52,7 +52,9 @@
     compareId: '',
     outcomeId: 'assists',
     splitId: 'groups',
-    curriculumIndex: 0
+    curriculumIndex: 0,
+    weightsLocked: false,
+    weightAttempts: 0
   });
 
   const WC2018_GROUPS = Object.freeze({
@@ -122,13 +124,84 @@
     return String(row && row.name || '') + '|' + String(row && row.team || '');
   }
 
-  function positionGroup(position) {
-    const text = String(position || '');
+  // Disambiguate duplicate name|team rows (two Yossi Cohens) without changing
+  // the first occurrence's key — Open Data fold hashes stay stable.
+  function ensureDistinctPlayerIds(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const seen = Object.create(null);
+    return list.map(function (row) {
+      if (!row || typeof row !== 'object') return row;
+      if (row.id != null && String(row.id)) return row;
+      const base = String(row.name || '') + '|' + String(row.team || '');
+      const n = (seen[base] = (seen[base] || 0) + 1);
+      const id = n === 1 ? base : base + '|#' + n;
+      return Object.assign({}, row, { id: id });
+    });
+  }
+
+  // Minimum peers inside a position group before mid-rank normalize runs.
+  // Groups smaller than this keep raw component scores and a visible reason.
+  const MIN_POSITION_PEERS = 5;
+
+  // Short codes + Hebrew labels that StatsBomb-style English regexes miss.
+  // Overridable per store via createStore(..., { positionAliases }) or
+  // positionGroup(text, aliases) — the mapping step can pass a custom table.
+  const DEFAULT_POSITION_ALIASES = Object.freeze({
+    GK: 'GK',
+    CB: 'DF', LB: 'DF', RB: 'DF',
+    DM: 'MF', CM: 'MF', AM: 'MF',
+    LW: 'FW', RW: 'FW', ST: 'FW', CF: 'FW',
+    'שוער': 'GK',
+    'בלם': 'DF',
+    'מגן': 'DF',
+    'קשר': 'MF',
+    'כנף': 'FW',
+    'חלוץ': 'FW'
+  });
+
+  function positionGroup(position, aliases) {
+    const text = String(position || '').trim();
+    if (!text) return 'OT';
+    // Only an object table counts — Array#map would otherwise pass the index.
+    const table = (aliases && typeof aliases === 'object') ? aliases : DEFAULT_POSITION_ALIASES;
+    const upper = text.toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(table, upper)) return table[upper];
+    if (Object.prototype.hasOwnProperty.call(table, text)) return table[text];
+    // Full English labels (StatsBomb Open Data style) stay on the regex path.
     if (/goalkeeper/i.test(text)) return 'GK';
     if (/midfield/i.test(text)) return 'MF';
     if (/back|defen/i.test(text)) return 'DF';
     if (/forward|wing|striker/i.test(text)) return 'FW';
     return 'OT';
+  }
+
+  function mergePositionAliases(overrides) {
+    if (!overrides || typeof overrides !== 'object') return DEFAULT_POSITION_ALIASES;
+    return Object.assign({}, DEFAULT_POSITION_ALIASES, overrides);
+  }
+
+  function countOtRows(rows) {
+    let n = 0;
+    (rows || []).forEach(function (row) {
+      if ((row && row.positionGroup) === 'OT') n += 1;
+    });
+    return n;
+  }
+
+  function buildNormalizationNote(rows, metric, otCount) {
+    if (!metric || !metric.normalizePosition) return null;
+    const skipped = (rows || []).filter(function (row) {
+      return row && row.components && row.components.normalizationSkipped;
+    });
+    const parts = [];
+    parts.push('נרמול עמדה דורש לפחות ' + MIN_POSITION_PEERS + ' עמיתים בקבוצה');
+    if (otCount > 0) {
+      parts.push(otCount + ' שורות נפלו ל-OT (עמדה לא מזוהה)');
+    }
+    if (skipped.length) {
+      parts.push(skipped.length + ' שורות לא נורמלו כי הקבוצה קטנה מ-' + MIN_POSITION_PEERS);
+    }
+    return parts.join('. ') + '.';
   }
 
   function per90(value, minutes) {
@@ -140,6 +213,121 @@
   function scaleCap(value, cap) {
     if (!cap) return 0;
     return clamp((Number(value) || 0) / cap * 100, 0, 100);
+  }
+
+  // Fixed WC2018 teaching caps (7-game tournament + StatsBomb defs). Kept as
+  // the Open Data / research scale. Commercial USER_LICENSED_DATA must NOT
+  // reuse this set — see deriveFileCaps / createStore({ caps: 'file' }).
+  const WC2018_CAPS = Object.freeze({
+    pressures90: 18,
+    tacklesInt90: 6,
+    defensive90: 14,
+    progressive90: 22,
+    keyPasses90: 4,
+    passes90: 80,
+    xg90: 0.6,
+    boxTouches90: 8,
+    shotsOnTarget90: 2
+  });
+
+  const CAP_RECIPE_KEYS = Object.freeze([
+    'pressures90', 'tacklesInt90', 'defensive90',
+    'progressive90', 'keyPasses90', 'passes90',
+    'xg90', 'boxTouches90', 'shotsOnTarget90'
+  ]);
+
+  function copyCaps(caps) {
+    const out = {};
+    CAP_RECIPE_KEYS.forEach(function (key) {
+      const v = caps && caps[key];
+      out[key] = Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : WC2018_CAPS[key];
+    });
+    return out;
+  }
+
+  function resolveCapsSource(opts, openData, provenance) {
+    const asked = opts && opts.caps;
+    if (asked === 'file' || asked === 'wc2018') return asked;
+    if (openData || provenance === OPEN_DATA_PROVENANCE) return 'wc2018';
+    return 'file';
+  }
+
+  // Per-90 recipe inputs for one raw row (caps-independent).
+  function rawRecipePer90(player) {
+    const press = rawPer90(player, 'pressures', 'pressuresPer90');
+    const tackles = rawPer90(player, 'tackles', 'tacklesPer90');
+    const intercepts = rawPer90(player, 'interceptions', 'interceptionsPer90');
+    const defense = rawPer90(player, 'defensiveActions', 'defensiveActionsPer90');
+    const gritAvailable = componentAvailableOnPlayer(player, 'grit');
+    const prog = rawPer90(player, 'progressiveActions', 'progressiveActionsPer90');
+    const keyPasses = rawPer90(player, 'keyPasses', 'keyPassesPer90');
+    const passes = rawPer90(player, 'passesCompleted', 'passesCompletedPer90');
+    const involvementAvailable = componentAvailableOnPlayer(player, 'involvement');
+    const xg = rawPer90(player, 'shotXgSum', 'shotXgSumPer90');
+    const box = rawPer90(player, 'boxTouches', 'boxTouchesPer90');
+    const onTarget = rawPer90(player, 'shotsOnTarget', 'shotsOnTargetPer90');
+    const clutchAvailable = componentAvailableOnPlayer(player, 'clutch');
+    return {
+      pressures90: gritAvailable ? round2(press) : null,
+      tacklesInt90: gritAvailable ? round2(tackles + intercepts) : null,
+      defensive90: gritAvailable ? round2(defense) : null,
+      progressive90: involvementAvailable ? round2(prog) : null,
+      keyPasses90: involvementAvailable ? round2(keyPasses) : null,
+      passes90: involvementAvailable ? round2(passes) : null,
+      xg90: clutchAvailable ? round2(xg) : null,
+      boxTouches90: clutchAvailable ? round2(box) : null,
+      shotsOnTarget90: clutchAvailable ? round2(onTarget) : null
+    };
+  }
+
+  // Roster max per recipe key — the active commercial scale for BYOD.
+  // Deterministic; does not blend in WC2018 numbers (licence 1.2.2).
+  function deriveFileCaps(rawList) {
+    const caps = {};
+    CAP_RECIPE_KEYS.forEach(function (key) {
+      let max = 0;
+      let found = false;
+      (rawList || []).forEach(function (row) {
+        const raw = rawRecipePer90(row);
+        const v = Number(raw[key]);
+        if (!Number.isFinite(v)) return;
+        found = true;
+        if (v > max) max = v;
+      });
+      caps[key] = found && max > 0 ? round2(max) : 1;
+    });
+    return Object.freeze(caps);
+  }
+
+  function measureCapSaturation(players, caps) {
+    const c = caps || WC2018_CAPS;
+    let cells = 0;
+    let saturated = 0;
+    const byKey = {};
+    CAP_RECIPE_KEYS.forEach(function (key) {
+      byKey[key] = { n: 0, saturated: 0 };
+    });
+    (players || []).forEach(function (player) {
+      const raw = player && player.components && player.components.raw || {};
+      CAP_RECIPE_KEYS.forEach(function (key) {
+        const v = Number(raw[key]);
+        if (!Number.isFinite(v)) return;
+        cells += 1;
+        byKey[key].n += 1;
+        // Strict > : at the ceiling (v === cap) still scales to 100, but
+        // "saturation rate" means the head that was clipped above the cap.
+        if (v > c[key]) {
+          saturated += 1;
+          byKey[key].saturated += 1;
+        }
+      });
+    });
+    return {
+      saturated: saturated,
+      cells: cells,
+      rate: cells ? round2(saturated / cells) : 0,
+      byKey: byKey
+    };
   }
 
   function rawPer90(player, totalKey, per90Key) {
@@ -177,47 +365,39 @@
     return false;
   }
 
-  function componentsFromEvents(player) {
+  function componentsFromEvents(player, caps) {
+    const c = caps || WC2018_CAPS;
+    const raw = rawRecipePer90(player);
+    const gritOk = componentAvailableOnPlayer(player, 'grit');
+    const involvementOk = componentAvailableOnPlayer(player, 'involvement');
+    const clutchOk = componentAvailableOnPlayer(player, 'clutch');
     const press = rawPer90(player, 'pressures', 'pressuresPer90');
     const tackles = rawPer90(player, 'tackles', 'tacklesPer90');
     const intercepts = rawPer90(player, 'interceptions', 'interceptionsPer90');
     const defense = rawPer90(player, 'defensiveActions', 'defensiveActionsPer90');
-    const gritAvailable = componentAvailableOnPlayer(player, 'grit');
-    const grit = gritAvailable
-      ? round1(scaleCap(press, 18) * 0.45 + scaleCap(tackles + intercepts, 6) * 0.3 + scaleCap(defense, 14) * 0.25)
+    const grit = gritOk
+      ? round1(scaleCap(press, c.pressures90) * 0.45 + scaleCap(tackles + intercepts, c.tacklesInt90) * 0.3 + scaleCap(defense, c.defensive90) * 0.25)
       : null;
 
     const prog = rawPer90(player, 'progressiveActions', 'progressiveActionsPer90');
     const keyPasses = rawPer90(player, 'keyPasses', 'keyPassesPer90');
     const passes = rawPer90(player, 'passesCompleted', 'passesCompletedPer90');
-    const involvementAvailable = componentAvailableOnPlayer(player, 'involvement');
-    const involvement = involvementAvailable
-      ? round1(scaleCap(prog, 22) * 0.5 + scaleCap(keyPasses, 4) * 0.3 + scaleCap(passes, 80) * 0.2)
+    const involvement = involvementOk
+      ? round1(scaleCap(prog, c.progressive90) * 0.5 + scaleCap(keyPasses, c.keyPasses90) * 0.3 + scaleCap(passes, c.passes90) * 0.2)
       : null;
 
     const xg = rawPer90(player, 'shotXgSum', 'shotXgSumPer90');
     const box = rawPer90(player, 'boxTouches', 'boxTouchesPer90');
     const onTarget = rawPer90(player, 'shotsOnTarget', 'shotsOnTargetPer90');
-    const clutchAvailable = componentAvailableOnPlayer(player, 'clutch');
-    const clutch = clutchAvailable
-      ? round1(scaleCap(xg, 0.6) * 0.4 + scaleCap(box, 8) * 0.35 + scaleCap(onTarget, 2) * 0.25)
+    const clutch = clutchOk
+      ? round1(scaleCap(xg, c.xg90) * 0.4 + scaleCap(box, c.boxTouches90) * 0.35 + scaleCap(onTarget, c.shotsOnTarget90) * 0.25)
       : null;
 
     return {
       grit: grit,
       involvement: involvement,
       clutch: clutch,
-      raw: {
-        pressures90: gritAvailable ? round2(press) : null,
-        tacklesInt90: gritAvailable ? round2(tackles + intercepts) : null,
-        defensive90: gritAvailable ? round2(defense) : null,
-        progressive90: involvementAvailable ? round2(prog) : null,
-        keyPasses90: involvementAvailable ? round2(keyPasses) : null,
-        passes90: involvementAvailable ? round2(passes) : null,
-        xg90: clutchAvailable ? round2(xg) : null,
-        boxTouches90: clutchAvailable ? round2(box) : null,
-        shotsOnTarget90: clutchAvailable ? round2(onTarget) : null
-      }
+      raw: raw
     };
   }
 
@@ -262,7 +442,9 @@
     return cells[0] ? cells[0].value : null;
   }
 
-  function normalizeByPosition(rows) {
+  function normalizeByPosition(rows, options) {
+    const opts = options || {};
+    const minPeers = opts.minPeers != null ? Number(opts.minPeers) : MIN_POSITION_PEERS;
     const groups = {};
     rows.forEach(function (row, rowIndex) {
       const key = row.positionGroup || 'OT';
@@ -270,8 +452,15 @@
       groups[key].push(rowIndex);
     });
     const cellMaps = rows.map(function () { return {}; });
+    const skipReason = rows.map(function () { return null; });
     Object.keys(groups).forEach(function (key) {
       const idxs = groups[key];
+      if (idxs.length < minPeers) {
+        const reason = 'קבוצת עמדה ' + key + ' עם ' + idxs.length +
+          ' עמיתים — מתחת למינימום ' + minPeers;
+        idxs.forEach(function (ri) { skipReason[ri] = reason; });
+        return;
+      }
       ['grit', 'involvement', 'clutch'].forEach(function (comp) {
         const finiteIdxs = [];
         const vals = [];
@@ -289,6 +478,21 @@
       });
     });
     return rows.map(function (row, ri) {
+      if (skipReason[ri]) {
+        return Object.assign({}, row, {
+          components: Object.assign({}, row.components, {
+            raw: row.components.raw,
+            normalized: false,
+            normalizationSkipped: true,
+            normalizationReason: skipReason[ri],
+            ties: {
+              grit: { tiedPeers: 0, groupN: 0 },
+              involvement: { tiedPeers: 0, groupN: 0 },
+              clutch: { tiedPeers: 0, groupN: 0 }
+            }
+          })
+        });
+      }
       const map = cellMaps[ri];
       function cell(name) {
         return map[name] || { value: null, tiedPeers: 0, groupN: 0 };
@@ -306,6 +510,8 @@
           clutch: (clutchIn == null || !Number.isFinite(Number(clutchIn))) ? null : clutchCell.value,
           raw: row.components.raw,
           normalized: true,
+          normalizationSkipped: false,
+          normalizationReason: null,
           ties: {
             grit: { tiedPeers: gritCell.tiedPeers, groupN: gritCell.groupN },
             involvement: { tiedPeers: involvementCell.tiedPeers, groupN: involvementCell.groupN },
@@ -323,6 +529,7 @@
     const src = spec || {};
     const outcome = String(src.outcomeId || DEFAULT_METRIC.outcomeId);
     const split = String(src.splitId || DEFAULT_METRIC.splitId);
+    const attemptsRaw = Number(src.weightAttempts);
     return {
       grit: clamp(src.grit, 0, 100),
       involvement: clamp(src.involvement, 0, 100),
@@ -333,8 +540,15 @@
       compareId: src.compareId ? String(src.compareId) : '',
       outcomeId: OUTCOME_IDS.indexOf(outcome) >= 0 ? outcome : 'assists',
       splitId: split === 'hash' ? 'hash' : 'groups',
-      curriculumIndex: clamp(src.curriculumIndex, 0, CURRICULUM_LENGTH - 1)
+      curriculumIndex: clamp(src.curriculumIndex, 0, CURRICULUM_LENGTH - 1),
+      weightsLocked: !!src.weightsLocked,
+      weightAttempts: Number.isFinite(attemptsRaw) && attemptsRaw > 0 ? Math.round(attemptsRaw) : 0
     };
+  }
+
+  function weightTripleKey(spec) {
+    const metric = normalizeMetricSpec(spec);
+    return Math.round(metric.grit) + '|' + Math.round(metric.involvement) + '|' + Math.round(metric.clutch);
   }
 
   function compositeScore(components, spec) {
@@ -454,23 +668,61 @@
       comp: row.comp || row.competition || defaultComp,
       category: row.category,
       position: row.position || '',
-      positionGroup: positionGroup(row.position),
+      positionGroup: positionGroup(row.position, opts.positionAliases),
       minutes: minutes,
       matchesPlayed: row.matchesPlayed,
       group: WC2018_TEAM_GROUP[row.team] || null,
       counts: countsFromRow(row),
       per90File: row.per90 || null,
-      components: componentsFromEvents(row),
+      components: componentsFromEvents(row, opts.caps || WC2018_CAPS),
       provenance: provenance
     };
   }
 
-  function scorePrepared(prepared, spec) {
+  // ב10: count scorePrepared calls so tests can assert derive ranks each
+  // distinct needed spec once (~5) instead of re-ranking the same set ~11 times.
+  let RANK_CALLS = 0;
+  function resetRankCalls() { RANK_CALLS = 0; }
+  function getRankCalls() { return RANK_CALLS; }
+
+  function metricRankKey(spec) {
+    const metric = normalizeMetricSpec(spec);
+    return [
+      Math.round(metric.grit),
+      Math.round(metric.involvement),
+      Math.round(metric.clutch),
+      Math.round(metric.minMinutes),
+      metric.normalizePosition ? 1 : 0
+    ].join('|');
+  }
+
+  function createRankCache() {
+    return { __scoutRankCache: true };
+  }
+
+  function isRankCache(value) {
+    return !!(value && typeof value === 'object' && value.__scoutRankCache === true);
+  }
+
+  function rankOnce(prepared, spec, options, cache) {
+    if (!cache) return scorePrepared(prepared, spec, options);
+    const key = metricRankKey(spec);
+    if (Object.prototype.hasOwnProperty.call(cache, key)) return cache[key];
+    const rows = scorePrepared(prepared, spec, options);
+    cache[key] = rows;
+    return rows;
+  }
+
+  function scorePrepared(prepared, spec, options) {
+    RANK_CALLS += 1;
+    const opts = options || {};
     const metric = normalizeMetricSpec(spec);
     const eligible = prepared.filter(function (row) {
       return row && row.name && row.minutes >= metric.minMinutes;
     });
-    const adjusted = metric.normalizePosition ? normalizeByPosition(eligible) : eligible;
+    const adjusted = metric.normalizePosition
+      ? normalizeByPosition(eligible, { minPeers: opts.minPeers })
+      : eligible;
     return adjusted
       .map(function (row) {
         const score = compositeScore(row.components, metric);
@@ -539,14 +791,29 @@
     ];
   }
 
-  function fragilityFromPrepared(prepared, spec, delta) {
+  function fragilityFromPrepared(prepared, spec, delta, rankCache, scoreOpts) {
     const step = delta == null ? 10 : delta;
-    const baseRows = scorePrepared(prepared, spec);
+    const baseRows = rankOnce(prepared, spec, scoreOpts, rankCache);
     const byId = {};
     baseRows.forEach(function (row) { byId[row.id] = row; });
     const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
+    const baseSpec = normalizeMetricSpec(spec);
     return ['grit', 'involvement', 'clutch'].map(function (key) {
-      const ranked = scorePrepared(prepared, bumpSpec(spec, key, step));
+      const before = baseSpec[key];
+      const bumped = bumpSpec(spec, key, step);
+      // clamp at 0/100 can make +delta a silent no-op (e.g. grit already 100).
+      // Tag blocked explicitly — never pretend the minutes threshold is why ranks
+      // did not move.
+      const blocked = step !== 0 && bumped[key] === before;
+      if (blocked) {
+        return {
+          key: key,
+          label: 'אין הפרעה אפשרית במשקל 100',
+          blocked: true,
+          swings: []
+        };
+      }
+      const ranked = rankOnce(prepared, bumped, scoreOpts, rankCache);
       const swings = ranked
         .map(function (row) {
           const prev = byId[row.id];
@@ -562,7 +829,7 @@
         .filter(function (row) { return row.deltaRank; })
         .sort(function (a, b) { return Math.abs(b.deltaRank) - Math.abs(a.deltaRank); })
         .slice(0, 5);
-      return { key: key, label: labels[key] + ' +' + step, swings: swings };
+      return { key: key, label: labels[key] + ' +' + step, blocked: false, swings: swings };
     });
   }
 
@@ -575,13 +842,28 @@
     const prev = baseRows.find(function (row) { return row.id === selectedId; });
     if (!prev) return [];
     const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
+    const baseSpec = normalizeMetricSpec(spec);
     return ['grit', 'involvement', 'clutch'].map(function (key) {
-      const ranked = scorePrepared(prepared, bumpSpec(spec, key, step));
+      const before = baseSpec[key];
+      const bumped = bumpSpec(spec, key, step);
+      const blocked = step !== 0 && bumped[key] === before;
+      if (blocked) {
+        return {
+          key: key,
+          label: 'אין הפרעה אפשרית במשקל 100',
+          blocked: true,
+          from: prev.rank,
+          to: prev.rank,
+          deltaRank: 0
+        };
+      }
+      const ranked = scorePrepared(prepared, bumped);
       const row = ranked.find(function (item) { return item.id === selectedId; });
       const to = row ? row.rank : prev.rank;
       return {
         key: key,
         label: labels[key] + ' +' + step,
+        blocked: false,
         from: prev.rank,
         to: to,
         deltaRank: prev.rank - to
@@ -680,25 +962,88 @@
           ? 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
           : 'Synthetic teaching file shipped with ScoutAI — not match data'
       });
-    const rawList = eventPlayers(rawPlayers);
+    const rawList = ensureDistinctPlayerIds(eventPlayers(rawPlayers));
     const coverage = buildCoverage(rawList);
+    const positionAliases = mergePositionAliases(
+      opts.positionAliases || (rawPlayers && rawPlayers.positionAliases) || null
+    );
+    const capsSource = resolveCapsSource(opts, openData, provenance);
+    const caps = Object.freeze(
+      capsSource === 'file' ? copyCaps(deriveFileCaps(rawList)) : copyCaps(WC2018_CAPS)
+    );
     const players = flagImpossibleMinutes(rawList.map(function (row) {
-      return preparePlayer(row, { provenance: provenance });
+      return preparePlayer(row, { provenance: provenance, positionAliases: positionAliases, caps: caps });
     }));
+    const capSaturation = measureCapSaturation(players, caps);
+    const otCount = countOtRows(players);
+    // Unique normalized weight triples tried before (and including) lock.
+    // Owner decision: hide test fold on free Open Data layer too until lock.
+    const attemptedWeightKeys = Object.create(null);
+    let weightAttemptCount = 0;
+    let attemptSeedApplied = false;
+    function noteWeightAttempt(metric) {
+      const key = weightTripleKey(metric);
+      // Restore floor from hash once; current triple is included in that count.
+      if (!attemptSeedApplied && metric.weightAttempts > 0) {
+        weightAttemptCount = metric.weightAttempts;
+        attemptedWeightKeys[key] = true;
+        attemptSeedApplied = true;
+        return weightAttemptCount;
+      }
+      attemptSeedApplied = true;
+      if (!attemptedWeightKeys[key]) {
+        attemptedWeightKeys[key] = true;
+        weightAttemptCount += 1;
+      }
+      return weightAttemptCount;
+    }
     function derive(spec, baselineSpec) {
       const metric = normalizeMetricSpec(spec);
-      let rows = scorePrepared(players, metric);
-      if (baselineSpec) rows = attachDeltas(rows, scorePrepared(players, baselineSpec));
+      const attempts = noteWeightAttempt(metric);
+      metric.weightAttempts = attempts;
+      const scoreOpts = { minPeers: opts.minPeers };
+      // ב10: one rank per distinct needed spec (metric, baseline/DEFAULT, +3 weight bumps).
+      const rankCache = createRankCache();
+      let rows = rankOnce(players, metric, scoreOpts, rankCache);
+      if (baselineSpec) rows = attachDeltas(rows, rankOnce(players, baselineSpec, scoreOpts, rankCache));
+      const rankSamples = opts.rankSamples == null ? 0 : Number(opts.rankSamples) || 0;
+      if (rankSamples > 0) {
+        const seed = opts.rankSeed || ('scoutai-rank|' + [
+          Math.round(metric.grit),
+          Math.round(metric.involvement),
+          Math.round(metric.clutch),
+          Math.round(metric.minMinutes),
+          metric.normalizePosition ? 1 : 0
+        ].join('|'));
+        const intervals = rankInterval(players, metric, {
+          samples: rankSamples,
+          seed: seed,
+          minPeers: opts.minPeers,
+          caps: caps
+        });
+        const byId = Object.create(null);
+        intervals.forEach(function (iv) { byId[iv.id] = iv; });
+        rows = rows.map(function (row) {
+          return Object.assign({}, row, { rankInterval: byId[row.id] || null });
+        });
+      }
       const selected = rows.find(function (row) { return row.id === metric.selectedId; }) || rows[0] || null;
       if (selected && !metric.selectedId) metric.selectedId = selected.id;
       const compared = findPrepared(rows, players, metric.compareId);
-      const fragility = fragilityFromPrepared(players, metric, 10);
-      const layer = { provenance: provenance, source: source };
+      const fragility = fragilityFromPrepared(players, metric, 10, rankCache, scoreOpts);
+      const layer = { provenance: provenance, source: source, caps: caps, capsSource: capsSource, capSaturation: capSaturation };
       const explorer = buildEventExplorer(selected, layer);
       const validation = validateMetric(players, metric, {
         outcomeId: metric.outcomeId,
-        splitId: metric.splitId
+        splitId: metric.splitId,
+        revealed: !!metric.weightsLocked,
+        attempts: attempts,
+        seed: opts.validationSeed || 'scoutai-demo-001',
+        rankCache: rankCache,
+        scoreOpts: scoreOpts
       });
+      // Single exercise eval; reuse ranks. Browser re-runs evaluateCurriculum with real answers.
+      const exercise = evaluateExercise(players, metric, null, rankCache, scoreOpts);
       return {
         spec: metric,
         rows: rows,
@@ -709,20 +1054,11 @@
         mapping: lessonMapping(selected),
         fragility: fragility,
         formula: formatFormula(metric),
-        exercise: evaluateExercise(players, metric),
-        radar: buildCompareRadar(selected, compared),
+        exercise: exercise,
+        radar: buildCompareRadar(selected, compared, { caps: caps }),
         explorer: explorer,
         validation: validation,
         glossary: glossaryForPlayer(selected),
-        curriculum: evaluateCurriculum({
-          spec: metric,
-          selected: selected,
-          explorer: explorer,
-          validation: validation,
-          exercise: evaluateExercise(players, metric),
-          players: players,
-          answers: {}
-        }),
         exportBundle: exportMetricBundle(metric, selected, {
           compared: compared,
           provenance: provenance,
@@ -732,7 +1068,13 @@
         source: source,
         commercialAllowed: provenance === USER_DATA_PROVENANCE,
         coverage: coverage,
-        coverageBanner: coverage.banner
+        coverageBanner: coverage.banner,
+        otCount: otCount,
+        positionAliases: positionAliases,
+        normalizationNote: buildNormalizationNote(rows, metric, otCount),
+        caps: caps,
+        capsSource: capsSource,
+        capSaturation: capSaturation
       };
     }
     return {
@@ -740,7 +1082,12 @@
       derive: derive,
       provenance: provenance,
       source: source,
-      coverage: coverage
+      coverage: coverage,
+      otCount: otCount,
+      positionAliases: positionAliases,
+      caps: caps,
+      capsSource: capsSource,
+      capSaturation: capSaturation
     };
   }
 
@@ -783,6 +1130,8 @@
       parts.push('fold=' + encodeURIComponent(metric.splitId));
     }
     if (metric.curriculumIndex) parts.push('cur=' + metric.curriculumIndex);
+    if (metric.weightsLocked) parts.push('lock=1');
+    if (metric.weightAttempts > 0) parts.push('att=' + metric.weightAttempts);
     return parts.join('&');
   }
 
@@ -805,7 +1154,9 @@
       compareId: params.cmp || '',
       outcomeId: params.out || DEFAULT_METRIC.outcomeId,
       splitId: params.fold || DEFAULT_METRIC.splitId,
-      curriculumIndex: params.cur
+      curriculumIndex: params.cur,
+      weightsLocked: params.lock === '1' || params.lock === 'true',
+      weightAttempts: params.att
     });
   }
 
@@ -816,21 +1167,23 @@
       metric.clutch + '×Clutch) / ' + (total || 1);
   }
 
+  // Static WC2018 teaching recipe (same numbers as WC2018_CAPS). Active scoring
+  // uses store.caps — file-derived for USER_LICENSED_DATA, WC2018 for Open Data.
   const COMPONENT_RECIPE = Object.freeze({
     grit: Object.freeze([
-      { key: 'pressures90', label: 'לחיצות /90', cap: 18, weight: 0.45 },
-      { key: 'tacklesInt90', label: 'תיקולים+חטיפות /90', cap: 6, weight: 0.3 },
-      { key: 'defensive90', label: 'פעולות הגנה /90', cap: 14, weight: 0.25 }
+      { key: 'pressures90', label: 'לחיצות /90', cap: WC2018_CAPS.pressures90, weight: 0.45 },
+      { key: 'tacklesInt90', label: 'תיקולים+חטיפות /90', cap: WC2018_CAPS.tacklesInt90, weight: 0.3 },
+      { key: 'defensive90', label: 'פעולות הגנה /90', cap: WC2018_CAPS.defensive90, weight: 0.25 }
     ]),
     involvement: Object.freeze([
-      { key: 'progressive90', label: 'התקדמות /90', cap: 22, weight: 0.5 },
-      { key: 'keyPasses90', label: 'מסירות מפתח /90', cap: 4, weight: 0.3 },
-      { key: 'passes90', label: 'מסירות /90', cap: 80, weight: 0.2 }
+      { key: 'progressive90', label: 'התקדמות /90', cap: WC2018_CAPS.progressive90, weight: 0.5 },
+      { key: 'keyPasses90', label: 'מסירות מפתח /90', cap: WC2018_CAPS.keyPasses90, weight: 0.3 },
+      { key: 'passes90', label: 'מסירות /90', cap: WC2018_CAPS.passes90, weight: 0.2 }
     ]),
     clutch: Object.freeze([
-      { key: 'xg90', label: 'xG /90', cap: 0.6, weight: 0.4 },
-      { key: 'boxTouches90', label: 'נגיעות ברחבה /90', cap: 8, weight: 0.35 },
-      { key: 'shotsOnTarget90', label: 'בעיטות למסגרת /90', cap: 2, weight: 0.25 }
+      { key: 'xg90', label: 'xG /90', cap: WC2018_CAPS.xg90, weight: 0.4 },
+      { key: 'boxTouches90', label: 'נגיעות ברחבה /90', cap: WC2018_CAPS.boxTouches90, weight: 0.35 },
+      { key: 'shotsOnTarget90', label: 'בעיטות למסגרת /90', cap: WC2018_CAPS.shotsOnTarget90, weight: 0.25 }
     ])
   });
 
@@ -986,6 +1339,132 @@
     })
   });
 
+  const LEARNING_STORAGE_KEY = 'scoutai.learning.v1';
+  const LEARNING_ROSE_IDS = Object.freeze(['grit', 'involvement', 'clutch']);
+  const LEARNING_COST_IDS = Object.freeze(['DF', 'MF', 'FW', 'GK', 'none']);
+
+  function emptyLearningState() {
+    return {
+      answers: {
+        unusedField: '',
+        per90: '',
+        cappedField: '',
+        weightsManual: '',
+        fragilityPredict: '',
+        splitIsSeason: '',
+        whatMatters: '',
+        beatsMinutes: '',
+        unusedTerm: '',
+        commercial: ''
+      },
+      defence: '',
+      roseComponent: '',
+      costGroup: ''
+    };
+  }
+
+  function serializeLearningState(state) {
+    const base = emptyLearningState();
+    const src = state && typeof state === 'object' ? state : {};
+    const srcAnswers = src.answers && typeof src.answers === 'object' ? src.answers : {};
+    const answers = {};
+    Object.keys(base.answers).forEach(function (key) {
+      answers[key] = srcAnswers[key] == null ? '' : String(srcAnswers[key]);
+    });
+    const rose = src.roseComponent == null ? '' : String(src.roseComponent);
+    const cost = src.costGroup == null ? '' : String(src.costGroup);
+    return JSON.stringify({
+      answers: answers,
+      defence: src.defence == null ? '' : String(src.defence),
+      roseComponent: LEARNING_ROSE_IDS.indexOf(rose) >= 0 ? rose : (rose === '' ? '' : rose),
+      costGroup: LEARNING_COST_IDS.indexOf(cost) >= 0 ? cost : (cost === '' ? '' : cost)
+    });
+  }
+
+  function parseLearningState(raw) {
+    try {
+      if (raw == null || raw === '') return emptyLearningState();
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return emptyLearningState();
+      const normalized = JSON.parse(serializeLearningState(parsed));
+      const base = emptyLearningState();
+      const rose = normalized.roseComponent;
+      const cost = normalized.costGroup;
+      return {
+        answers: Object.assign({}, base.answers, normalized.answers || {}),
+        defence: normalized.defence == null ? '' : String(normalized.defence),
+        roseComponent: LEARNING_ROSE_IDS.indexOf(rose) >= 0 ? rose : '',
+        costGroup: LEARNING_COST_IDS.indexOf(cost) >= 0 ? cost : ''
+      };
+    } catch (err) {
+      return emptyLearningState();
+    }
+  }
+
+  function loadLearningState(storage) {
+    try {
+      if (!storage || typeof storage.getItem !== 'function') return emptyLearningState();
+      return parseLearningState(storage.getItem(LEARNING_STORAGE_KEY));
+    } catch (err) {
+      return emptyLearningState();
+    }
+  }
+
+  function saveLearningState(storage, state) {
+    try {
+      if (!storage || typeof storage.setItem !== 'function') return false;
+      storage.setItem(LEARNING_STORAGE_KEY, serializeLearningState(state));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function normalizeLearningClaim(claim) {
+    const src = claim || {};
+    let rose = src.roseComponent != null ? String(src.roseComponent) : (src.rose != null ? String(src.rose) : '');
+    let cost = src.costGroup != null ? String(src.costGroup) : (src.cost != null ? String(src.cost) : '');
+    if (/no\s*cost\s*to\s*forwards/i.test(cost) || cost === 'no-cost-forwards') cost = 'none';
+    if (LEARNING_ROSE_IDS.indexOf(rose) < 0) rose = '';
+    if (LEARNING_COST_IDS.indexOf(cost) < 0) cost = '';
+    return { roseComponent: rose, costGroup: cost };
+  }
+
+  function expectedTradeoff(metric, current, baseline) {
+    const deltas = {
+      grit: metric.grit - DEFAULT_METRIC.grit,
+      involvement: metric.involvement - DEFAULT_METRIC.involvement,
+      clutch: metric.clutch - DEFAULT_METRIC.clutch
+    };
+    let roseComponent = '';
+    let best = 0;
+    LEARNING_ROSE_IDS.forEach(function (key) {
+      if (deltas[key] > best) {
+        best = deltas[key];
+        roseComponent = key;
+      }
+    });
+    const groups = ['DF', 'MF', 'FW', 'GK'];
+    let costGroup = 'none';
+    let worst = 0;
+    groups.forEach(function (group) {
+      const before = medianRank(baseline, group);
+      const after = medianRank(current, group);
+      if (before == null || after == null) return;
+      const delta = after - before;
+      if (delta > worst) {
+        worst = delta;
+        costGroup = group;
+      }
+    });
+    if (worst <= 0) costGroup = 'none';
+    return {
+      roseComponent: roseComponent,
+      costGroup: costGroup,
+      weightDeltas: deltas
+    };
+  }
+
   function medianRank(rows, group) {
     const ranks = rows
       .filter(function (row) { return row.positionGroup === group; })
@@ -1004,11 +1483,23 @@
     return createStore(input).players;
   }
 
-  function evaluateExercise(prepared, spec) {
+  // Defender self-check needs a window of 12 and peer groups; rosters ≤12 are
+  // not-evaluable (smallSample) rather than a quiet fail.
+  const EXERCISE_SMALL_SAMPLE_MAX = 12;
+
+  function evaluateExercise(prepared, spec, claim, rankCache, scoreOpts) {
+    // Additive optional args: claim stays 3rd; rankCache may also be passed as 3rd
+    // when it is a createRankCache() object (existing claim-shaped calls keep working).
+    if (isRankCache(claim) && rankCache == null) {
+      rankCache = claim;
+      claim = null;
+    }
     const players = asPrepared(prepared);
     const metric = normalizeMetricSpec(spec);
-    const current = scorePrepared(players, metric);
-    const baseline = scorePrepared(players, DEFAULT_METRIC);
+    const rosterN = players.length;
+    const smallSample = rosterN <= EXERCISE_SMALL_SAMPLE_MAX;
+    const current = rankOnce(players, metric, scoreOpts, rankCache);
+    const baseline = rankOnce(players, DEFAULT_METRIC, scoreOpts, rankCache);
     const windowSize = Math.min(12, current.length);
     const nowTop = current.slice(0, windowSize);
     const baseTop = baseline.slice(0, windowSize);
@@ -1017,29 +1508,57 @@
     const fwNow = countGroup(nowTop, 'FW');
     const medianDf = medianRank(current, 'DF');
     const medianFw = medianRank(current, 'FW');
+    const trade = expectedTradeoff(metric, current, baseline);
+    const declared = normalizeLearningClaim(claim);
+    const medianBit = (medianDf != null && medianFw != null)
+      ? ('חציון דירוג חי: DF #' + medianDf + ' · FW #' + medianFw + '.')
+      : 'חציון דירוג DF/FW לא זמין.';
+    const smallMsg = 'אי אפשר להעריך את הבדיקה הזאת ב-n=' + rosterN;
+    let tradeDetail;
+    let tradePass = false;
+    if (smallSample) {
+      tradePass = false;
+      tradeDetail = smallMsg;
+    } else if (!declared.roseComponent || !declared.costGroup) {
+      tradeDetail = 'הצהירו איזה רכיב עלה ואיזו קבוצת עמדה שילמה את המחיר. ' + medianBit;
+    } else if (declared.costGroup === 'none' && trade.costGroup !== 'none') {
+      tradePass = false;
+      tradeDetail = 'לא נכון שאין עלות לחלוצים (או לאף אחד). בפועל שילמה ' + trade.costGroup +
+        '. ' + medianBit + ' הרכיב שעלה מול 40/30/30: ' + (trade.roseComponent || 'אין') + '.';
+    } else {
+      tradePass = declared.roseComponent === trade.roseComponent && declared.costGroup === trade.costGroup;
+      tradeDetail = tradePass
+        ? ('נכון: ' + trade.roseComponent + ' עלה; ' + trade.costGroup + ' שילמה את המחיר. ' + medianBit)
+        : ('ההצהרה לא תואמת את הדירוג החי. בפועל עלה ' + (trade.roseComponent || 'אין') +
+          ' ואת המחיר שילמה ' + trade.costGroup + '. ' + medianBit);
+    }
     const checks = [
       {
         id: 'minutes',
         label: 'סף דקות לפחות 270 — כדי לא לדרג מחליף של משחק אחד',
         pass: metric.minMinutes >= 270,
+        evaluable: true,
         detail: 'סף נוכחי: ' + metric.minMinutes + ' דקות.'
       },
       {
         id: 'grit-over-clutch',
         label: 'Grit גבוה מ-Clutch — בלם לא נמדד בעיקר ב-xG',
         pass: metric.grit > metric.clutch,
+        evaluable: true,
         detail: 'Grit ' + metric.grit + ' מול Clutch ' + metric.clutch + '.'
       },
       {
         id: 'defenders-surface',
         label: 'יותר בלמים ב-12 הראשונים מאשר במדד הבסיס 40/30/30',
-        pass: dfNow > dfBase,
-        detail: 'עכשיו ' + dfNow + ' בלמים בחלון, בבסיס היו ' + dfBase + '.'
+        pass: smallSample ? false : (dfNow > dfBase),
+        evaluable: !smallSample,
+        detail: smallSample ? smallMsg : ('עכשיו ' + dfNow + ' בלמים בחלון, בבסיס היו ' + dfBase + '.')
       },
       {
         id: 'fair-comparison',
         label: 'נרמול עמדה או משקל מאמץ דומיננטי (Grit ≥ 60)',
         pass: metric.normalizePosition || metric.grit >= 60,
+        evaluable: true,
         detail: metric.normalizePosition
           ? 'נרמול עמדה דולק (אחוזון mid-rank): בלם מושווה לבלמים, לא לחלוץ.'
           : 'בלי נרמול צריך Grit גבוה, אחרת xG של חלוצים שולט.'
@@ -1047,12 +1566,20 @@
       {
         id: 'not-just-attackers',
         label: 'בחלון העליון יש לפחות אותו מספר בלמים כמו חלוצים',
-        pass: windowSize === 0 || dfNow >= fwNow,
-        detail: 'בלמים ' + dfNow + ' · חלוצים ' + fwNow +
-          (medianDf != null && medianFw != null ? ' · חציון דירוג DF #' + medianDf + ' / FW #' + medianFw : '') + '.'
+        pass: smallSample ? false : (windowSize === 0 || dfNow >= fwNow),
+        evaluable: !smallSample,
+        detail: smallSample ? smallMsg : ('בלמים ' + dfNow + ' · חלוצים ' + fwNow +
+          (medianDf != null && medianFw != null ? ' · חציון דירוג DF #' + medianDf + ' / FW #' + medianFw : '') + '.')
+      },
+      {
+        id: 'tradeoff-defence',
+        label: 'הצהרת פשרה: איזה רכיב עלה, ואיזו קבוצת עמדה שילמה את המחיר בחציון הדירוג',
+        pass: smallSample ? false : tradePass,
+        evaluable: !smallSample,
+        detail: tradeDetail
       }
     ];
-    const passed = checks.every(function (item) { return item.pass; });
+    const passed = !smallSample && checks.every(function (item) { return item.pass; });
     return {
       id: DEFENDER_EXERCISE.id,
       title: DEFENDER_EXERCISE.title,
@@ -1060,29 +1587,38 @@
       hint: DEFENDER_EXERCISE.hint,
       checks: checks,
       passed: passed,
+      smallSample: smallSample,
+      rosterN: rosterN,
       windowSize: windowSize,
       dfNow: dfNow,
       dfBase: dfBase,
       fwNow: fwNow,
       medianDf: medianDf,
       medianFw: medianFw,
-      summary: passed
-        ? 'עברתם את הבדיקה העצמית. זה עדיין מדד ידני — לא הוכחה שמצאתם בלם טוב.'
-        : 'עוד לא. המדד עדיין מתנהג כמו מדד חלוצים, או שהמדגם קטן מדי.'
+      expectedRose: trade.roseComponent,
+      expectedCostGroup: trade.costGroup,
+      claim: declared,
+      summary: smallSample
+        ? smallMsg
+        : (passed
+          ? 'עברתם את הבדיקה העצמית. זה עדיין מדד ידני — לא הוכחה שמצאתם בלם טוב.'
+          : 'עוד לא. המדד עדיין מתנהג כמו מדד חלוצים, או שהמדגם קטן מדי, או שההצהרה על הפשרה לא מדויקת.')
     };
   }
 
-  function radarValues(row) {
+  function radarValues(row, caps) {
+    const c = caps || WC2018_CAPS;
     const raw = row && row.components && row.components.raw || {};
     return RADAR_AXES.map(function (axis) {
       const value = Number(raw[axis.key]);
+      const cap = c[axis.key] != null ? c[axis.key] : axis.cap;
       return {
         key: axis.key,
         label: axis.label,
         feeds: axis.feeds,
-        cap: axis.cap,
+        cap: cap,
         raw: Number.isFinite(value) ? value : 0,
-        scaled: round1(scaleCap(Number.isFinite(value) ? value : 0, axis.cap))
+        scaled: round1(scaleCap(Number.isFinite(value) ? value : 0, cap))
       };
     });
   }
@@ -1117,8 +1653,9 @@
     const cx = options && options.cx != null ? options.cx : 160;
     const cy = options && options.cy != null ? options.cy : 160;
     const radius = options && options.radius != null ? options.radius : 110;
-    const aValues = radarValues(rowA);
-    const bValues = rowB ? radarValues(rowB) : null;
+    const caps = options && options.caps ? options.caps : WC2018_CAPS;
+    const aValues = radarValues(rowA, caps);
+    const bValues = rowB ? radarValues(rowB, caps) : null;
     const axisGuide = aValues.map(function (item, index) {
       const tip = polarPoint(index, aValues.length, 100, cx, cy, radius);
       const labelAt = polarPoint(index, aValues.length, 118, cx, cy, radius);
@@ -1200,6 +1737,23 @@
         : 'Synthetic teaching file shipped with ScoutAI — not match data'
     });
     const commercial = false;
+    const learningIn = extra.learning && typeof extra.learning === 'object' ? extra.learning : {};
+    const learningRecord = Array.isArray(learningIn.record)
+      ? learningIn.record.map(function (item) {
+        return {
+          id: item && item.id != null ? String(item.id) : '',
+          pass: !!(item && item.pass),
+          label: item && item.label != null ? String(item.label) : ''
+        };
+      })
+      : [];
+    const learning = {
+      defence: learningIn.defence == null ? '' : String(learningIn.defence),
+      passed: typeof learningIn.passed === 'boolean' ? learningIn.passed : null,
+      roseComponent: learningIn.roseComponent == null ? '' : String(learningIn.roseComponent),
+      costGroup: learningIn.costGroup == null ? '' : String(learningIn.costGroup),
+      record: learningRecord
+    };
     return {
       tool: 'ScoutAI',
       purpose: 'educational metric lab',
@@ -1234,6 +1788,7 @@
         components: extra.compared.components
       } : null,
       methodologyHe: methodologyParagraph(metric, selected, { provenance: provenance }),
+      learning: learning,
       citationEn: provenance === USER_DATA_PROVENANCE
         ? 'ScoutAI educational metric lab on USER_LICENSED_DATA processed locally. ScoutAI does not license the uploaded file. Weights are manual and uncalibrated; not a scouting recommendation.'
         : provenance === SYNTHETIC_PROVENANCE
@@ -1241,6 +1796,73 @@
           : 'ScoutAI educational metric lab on StatsBomb Open Data, FIFA World Cup 2018 (competition 43, season 3). Non-commercial research/education only. Weights are manual and uncalibrated; not a scouting recommendation.',
       generatedLocally: true
     };
+  }
+
+
+  function buildCompletionRecord(context) {
+    const ctx = context || {};
+    const provenance = ctx.provenance
+      || (ctx.selected && ctx.selected.provenance)
+      || OPEN_DATA_PROVENANCE;
+    const curriculum = Array.isArray(ctx.curriculum)
+      ? ctx.curriculum
+      : evaluateCurriculum(ctx);
+    const stepIds = CURRICULUM_LESSONS.map(function (lesson) { return lesson.id; });
+    const steps = curriculum.map(function (lesson) {
+      return {
+        id: lesson.id,
+        title: lesson.title || '',
+        passed: !!lesson.passed,
+        checks: (lesson.checks || []).map(function (item) {
+          return {
+            id: item && item.id != null ? String(item.id) : '',
+            pass: !!(item && item.pass),
+            label: item && item.label != null ? String(item.label) : ''
+          };
+        })
+      };
+    });
+    const passed = steps.length > 0 && steps.every(function (step) { return step.passed; });
+    const disclaimerHe =
+      'רשומת השלמה מקומית לדיווח עצמי — לא תעודת מנהלת הליגות ולא הסמכה רשמית. ' +
+      'accredited:false. NO_HELD_OUT_SEASON: אין עונה מוחזקת בריפו; פיצול הבתים הוא אותו טורניר. ' +
+      'המשקלות ידניות ולא מכוילות — לא המלצת סקאוטינג.';
+    const stamp = provenance === OPEN_DATA_PROVENANCE
+      ? 'NON_COMMERCIAL · STATSBOMB_OPEN_DATA · education/research only · not for sale'
+      : (provenance === USER_DATA_PROVENANCE
+        ? 'USER_LICENSED_DATA · local self-report · not a management certificate'
+        : 'SYNTHETIC_EXAMPLE · teaching only · not a management certificate');
+    const record = {
+      tool: 'ScoutAI',
+      kind: 'local-completion-record',
+      purpose: 'educational self-report',
+      accredited: false,
+      commercial: false,
+      provenance: provenance,
+      stamp: stamp,
+      stepIds: stepIds,
+      steps: steps,
+      passed: passed,
+      warnings: [
+        'NO_HELD_OUT_SEASON',
+        'HAND_WEIGHTS_UNCALIBRATED',
+        'NOT_MANAGEMENT_CERTIFICATE'
+      ],
+      disclaimerHe: disclaimerHe,
+      heldOutSeason: false,
+      generatedLocally: true
+    };
+    // Open Data: never embed player rows (licence 1.2.2 — no derived commercial artefact packing roster).
+    if (provenance !== OPEN_DATA_PROVENANCE && Array.isArray(ctx.players) && ctx.players.length) {
+      record.players = ctx.players.map(function (row) {
+        return {
+          id: row && row.id != null ? String(row.id) : '',
+          name: row && row.name != null ? String(row.name) : '',
+          team: row && row.team != null ? String(row.team) : ''
+        };
+      });
+    }
+    return record;
   }
 
   function sourceLayer(meta, row) {
@@ -1319,17 +1941,19 @@
     ];
   }
 
+  // Static column dictionary; cap field mirrors WC2018_CAPS. Explorer rows
+  // override with store.caps when the active layer is file-derived.
   const EVENT_COLUMNS = Object.freeze([
-    { key: 'pressures', label: 'לחיצות', type: 'Pressure', feeds: 'Grit', usedInScore: true, recipeKey: 'pressures90', cap: 18, weight: 0.45, per90Field: 'pressuresPer90' },
-    { key: 'tackles', label: 'תיקולים', type: 'Duel / Tackle', feeds: 'Grit', usedInScore: true, recipeKey: 'tacklesInt90', cap: 6, weight: 0.3, per90Field: 'tacklesPer90', pairWith: 'interceptions' },
-    { key: 'interceptions', label: 'חטיפות', type: 'Interception', feeds: 'Grit', usedInScore: true, recipeKey: 'tacklesInt90', cap: 6, weight: 0.3, per90Field: 'interceptionsPer90', pairWith: 'tackles' },
-    { key: 'defensiveActions', label: 'פעולות הגנה', type: 'Ball Recovery + Block', feeds: 'Grit', usedInScore: true, recipeKey: 'defensive90', cap: 14, weight: 0.25, per90Field: 'defensiveActionsPer90' },
-    { key: 'progressiveActions', label: 'התקדמות', type: 'Pass / Carry', feeds: 'Involvement', usedInScore: true, recipeKey: 'progressive90', cap: 22, weight: 0.5, per90Field: 'progressiveActionsPer90' },
-    { key: 'keyPasses', label: 'מסירות מפתח', type: 'Pass (shot/goal assist)', feeds: 'Involvement', usedInScore: true, recipeKey: 'keyPasses90', cap: 4, weight: 0.3, per90Field: 'keyPassesPer90' },
-    { key: 'passesCompleted', label: 'מסירות שהושלמו', type: 'Pass', feeds: 'Involvement', usedInScore: true, recipeKey: 'passes90', cap: 80, weight: 0.2, per90Field: 'passesCompletedPer90' },
-    { key: 'shotXgSum', label: 'סכום xG', type: 'Shot + statsbomb_xg', feeds: 'Clutch', usedInScore: true, recipeKey: 'xg90', cap: 0.6, weight: 0.4, per90Field: 'shotXgSumPer90' },
-    { key: 'boxTouches', label: 'נגיעות ברחבה', type: 'location (penalty box)', feeds: 'Clutch', usedInScore: true, recipeKey: 'boxTouches90', cap: 8, weight: 0.35, per90Field: 'boxTouchesPer90' },
-    { key: 'shotsOnTarget', label: 'בעיטות למסגרת', type: 'Shot (Saved/Goal)', feeds: 'Clutch', usedInScore: true, recipeKey: 'shotsOnTarget90', cap: 2, weight: 0.25, per90Field: 'shotsOnTargetPer90' },
+    { key: 'pressures', label: 'לחיצות', type: 'Pressure', feeds: 'Grit', usedInScore: true, recipeKey: 'pressures90', cap: WC2018_CAPS.pressures90, weight: 0.45, per90Field: 'pressuresPer90' },
+    { key: 'tackles', label: 'תיקולים', type: 'Duel / Tackle', feeds: 'Grit', usedInScore: true, recipeKey: 'tacklesInt90', cap: WC2018_CAPS.tacklesInt90, weight: 0.3, per90Field: 'tacklesPer90', pairWith: 'interceptions' },
+    { key: 'interceptions', label: 'חטיפות', type: 'Interception', feeds: 'Grit', usedInScore: true, recipeKey: 'tacklesInt90', cap: WC2018_CAPS.tacklesInt90, weight: 0.3, per90Field: 'interceptionsPer90', pairWith: 'tackles' },
+    { key: 'defensiveActions', label: 'פעולות הגנה', type: 'Ball Recovery + Block', feeds: 'Grit', usedInScore: true, recipeKey: 'defensive90', cap: WC2018_CAPS.defensive90, weight: 0.25, per90Field: 'defensiveActionsPer90' },
+    { key: 'progressiveActions', label: 'התקדמות', type: 'Pass / Carry', feeds: 'Involvement', usedInScore: true, recipeKey: 'progressive90', cap: WC2018_CAPS.progressive90, weight: 0.5, per90Field: 'progressiveActionsPer90' },
+    { key: 'keyPasses', label: 'מסירות מפתח', type: 'Pass (shot/goal assist)', feeds: 'Involvement', usedInScore: true, recipeKey: 'keyPasses90', cap: WC2018_CAPS.keyPasses90, weight: 0.3, per90Field: 'keyPassesPer90' },
+    { key: 'passesCompleted', label: 'מסירות שהושלמו', type: 'Pass', feeds: 'Involvement', usedInScore: true, recipeKey: 'passes90', cap: WC2018_CAPS.passes90, weight: 0.2, per90Field: 'passesCompletedPer90' },
+    { key: 'shotXgSum', label: 'סכום xG', type: 'Shot + statsbomb_xg', feeds: 'Clutch', usedInScore: true, recipeKey: 'xg90', cap: WC2018_CAPS.xg90, weight: 0.4, per90Field: 'shotXgSumPer90' },
+    { key: 'boxTouches', label: 'נגיעות ברחבה', type: 'location (penalty box)', feeds: 'Clutch', usedInScore: true, recipeKey: 'boxTouches90', cap: WC2018_CAPS.boxTouches90, weight: 0.35, per90Field: 'boxTouchesPer90' },
+    { key: 'shotsOnTarget', label: 'בעיטות למסגרת', type: 'Shot (Saved/Goal)', feeds: 'Clutch', usedInScore: true, recipeKey: 'shotsOnTarget90', cap: WC2018_CAPS.shotsOnTarget90, weight: 0.25, per90Field: 'shotsOnTargetPer90' },
     { key: 'shots', label: 'בעיטות', type: 'Shot', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'shotsPer90' },
     { key: 'goals', label: 'שערים', type: 'Goal', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'goalsPer90' },
     { key: 'assists', label: 'בישולים', type: 'Assist', feeds: 'לא בנוסחה', usedInScore: false, recipeKey: null, cap: null, weight: null, per90Field: 'assistsPer90' },
@@ -1344,7 +1968,7 @@
   const OUTCOMES = Object.freeze([
     { id: 'assists', label: 'בישולים', field: 'assists', leaky: false, leakNote: 'בישול לא נכנס לנוסחה. מסירת מפתח כן — זה לא אותו שדה.' },
     { id: 'dribbles', label: 'כדרורים', field: 'dribbles', leaky: false, leakNote: 'כדרור נאסף בקובץ ולא נכנס לציון.' },
-    { id: 'duelsWon', label: 'דו-קרבות שנרכשו', field: 'duelsWon', leaky: true, leakNote: 'דליפה נמדדת: העמודה זהה ל-tackles (קלט Grit) ב-605/605 שורות.' },
+    { id: 'duelsWon', label: 'דו-קרבות שנרכשו', field: 'duelsWon', leaky: true, leakNote: 'ב־Open Data העמודה חופפת ל-tackles (קלט Grit); בשכבת BYOD/סינתטי הדליפה נמדדת מחדש על הקובץ הפעיל.' },
     { id: 'goals', label: 'שערים', field: 'goals', leaky: false, leakNote: 'תלות רעיונית ב-Clutch/xG אינה סף העתקה (≥0.95 מול קלט יחיד).' },
     { id: 'box', label: 'שערים+בישולים', field: 'box', leaky: false, leakNote: 'תלות רעיונית ב-Clutch אינה סף העתקה (≥0.95 מול קלט יחיד).' }
   ]);
@@ -1461,11 +2085,17 @@
   function buildEventExplorer(player, meta) {
     const layer = sourceLayer(meta, player);
     const dataset = (layer.source && layer.source.dataset) || 'user-upload';
+    const activeCaps = (meta && meta.caps) || (layer && layer.caps) || WC2018_CAPS;
+    const capsSource = (meta && meta.capsSource) || (layer && layer.capsSource) || 'wc2018';
+    const capSaturation = (meta && meta.capSaturation) || (layer && layer.capSaturation) || null;
     if (!player) {
       return {
         player: null,
         dataset: dataset,
         provenance: layer.provenance,
+        caps: activeCaps,
+        capsSource: capsSource,
+        capSaturation: capSaturation,
         honesty: layer.provenance === OPEN_DATA_PROVENANCE
           ? 'הקובץ המקומי הוא ספירות מצטברות מ-64 משחקים, לא יומן אירוע-אחר-אירוע. אין כאן דקה, משחק או שידור.'
           : 'אין שחקן נבחר. הספירות יגיעו מהשכבה הפעילה (' + layer.provenance + '), לא מיומן אירוע.',
@@ -1482,8 +2112,13 @@
       const total = col.key === 'totalMinutesProxy' ? minutes : (counts[col.key] == null ? 0 : counts[col.key]);
       const computed90 = minutes > 0 ? round2(total * 90 / minutes) : 0;
       const fromFile = filePer90(player, col.per90Field);
-      const scaled = col.cap ? round1(scaleCap(raw[col.recipeKey] != null ? raw[col.recipeKey] : computed90, col.cap)) : null;
-      const capped = col.cap != null && computed90 > col.cap;
+      const cap = col.recipeKey && activeCaps[col.recipeKey] != null ? activeCaps[col.recipeKey] : col.cap;
+      const scaled = cap ? round1(scaleCap(raw[col.recipeKey] != null ? raw[col.recipeKey] : computed90, cap)) : null;
+      // Active-layer bind: WC teaching caps use strict >; file-derived caps treat
+      // the ceiling touch (v >= cap, scaled 100) as «נחתך» so the quiz works on BYOD.
+      const capped = cap != null && (capsSource === 'file'
+        ? computed90 >= cap
+        : computed90 > cap);
       return {
         key: col.key,
         label: col.label,
@@ -1495,16 +2130,17 @@
         minutes: minutes,
         per90: computed90,
         per90File: fromFile,
-        cap: col.cap,
+        cap: cap,
         weight: col.weight,
         scaled: scaled,
         capped: capped,
         recipeKey: col.recipeKey
       };
     });
+    const pressCap = activeCaps.pressures90;
     const receipt = [
       { step: 'ספירה בקובץ', detail: player.name + ' · ' + (player.team || '') + ' · ' + minutes + ' דקות פרוקסי · ' + layer.provenance + ' · ' + dataset },
-      { step: 'לחיצות ל-90', detail: (counts.pressures == null ? 'לא זמין' : counts.pressures) + ' × 90 / ' + minutes + ' = ' + (rows[0] ? rows[0].per90 : 0) + (rows[0] && rows[0].capped ? ' — מעל תקרת 18, לכן הסקייל 100' : '') },
+      { step: 'לחיצות ל-90', detail: (counts.pressures == null ? 'לא זמין' : counts.pressures) + ' × 90 / ' + minutes + ' = ' + (rows[0] ? rows[0].per90 : 0) + (rows[0] && rows[0].capped ? (' — מעל תקרת ' + pressCap + ', לכן הסקייל 100') : '') },
       { step: 'Grit', detail: '0.45×לחיצות + 0.30×(תיקולים+חטיפות) + 0.25×הגנה → ' + (player.components.grit == null ? 'לא זמין' : player.components.grit) },
       { step: 'Involvement', detail: '0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות → ' + (player.components.involvement == null ? 'לא זמין' : player.components.involvement) },
       { step: 'Clutch', detail: '0.40×xG + 0.35×רחבה + 0.25×מסגרת → ' + (player.components.clutch == null ? 'לא זמין' : player.components.clutch) + ' (תווית לימודית, לא רגע הכרעה)' }
@@ -1516,6 +2152,9 @@
       player: { id: player.id, name: player.name, team: player.team, minutes: minutes, group: player.group },
       dataset: dataset,
       provenance: layer.provenance,
+      caps: activeCaps,
+      capsSource: capsSource,
+      capSaturation: capSaturation,
       honesty: honesty,
       rows: rows,
       unused: rows.filter(function (row) { return !row.usedInScore; }),
@@ -1576,7 +2215,7 @@
     }
     const num = n * sxy - sx * sy;
     const den = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
-    if (!den) return 0;
+    if (!den) return null;
     return round2(num / den);
   }
 
@@ -1589,13 +2228,34 @@
     return WC2018_TEAM_GROUP[team] || null;
   }
 
+  // groups: WC houses A–D/E–H when the team is known; otherwise an arbitrary
+  // deterministic team-hash split (teammates stay together). Explicitly not a
+  // held-out season — see validateMetric.splitLabel / heldOutSeason:false.
   function assignFold(player, splitId) {
     if (splitId === 'hash') {
       return (hashSeed(playerKey(player)) % 2 === 0) ? 'train' : 'test';
     }
     const group = worldCupGroup(player.team);
-    if (!group) return 'unassigned';
-    return 'ABCD'.indexOf(group) >= 0 ? 'train' : 'test';
+    if (group) {
+      return 'ABCD'.indexOf(group) >= 0 ? 'train' : 'test';
+    }
+    // Non-WC / BYOD / synthetic: arbitrary split by team name hash.
+    const team = String(player && player.team || '');
+    return (hashSeed('fold-team|' + team) % 2 === 0) ? 'train' : 'test';
+  }
+
+  function splitIsWorldCupGroups(players) {
+    return (players || []).some(function (row) { return !!worldCupGroup(row.team); });
+  }
+
+  function describeSplitLabel(splitId, players) {
+    if (splitId === 'hash') {
+      return 'פיצול דטרמיניסטי לפי שם (לא לפי קבוצה) — שרירותי, לא עונה מוחזקת';
+    }
+    if (splitIsWorldCupGroups(players)) {
+      return 'בתים A–D אימון, E–H מבחן — אותו מונדיאל 2018 (לא עונה חדשה)';
+    }
+    return 'פיצול שרירותי לפי קבוצה (hash) — לא בתים של מונדיאל; אין עונה מוחזקת';
   }
 
 
@@ -1608,6 +2268,122 @@
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+  }
+
+  // Poisson draw for count uncertainty. Knuth for small λ; Normal≈ for large
+  // λ so passesCompleted (~hundreds) cannot spin on exp(-λ)≈0.
+  function samplePoisson(lambda, rng) {
+    const lam = Number(lambda);
+    if (!Number.isFinite(lam) || lam <= 0) return 0;
+    if (lam < 30) {
+      const L = Math.exp(-lam);
+      let k = 0;
+      let p = 1;
+      do {
+        k += 1;
+        p *= rng();
+      } while (p > L);
+      return k - 1;
+    }
+    let u;
+    let v;
+    let s;
+    do {
+      u = rng() * 2 - 1;
+      v = rng() * 2 - 1;
+      s = u * u + v * v;
+    } while (s === 0 || s >= 1);
+    const z = u * Math.sqrt(-2 * Math.log(s) / s);
+    const drawn = Math.round(lam + Math.sqrt(lam) * z);
+    return drawn < 0 ? 0 : drawn;
+  }
+
+  // Resample event totals ~ Poisson(observed) at the same minutes, then rebuild
+  // components from the new counts (ignore per90File so totals drive /90).
+  function resamplePlayerCounts(player, rng, caps) {
+    const counts = player && player.counts ? player.counts : {};
+    const nextCounts = {};
+    const row = {
+      name: player.name,
+      team: player.team,
+      position: player.position,
+      totalMinutesProxy: player.minutes,
+      minutes: player.minutes
+    };
+    COUNT_FIELDS.forEach(function (key) {
+      const v = counts[key];
+      if (v == null || !Number.isFinite(Number(v))) {
+        nextCounts[key] = null;
+        return;
+      }
+      const drawn = samplePoisson(Number(v), rng);
+      nextCounts[key] = drawn;
+      row[key] = drawn;
+    });
+    return Object.assign({}, player, {
+      counts: nextCounts,
+      per90File: null,
+      components: componentsFromEvents(row, caps || WC2018_CAPS)
+    });
+  }
+
+  // 90% rank interval via repeated Poisson resampling of the same counts over
+  // the same minutes. Seed goes through hashSeed (via createRng) for
+  // byte-stable repeats. Low-minute players get wider intervals at similar
+  // per90 rates because Poisson noise on smaller totals swings /90 harder.
+  function rankInterval(prepared, spec, options) {
+    const opts = options || {};
+    const samples = opts.samples == null ? 100 : Math.max(0, Number(opts.samples) || 0);
+    const seed = opts.seed == null ? 'scoutai-rank-interval' : String(opts.seed);
+    const metric = normalizeMetricSpec(spec);
+    const scoreOpts = { minPeers: opts.minPeers };
+    const base = scorePrepared(prepared, metric, scoreOpts);
+    if (!base.length || samples <= 0) {
+      return base.map(function (row) {
+        return {
+          id: row.id,
+          name: row.name,
+          rank: row.rank,
+          lo: row.rank,
+          hi: row.rank,
+          top10Share: row.rank <= 10 ? 1 : 0,
+          samples: samples,
+          seed: seed
+        };
+      });
+    }
+    const rng = createRng(seed);
+    const lists = Object.create(null);
+    base.forEach(function (row) { lists[row.id] = []; });
+    for (let s = 0; s < samples; s += 1) {
+      const resampled = prepared.map(function (player) {
+        return resamplePlayerCounts(player, rng, opts.caps || WC2018_CAPS);
+      });
+      const ranked = scorePrepared(resampled, metric, scoreOpts);
+      ranked.forEach(function (row) {
+        if (lists[row.id]) lists[row.id].push(row.rank);
+      });
+    }
+    return base.map(function (row) {
+      const raw = lists[row.id] || [];
+      const sorted = raw.slice().sort(function (a, b) { return a - b; });
+      const lo = sorted.length ? percentileSorted(sorted, 0.05) : row.rank;
+      const hi = sorted.length ? percentileSorted(sorted, 0.95) : row.rank;
+      let top10 = 0;
+      for (let i = 0; i < sorted.length; i += 1) {
+        if (sorted[i] <= 10) top10 += 1;
+      }
+      return {
+        id: row.id,
+        name: row.name,
+        rank: row.rank,
+        lo: lo == null ? row.rank : lo,
+        hi: hi == null ? row.rank : hi,
+        top10Share: sorted.length ? round2(top10 / samples) : 0,
+        samples: samples,
+        seed: seed
+      };
+    });
   }
 
   function shuffleInPlace(arr, rng) {
@@ -1638,6 +2414,125 @@
       }
     });
     return best;
+  }
+
+  function bootstrapSpearmanCi(scores, outcomes, seed, bootstraps) {
+    const nBoot = bootstraps || 200;
+    const rng = createRng(String(seed) + '|boot');
+    const n = scores.length;
+    const rhos = [];
+    for (let b = 0; b < nBoot; b += 1) {
+      const xs = [];
+      const ys = [];
+      for (let i = 0; i < n; i += 1) {
+        const j = Math.floor(rng() * n);
+        xs.push(scores[j]);
+        ys.push(outcomes[j]);
+      }
+      const rho = spearman(xs, ys);
+      if (rho != null) rhos.push(rho);
+    }
+    rhos.sort(function (a, b) { return a - b; });
+    return {
+      lo: percentileSorted(rhos, 0.025),
+      hi: percentileSorted(rhos, 0.975),
+      point: spearman(scores, outcomes),
+      bootstraps: nBoot,
+      seed: String(seed)
+    };
+  }
+
+  function permutationPValue(scores, outcomes, seed, permutations) {
+    const nPerm = permutations || 200;
+    const observed = spearman(scores, outcomes);
+    if (observed == null) {
+      return { p: null, observed: null, permutations: nPerm, seed: String(seed) };
+    }
+    const absObs = Math.abs(observed);
+    const rng = createRng(String(seed) + '|perm-p');
+    let ge = 0;
+    for (let p = 0; p < nPerm; p += 1) {
+      const shuffled = outcomes.slice();
+      shuffleInPlace(shuffled, rng);
+      const rho = spearman(scores, shuffled);
+      if (Math.abs(rho == null ? 0 : rho) >= absObs) ge += 1;
+    }
+    return {
+      p: Math.round(((ge + 1) / (nPerm + 1)) * 10000) / 10000,
+      observed: observed,
+      permutations: nPerm,
+      seed: String(seed)
+    };
+  }
+
+  function signedNullBandFromPermutation(scores, outcomes, seed, permutations) {
+    const nPerm = permutations || 200;
+    const rng = createRng(seed);
+    const rhos = [];
+    for (let p = 0; p < nPerm; p += 1) {
+      const shuffled = outcomes.slice();
+      shuffleInPlace(shuffled, rng);
+      const rho = spearman(scores, shuffled);
+      rhos.push(rho == null ? 0 : rho);
+    }
+    rhos.sort(function (a, b) { return a - b; });
+    return {
+      lo: percentileSorted(rhos, 0.025),
+      hi: percentileSorted(rhos, 0.975),
+      p50: percentileSorted(rhos, 0.5),
+      permutations: nPerm,
+      seed: String(seed)
+    };
+  }
+
+  function overfitBandFromRandomSplits(ranked, outcomeId, seed, splits) {
+    const nSplits = splits || 200;
+    const rng = createRng(String(seed) + '|overfit');
+    const drops = [];
+    for (let s = 0; s < nSplits; s += 1) {
+      const train = [];
+      const test = [];
+      ranked.forEach(function (row) {
+        if (rng() < 0.5) train.push(row);
+        else test.push(row);
+      });
+      const trainRho = spearman(
+        train.map(function (row) { return row.score; }),
+        train.map(function (row) { return outcomeValue(row, outcomeId); })
+      );
+      const testRho = spearman(
+        test.map(function (row) { return row.score; }),
+        test.map(function (row) { return outcomeValue(row, outcomeId); })
+      );
+      if (trainRho != null && testRho != null) drops.push(round2(trainRho - testRho));
+    }
+    drops.sort(function (a, b) { return a - b; });
+    return {
+      lo: percentileSorted(drops, 0.025),
+      hi: percentileSorted(drops, 0.975),
+      p50: percentileSorted(drops, 0.5),
+      splits: nSplits,
+      seed: String(seed)
+    };
+  }
+
+  function redactTestUntilLock(stats, revealed) {
+    if (revealed) {
+      return Object.assign({}, stats, { revealed: true });
+    }
+    return {
+      n: stats ? stats.n : 0,
+      rho: null,
+      minutesRho: null,
+      outcomeMissing: !!(stats && stats.outcomeMissing),
+      topMetric: [],
+      topOutcome: [],
+      componentRho: { grit: null, involvement: null, clutch: null },
+      bestComponent: null,
+      revealed: false,
+      redacted: true,
+      redactedReason: 'weights-unlocked'
+    };
   }
 
   function nullBandFromPermutation(scores, outcomes, seed, permutations) {
@@ -1738,10 +2633,15 @@
     const splitId = opts.splitId || metric.splitId;
     const seed = opts.seed || 'scoutai-demo-001';
     const permutations = opts.permutations || 200;
+    const bootstraps = opts.bootstraps || 200;
+    const splitResamples = opts.splitResamples || 200;
+    // Direct API default: revealed. UI/store.derive passes revealed:!!weightsLocked.
+    const revealed = opts.revealed == null ? true : !!opts.revealed;
+    const attempts = opts.attempts != null ? opts.attempts : metric.weightAttempts;
     const meta = outcomeMeta(outcomeId);
     const players = asPrepared(prepared);
     const audit = auditOutcome(players, outcomeId);
-    const ranked = scorePrepared(players, metric);
+    const ranked = rankOnce(players, metric, opts.scoreOpts, opts.rankCache);
     const train = [];
     const test = [];
     const unassigned = [];
@@ -1752,31 +2652,58 @@
       else unassigned.push(row);
     });
     // Always compute folds; redact ρ when leaky so UI/BYOD never show
-    // holdout Spearman before the copy flag.
+    // holdout Spearman before the copy flag. Separately redact test until lock.
     const trainRaw = foldStats(train, outcomeId);
     const testRaw = foldStats(test, outcomeId);
     const trainStats = redactFoldIfLeaky(trainRaw, audit.leaky);
-    const testStats = redactFoldIfLeaky(testRaw, audit.leaky);
+    let testStats = redactFoldIfLeaky(testRaw, audit.leaky);
     const drop = (!audit.leaky && trainRaw.rho != null && testRaw.rho != null)
       ? round2(trainRaw.rho - testRaw.rho)
       : null;
     const testOutcomes = test.map(function (row) { return outcomeValue(row, outcomeId); });
     const testScores = test.map(function (row) { return row.score; });
+    const canBand = !(testRaw.outcomeMissing || audit.leaky);
+    const rhoCi = canBand
+      ? bootstrapSpearmanCi(testScores, testOutcomes, seed, bootstraps)
+      : null;
+    const permP = canBand
+      ? permutationPValue(testScores, testOutcomes, seed, permutations)
+      : null;
+    const signedNull = canBand
+      ? signedNullBandFromPermutation(testScores, testOutcomes, seed, permutations)
+      : null;
+    const overfitBand = canBand
+      ? overfitBandFromRandomSplits(ranked, outcomeId, seed, splitResamples)
+      : null;
     const baselines = {
       minutes: {
-        rho: testRaw.minutesRho,
+        rho: revealed ? testRaw.minutesRho : null,
         label: 'דירוג לפי דקות בלבד מול אותו יעד'
       },
-      bestComponent: testRaw.bestComponent,
-      nullBand: (testRaw.outcomeMissing || audit.leaky)
-        ? null
-        : nullBandFromPermutation(testScores, testOutcomes, seed, permutations),
-      defenderHint: (testRaw.outcomeMissing || audit.leaky)
-        ? null
-        : defenderHintBaseline(players, test, outcomeId, splitId)
+      bestComponent: revealed ? testRaw.bestComponent : null,
+      nullBand: (canBand && revealed)
+        ? nullBandFromPermutation(testScores, testOutcomes, seed, permutations)
+        : null,
+      signedNullBand: (canBand && revealed) ? signedNull : null,
+      rhoCi: (canBand && revealed) ? rhoCi : null,
+      permutationP: (canBand && revealed && permP) ? permP.p : null,
+      permutation: (canBand && revealed) ? permP : null,
+      overfitBand: (canBand && revealed) ? overfitBand : null,
+      defenderHint: (canBand && revealed)
+        ? defenderHintBaseline(players, test, outcomeId, splitId)
+        : null
     };
-    const beatsMinutes = !!(testRaw.rho != null && baselines.minutes.rho != null &&
-      testRaw.rho > baselines.minutes.rho);
+    const beatsMinutes = !!(testRaw.rho != null && testRaw.minutesRho != null &&
+      testRaw.rho > testRaw.minutesRho);
+    testStats = redactTestUntilLock(testStats, revealed && !audit.leaky);
+    if (audit.leaky) {
+      testStats = Object.assign({}, testStats, { revealed: revealed });
+    }
+    const lock = {
+      locked: !!metric.weightsLocked,
+      revealed: revealed,
+      attempts: attempts || 0
+    };
     return {
       outcomeId: outcomeId,
       outcomeLabel: meta.label,
@@ -1784,24 +2711,35 @@
       leakNote: audit.leakNote,
       audit: audit,
       splitId: splitId,
-      splitLabel: splitId === 'hash'
-        ? 'פיצול דטרמיניסטי לפי שם (לא לפי קבוצה)'
-        : 'בתים A–D אימון, E–H מבחן — אותו מונדיאל 2018',
+      splitLabel: describeSplitLabel(splitId, players),
       heldOutSeason: false,
-      honesty: 'אין בריפו עונה שנייה של אותן ספירות אירועים. זה פיצול מדגם בתוך מונדיאל 2018, לא חיזוי עונה מוחזקת.',
+      honesty: splitIsWorldCupGroups(players)
+        ? 'אין בריפו עונה שנייה של אותן ספירות אירועים. זה פיצול מדגם בתוך מונדיאל 2018, לא חיזוי עונה מוחזקת.'
+        : 'אין עונה מוחזקת. הפיצול בשכבה הפעילה הוא שרירותי (קבוצה/שם) בתוך אותו קובץ — לא חיזוי עונה חדשה.',
       unassigned: unassigned.length,
       train: trainStats,
       test: testStats,
-      rhoDrop: drop,
+      rhoDrop: revealed ? drop : null,
       baselines: baselines,
-      beatsMinutes: beatsMinutes,
+      beatsMinutes: revealed ? beatsMinutes : false,
       seed: String(seed),
-      verdict: validationVerdict(trainStats, testStats, meta, audit, baselines)
+      revealed: revealed,
+      lock: lock,
+      verdict: validationVerdict(trainStats, testStats, meta, audit, baselines, {
+        revealed: revealed,
+        rhoDrop: drop,
+        overfitBand: overfitBand,
+        rhoCi: rhoCi,
+        permutationP: permP,
+        locked: !!metric.weightsLocked,
+        attempts: attempts || 0
+      })
     };
   }
 
-  function validationVerdict(trainStats, testStats, meta, audit, baselines) {
+  function validationVerdict(trainStats, testStats, meta, audit, baselines, extras) {
     const notes = [];
+    const info = extras || {};
     if ((trainStats && trainStats.outcomeMissing) || (testStats && testStats.outcomeMissing)) {
       const field = meta && meta.field ? meta.field : (meta && meta.id) || 'assists';
       const label = meta && meta.label ? meta.label : field;
@@ -1814,6 +2752,12 @@
       notes.push('ρ מול היעד מוסתר עד לתיקון הדליפה.');
       return notes.join(' ');
     }
+    if (!info.revealed) {
+      notes.push('מדגם המבחן מוסתר עד לנעילת המשקלים («נעל את המשקלים האלה»).');
+      notes.push('נוסו עד כה ' + (info.attempts || 0) + ' תצורות משקל ייחודיות.');
+      notes.push('ρ באימון זמין לכיול; ρ במבחן נחשף רק אחרי הנעילה — גם בשכבת Open Data החופשית.');
+      return notes.join(' ');
+    }
     if (audit && audit.maxRho != null) {
       notes.push('ביקורת חפיפה: מקסימום ρ=' + audit.maxRho +
         (audit.maxField ? (' מול «' + audit.maxField + '»') : '') +
@@ -1821,12 +2765,32 @@
     }
     if (meta && meta.leakNote && !(audit && audit.leaky)) notes.push(meta.leakNote);
     if (testStats.n < 20) notes.push('מדגם המבחן קטן — אסור להכריז על תוקף.');
-    if (trainStats.rho != null && testStats.rho != null && trainStats.rho - testStats.rho >= 0.2) {
-      notes.push('ρ באימון גבוה בהרבה מבמבחן — חשד להתאמת-יתר למדגם.');
+    if (info.locked) {
+      notes.push('משקלים נעולים אחרי ' + (info.attempts || 0) + ' תצורות ייחודיות.');
     }
-    if (testStats.rho == null) notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
-    else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
-    else notes.push('ρ במבחן ' + testStats.rho + ' הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג.');
+    const ci = info.rhoCi || (baselines && baselines.rhoCi);
+    const perm = info.permutationP || (baselines && baselines.permutation);
+    if (testStats.rho == null) {
+      notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
+    } else if (ci && ci.lo != null && ci.hi != null) {
+      notes.push('ρ במבחן ' + testStats.rho +
+        ' [' + ci.lo + ', ' + ci.hi + '] (CI בוטסטרפ)' +
+        (perm && perm.p != null ? ('; · p פרמוטציה=' + perm.p) : '') +
+        ' — קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג.');
+    } else {
+      notes.push('ρ במבחן ' + testStats.rho + ' הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג.');
+    }
+    const drop = info.rhoDrop;
+    const ob = info.overfitBand || (baselines && baselines.overfitBand);
+    if (drop != null && ob && ob.lo != null && ob.hi != null) {
+      if (drop >= ob.lo && drop <= ob.hi) {
+        notes.push('Δρ=' + drop + ' בתוך רצועת פיצולים אקראיים [' +
+          ob.lo + ', ' + ob.hi + '] — אין ראיה חזקה להתאמת-יתר מעבר לרעש הפיצול.');
+      } else {
+        notes.push('Δρ=' + drop + ' מחוץ לרצועת פיצולים אקראיים [' +
+          ob.lo + ', ' + ob.hi + '] — חשד להתאמת-יתר למדגם האימון.');
+      }
+    }
     if (baselines && baselines.minutes && baselines.minutes.rho != null && testStats.rho != null) {
       if (testStats.rho > baselines.minutes.rho) {
         notes.push('המדד עוקף את קו־הבסיס של דקות בלבד (ρ=' + baselines.minutes.rho + ').');
@@ -1838,6 +2802,10 @@
       notes.push('רצועת האפס (פרמוטציה, p95 של |ρ|) ≈ ' + baselines.nullBand.p95 +
         '; המדד יושב רק מעט מעליה אם בכלל.');
     }
+    if (baselines && baselines.signedNullBand && baselines.signedNullBand.lo != null) {
+      notes.push('רצועת אפס חתומה (פרמוטציה) [' + baselines.signedNullBand.lo +
+        ', ' + baselines.signedNullBand.hi + '] מקיפה את 0.');
+    }
     if (baselines && baselines.bestComponent && baselines.bestComponent.rho != null) {
       notes.push('רכיב בודד חזק ביותר במבחן: ' + baselines.bestComponent.label +
         ' ρ=' + baselines.bestComponent.rho + '.');
@@ -1848,6 +2816,185 @@
     }
     return notes.join(' ');
   }
+
+
+  // Single source of truth for course <option value> contracts (ב9).
+  // quizMarkup(ui.js) renders these; evaluateCurriculum grades static correct:true
+  // options from the same table. Contextual fields (caps/fragility/beatsMinutes/per90)
+  // keep live grading but still list their option catalogs here.
+  const COURSE_QUIZ = Object.freeze({
+    events: Object.freeze({
+      fields: Object.freeze([
+        Object.freeze({
+          key: 'unusedField',
+          controlId: 'ansUnusedField',
+          kind: 'select',
+          label: 'איזה שדה נאסף ולא נכנס לנוסחה?',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'pressures', label: 'pressures (לחיצות)', correct: false }),
+            Object.freeze({ value: 'dribbles', label: 'dribbles (כדרורים)', correct: true }),
+            Object.freeze({ value: 'shotXgSum', label: 'shotXgSum (xG)', correct: false }),
+            Object.freeze({ value: 'keyPasses', label: 'keyPasses (מסירות מפתח)', correct: false })
+          ])
+        })
+      ])
+    }),
+    per90: Object.freeze({
+      fields: Object.freeze([
+        Object.freeze({
+          key: 'per90',
+          controlId: 'ansPer90',
+          kind: 'number',
+          label: '{who} רשם {press} לחיצות ב-{mins} דקות — כמה לחיצות ל-90?',
+          placeholder: 'לדוגמה 26.52'
+        })
+      ])
+    }),
+    caps: Object.freeze({
+      fields: Object.freeze([
+        Object.freeze({
+          key: 'cappedField',
+          controlId: 'ansCap',
+          kind: 'select',
+          dynamicCaps: true,
+          label: 'איזה רכיב אצל השחקן הנבחר נחתך בתקרה?',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'none', label: 'שום דבר לא נחתך', correct: false })
+          ])
+        })
+      ])
+    }),
+    weights: Object.freeze({
+      fields: Object.freeze([
+        Object.freeze({
+          key: 'weightsManual',
+          controlId: 'ansWeights',
+          kind: 'select',
+          label: 'המשקלות במעבדה הן',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'yes', label: 'ידניות ושרירותיות, לא מודל מכויל', correct: true }),
+            Object.freeze({ value: 'no', label: 'כיול מדעי מעונת 2018', correct: false })
+          ])
+        })
+      ])
+    }),
+    defenders: Object.freeze({
+      fields: Object.freeze([]),
+      emptyMessage: 'התרגיל חי במעבדת הבלמים למעלה — הזיזו משקלות עד שהבדיקה ירוקה.'
+    }),
+    fragility: Object.freeze({
+      fields: Object.freeze([
+        Object.freeze({
+          key: 'fragilityPredict',
+          controlId: 'ansBump',
+          kind: 'select',
+          label: 'לפני הגילוי: איזו דחיפת +10 תשפר הכי את דירוג {who}?',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'grit', label: 'Grit +10', correct: false }),
+            Object.freeze({ value: 'involvement', label: 'Involvement +10', correct: false }),
+            Object.freeze({ value: 'clutch', label: 'Clutch +10', correct: false }),
+            Object.freeze({ value: 'none', label: 'שום דחיפה לא משפרת', correct: false })
+          ])
+        })
+      ])
+    }),
+    holdout: Object.freeze({
+      fields: Object.freeze([
+        Object.freeze({
+          key: 'splitIsSeason',
+          controlId: 'ansSeason',
+          kind: 'select',
+          label: 'האם הפיצול (בתים או שרירותי) הוא עונה חדשה?',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'no', label: 'לא — אותו מונדיאל, שני מדגמי קבוצות', correct: true }),
+            Object.freeze({ value: 'yes', label: 'כן — זו העונה המוחזקת', correct: false })
+          ])
+        }),
+        Object.freeze({
+          key: 'whatMatters',
+          controlId: 'ansRho',
+          kind: 'select',
+          label: 'איזה Spearman קובע אם המדד מכליל?',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'test', label: 'ρ במבחן', correct: true }),
+            Object.freeze({ value: 'train', label: 'ρ באימון', correct: false })
+          ])
+        }),
+        Object.freeze({
+          key: 'beatsMinutes',
+          controlId: 'ansBeats',
+          kind: 'select',
+          label: 'האם המדד שלכם עוקף את קו־הבסיס של דקות בלבד?',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'no', label: 'לא עוקף — ρ המדד ≤ ρ דקות', correct: false }),
+            Object.freeze({ value: 'yes', label: 'עוקף — ρ המדד גבוה מ-ρ דקות', correct: false })
+          ])
+        })
+      ])
+    }),
+    honesty: Object.freeze({
+      fields: Object.freeze([
+        Object.freeze({
+          key: 'unusedTerm',
+          controlId: 'ansTerm',
+          kind: 'select',
+          label: 'מונח שנאסף ולא נכנס לציון',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'Pressure', label: 'Pressure', correct: false }),
+            Object.freeze({ value: 'dribble', label: 'Dribble / Goal / Assist', correct: true }),
+            Object.freeze({ value: 'Pass', label: 'Pass', correct: false })
+          ])
+        }),
+        Object.freeze({
+          key: 'commercial',
+          controlId: 'ansCommercial',
+          kind: 'select',
+          label: 'האם מותר למכור ניתוח על הנתונים האלה?',
+          options: Object.freeze([
+            Object.freeze({ value: '', label: '— בחרו —' }),
+            Object.freeze({ value: 'no', label: 'לא — Open Data אסור למסחר', correct: true }),
+            Object.freeze({ value: 'yes', label: 'כן, אם נותנים קרדיט', correct: false })
+          ])
+        })
+      ])
+    })
+  });
+
+  function quizField(lessonId, fieldKey) {
+    const entry = COURSE_QUIZ[lessonId];
+    if (!entry || !entry.fields) return null;
+    for (let i = 0; i < entry.fields.length; i += 1) {
+      if (entry.fields[i].key === fieldKey) return entry.fields[i];
+    }
+    return null;
+  }
+
+  function quizMarkedCorrect(lessonId, fieldKey) {
+    const field = quizField(lessonId, fieldKey);
+    if (!field || !field.options) return [];
+    return field.options.filter(function (opt) { return opt.correct === true; }).map(function (opt) { return opt.value; });
+  }
+
+  function matchesMarkedQuiz(lessonId, fieldKey, value) {
+    const marked = quizMarkedCorrect(lessonId, fieldKey);
+    if (!marked.length) return false;
+    if (marked.indexOf(value) >= 0) return true;
+    // Accept the option label for unusedTerm historical alias.
+    const field = quizField(lessonId, fieldKey);
+    if (!field || !field.options) return false;
+    return field.options.some(function (opt) {
+      return opt.correct === true && (opt.value === value || opt.label === value);
+    });
+  }
+
 
   const CURRICULUM_LESSONS = Object.freeze([
     {
@@ -1870,9 +3017,9 @@
       id: 'caps',
       title: '3. תקרות שרירותיות',
       section: 'explorer',
-      body: 'כל רכיב נחתך בתקרה קבועה (לחיצות 18/90, xG 0.6/90…). מי שמעל התקרה מקבל 100. התקרה אינה כיול מדעי. בדקו מה נחתך אצל השחקן הנבחר.',
+      body: 'כל רכיב נחתך בתקרה (ב־Open Data: לחיצות 18/90, xG 0.6/90…; ב־BYOD: תקרות מהתפלגות הקובץ). מי שמעל התקרה מקבל 100. התקרה אינה כיול מדעי. בדקו מה נחתך אצל השחקן הנבחר.',
       exercise: 'איזה רכיב אצל השחקן הנבחר נחתך בתקרה? אם כלום — סמנו «שום דבר לא נחתך».',
-      hint: { selectedId: "N'Golo Kanté|France" }
+      hint: null
     },
     {
       id: 'weights',
@@ -1902,8 +3049,8 @@
       id: 'holdout',
       title: '7. מדגם מוחזק',
       section: 'validate',
-      body: 'אין עונה שנייה בריפו. הפיצול הכנה הוא בתים A–D מול E–H באותו מונדיאל. ρ במבחן הוא המספר שחשוב — אבל בלי נקודות ייחוס הוא נשמע כמו אישור. השוו לדקות בלבד, לרכיב בודד ולרצועת אפס מפרמוטציה עם seed קבוע.',
-      exercise: 'ענו: האם פיצול הבתים הוא עונה חדשה, מה המספר שקובע (ρ מבחן), והאם המדד שלכם עוקף את קו־הבסיס של דקות בלבד?',
+      body: 'אין עונה שנייה בריפו. ב־Open Data הפיצול הכנה הוא בתים A–D מול E–H באותו מונדיאל; ב־BYOD/סינתטי — פיצול שרירותי לפי קבוצה (hash) או לפי שם. ρ במבחן מוסתר עד שלוחצים «נעל את המשקלים האלה» — גם בשכבת Open Data החופשית — כדי שלא לכוון משקלות לפי המספר המוחזק. אחרי הנעילה מדווחים כמה תצורות משקל נוסו, ו־ρ מוצג עם CI בוטסטרפ ו־p פרמוטציה מול רצועת אפס ונקודות ייחוס (דקות בלבד, רכיב בודד).',
+      exercise: 'נעלו משקלים, ואז ענו: האם הפיצול (בתים או שרירותי) הוא עונה חדשה, מה המספר שקובע (ρ מבחן), והאם המדד שלכם עוקף את קו־הבסיס של דקות בלבד?',
       hint: null
     },
     {
@@ -2008,7 +3155,7 @@
           {
             id: 'manual-weights',
             label: 'המשקלות ידניות ושרירותיות — לא מודל מכויל',
-            pass: answers.weightsManual === 'yes',
+            pass: matchesMarkedQuiz('weights', 'weightsManual', answers.weightsManual),
             detail: answered(answers.weightsManual) ? '' : 'אשרו שקראתם את נוסחת המשקלות.'
           },
           {
@@ -2019,15 +3166,34 @@
           }
         ];
       } else if (lesson.id === 'defenders') {
-        const ex = exercise || { passed: false, checks: [] };
-        checks = [
-          {
-            id: 'defender-pass',
-            label: 'תרגיל הבלמים החי עבר',
-            pass: !!ex.passed,
-            detail: ex.summary || 'הזיזו משקלות במעבדה עד שהבדיקה העצמית ירוקה.'
-          }
-        ];
+        const claim = {
+          roseComponent: answers.roseComponent || '',
+          costGroup: answers.costGroup || ''
+        };
+        const ex = (ctx.players && ctx.spec)
+          ? evaluateExercise(ctx.players, ctx.spec, claim)
+          : (exercise || { passed: false, checks: [], smallSample: false });
+        if (ex.smallSample) {
+          checks = [
+            {
+              id: 'defender-sample',
+              label: 'תרגיל הבלמים — מדגם מספיק להערכה',
+              pass: false,
+              evaluable: false,
+              detail: ex.summary || ('אי אפשר להעריך את הבדיקה הזאת ב-n=' + (ex.rosterN || 0))
+            }
+          ];
+        } else {
+          checks = [
+            {
+              id: 'defender-pass',
+              label: 'תרגיל הבלמים החי עבר (כולל הצהרת פשרה)',
+              pass: !!ex.passed,
+              evaluable: true,
+              detail: ex.summary || 'הזיזו משקלות והצהירו מי עלה ומי שילם — עד שהבדיקה העצמית ירוקה.'
+            }
+          ];
+        }
       } else if (lesson.id === 'fragility') {
         const swings = (ctx.players && selected && ctx.spec)
           ? selectedWeightSwing(ctx.players, ctx.spec, selected.id, 10)
@@ -2065,36 +3231,51 @@
         const minutesRho = validation && validation.baselines && validation.baselines.minutes
           ? validation.baselines.minutes.rho
           : null;
+        const locked = !!(validation && (validation.revealed || (validation.lock && validation.lock.locked)));
         const liveBeats = !!(validation && validation.beatsMinutes);
         const expectedBeat = liveBeats ? 'yes' : 'no';
         checks = [
           {
+            id: 'weights-locked',
+            label: 'נעלתם משקלים לפני קריאת ρ מבחן',
+            pass: locked,
+            detail: locked
+              ? ('נעול · נוסו ' + ((validation.lock && validation.lock.attempts) || 0) + ' תצורות.')
+              : 'לחצו «נעל את המשקלים האלה» במעבדת האימות.'
+          },
+          {
             id: 'not-season',
             label: 'פיצול הבתים אינו עונה חדשה',
-            pass: answers.splitIsSeason === 'no',
+            pass: matchesMarkedQuiz('holdout', 'splitIsSeason', answers.splitIsSeason),
             detail: answered(answers.splitIsSeason)
-              ? (answers.splitIsSeason === 'no' ? 'נכון. אותו מונדיאל, שני מדגמי קבוצות.' : 'לא. אין בריפו עונה מוחזקת.')
+              ? (matchesMarkedQuiz('holdout', 'splitIsSeason', answers.splitIsSeason)
+                ? ('נכון. ' + ((validation && validation.splitLabel) || 'פיצול בתוך אותו קובץ') + ' — לא עונה חדשה.')
+                : 'לא. אין בריפו עונה מוחזקת.')
               : 'ענו במעבדת האימות.'
           },
           {
             id: 'test-rho',
             label: 'המספר שקובע הוא ρ במבחן, לא באימון',
-            pass: answers.whatMatters === 'test',
+            pass: matchesMarkedQuiz('holdout', 'whatMatters', answers.whatMatters),
             detail: answered(answers.whatMatters) ? '' : 'בחרו מה חשוב יותר אחרי הפיצול.'
           },
           {
             id: 'beats-minutes',
-            label: liveBeats
-              ? 'המדד עוקף את קו־הבסיס של דקות (לפי המעבדה החיה)'
-              : 'המדד לא עוקף את קו־הבסיס של דקות (לפי המעבדה החיה)',
-            pass: answers.beatsMinutes === expectedBeat,
-            detail: answered(answers.beatsMinutes)
-              ? (answers.beatsMinutes === expectedBeat
-                ? ('נכון. ρ מבחן=' + (validation && validation.test ? validation.test.rho : '?') +
-                  ' מול דקות ρ=' + minutesRho + '.')
-                : ('לא תואם את המעבדה החיה — המדד ' + (liveBeats ? 'עוקף' : 'לא עוקף') +
-                  ' דקות בלבד (ρ=' + minutesRho + ').'))
-              : 'ענו האם המדד עוקף את קו־הבסיס של דקות בלבד.'
+            label: !locked
+              ? 'אחרי נעילה: האם המדד עוקף דקות בלבד?'
+              : (liveBeats
+                ? 'המדד עוקף את קו־הבסיס של דקות (לפי המעבדה החיה)'
+                : 'המדד לא עוקף את קו־הבסיס של דקות (לפי המעבדה החיה)'),
+            pass: locked && answers.beatsMinutes === expectedBeat,
+            detail: !locked
+              ? 'נעלו משקלים כדי לחשוף את קו־הבסיס.'
+              : (answered(answers.beatsMinutes)
+                ? (answers.beatsMinutes === expectedBeat
+                  ? ('נכון. ρ מבחן=' + (validation && validation.test ? validation.test.rho : '?') +
+                    ' מול דקות ρ=' + minutesRho + '.')
+                  : ('לא תואם את המעבדה החיה — המדד ' + (liveBeats ? 'עוקף' : 'לא עוקף') +
+                    ' דקות בלבד (ρ=' + minutesRho + ').'))
+                : 'ענו האם המדד עוקף את קו־הבסיס של דקות בלבד.')
           },
           {
             id: 'report-honest',
@@ -2114,13 +3295,13 @@
           {
             id: 'unused-term',
             label: 'מונח שנאסף ולא נכנס לציון',
-            pass: answers.unusedTerm === 'dribble' || answers.unusedTerm === 'Dribble / Goal / Assist',
+            pass: matchesMarkedQuiz('honesty', 'unusedTerm', answers.unusedTerm),
             detail: answered(answers.unusedTerm) ? '' : 'בחרו מהמילון מונח עם התווית «לא בנוסחה».'
           },
           {
             id: 'non-commercial',
             label: 'Open Data אסור למסחר',
-            pass: answers.commercial === 'no',
+            pass: matchesMarkedQuiz('honesty', 'commercial', answers.commercial),
             detail: answered(answers.commercial) ? '' : 'אשרו את מגבלת הרישיון.'
           }
         ];
@@ -2179,52 +3360,249 @@
     return out;
   }
 
-  function parseUserCsv(text) {
+  // Friendly CSV headers → internal USER_DATASET_COLUMNS keys.
+  // Exact (case-insensitive) vocab wins; then alias table; first match owns the field.
+  const HEADER_ALIASES = Object.freeze({
+    name: Object.freeze(['player', 'player name', 'player_name', 'שם', 'שחקן']),
+    team: Object.freeze(['club', 'squad', 'side', 'קבוצה']),
+    position: Object.freeze(['pos', 'עמדה']),
+    minutes: Object.freeze([
+      'minutes played', 'mins', 'min', 'total minutes', 'totalminutesproxy',
+      'playing time', 'דקות', 'דק\'ות'
+    ]),
+    pressures: Object.freeze(['pressure']),
+    tackles: Object.freeze(['tackle']),
+    interceptions: Object.freeze(['intercept', 'ints']),
+    defensiveActions: Object.freeze(['defensive actions', 'def actions']),
+    progressiveActions: Object.freeze(['progressive actions', 'progressions']),
+    keyPasses: Object.freeze(['key passes', 'kp']),
+    passesCompleted: Object.freeze(['passes completed', 'completed passes', 'passes']),
+    shotXgSum: Object.freeze(['xg', 'xG', 'npxg', 'shot xg', 'expected goals', 'xg sum']),
+    boxTouches: Object.freeze(['box touches', 'touches in box']),
+    shotsOnTarget: Object.freeze(['shots on target', 'sot', 'on target']),
+    shots: Object.freeze(['shot']),
+    goals: Object.freeze(['goal', 'g']),
+    assists: Object.freeze(['assist', 'a']),
+    dribbles: Object.freeze(['dribble', 'take-ons', 'take ons']),
+    duelsWon: Object.freeze(['duels won', 'duels']),
+    bigChanceProxy: Object.freeze(['big chances', 'big chance'])
+  });
+
+  function normalizeHeaderLabel(header) {
+    return String(header || '')
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[_\/]+/g, ' ')
+      .replace(/\s+/g, ' ');
+  }
+
+  function aliasLookup() {
+    const table = Object.create(null);
+    USER_DATASET_COLUMNS.forEach(function (key) {
+      table[normalizeHeaderLabel(key)] = key;
+      const aliases = HEADER_ALIASES[key] || [];
+      aliases.forEach(function (alias) {
+        const norm = normalizeHeaderLabel(alias);
+        if (!table[norm]) table[norm] = key;
+      });
+    });
+    return table;
+  }
+
+  const HEADER_ALIAS_LOOKUP = aliasLookup();
+
+  function mapUserColumns(headers) {
+    const list = Array.isArray(headers) ? headers : [];
+    const mapping = {};
+    const claimed = Object.create(null);
+    const unmatched = [];
+    list.forEach(function (header) {
+      const label = String(header == null ? '' : header).replace(/^\uFEFF/, '').trim();
+      if (!label) return;
+      const key = HEADER_ALIAS_LOOKUP[normalizeHeaderLabel(label)];
+      if (!key || claimed[key]) {
+        unmatched.push(label);
+        return;
+      }
+      claimed[key] = true;
+      mapping[label] = key;
+    });
+    return {
+      mapping: mapping,
+      unmatched: unmatched,
+      unmatchedCount: unmatched.length
+    };
+  }
+
+  function parseTypedNumber(raw, rowNum, column) {
+    const text = String(raw == null ? '' : raw).trim();
+    if (!text) return { ok: true, value: null };
+    // mm:ss or h:mm:ss → total minutes (90:00 → 90, 1:30:00 → 90)
+    if (/^\d+:\d{2}(:\d{2})?$/.test(text)) {
+      const parts = text.split(':').map(function (p) { return Number(p); });
+      let minutes = 0;
+      if (parts.length === 2) {
+        minutes = parts[0] + parts[1] / 60;
+      } else {
+        minutes = parts[0] * 60 + parts[1] + parts[2] / 60;
+      }
+      if (!Number.isFinite(minutes)) {
+        return {
+          ok: false,
+          error: 'שורה ' + rowNum + ', עמודה ' + column + ': ערך זמן לא תקין «' + text + '»'
+        };
+      }
+      return { ok: true, value: minutes };
+    }
+    // Thousands separators: "2,340" → 2340; keep a single decimal point/comma
+    let normalized = text.replace(/\s/g, '');
+    if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(normalized)) {
+      normalized = normalized.replace(/,/g, '');
+    } else if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(normalized)) {
+      normalized = normalized.replace(/\./g, '').replace(/,/g, '.');
+    } else if (/^-?\d+,\d+$/.test(normalized) && !normalized.includes('.')) {
+      // European decimal comma without thousands: "1,5" → 1.5
+      normalized = normalized.replace(/,/g, '.');
+    }
+    const n = Number(normalized);
+    if (!Number.isFinite(n)) {
+      return {
+        ok: false,
+        error: 'שורה ' + rowNum + ', עמודה ' + column + ': ערך לא מספרי «' + text + '»'
+      };
+    }
+    return { ok: true, value: n };
+  }
+
+  function isTextField(key) {
+    return key === 'name' || key === 'team' || key === 'position';
+  }
+
+  function parseUserCsv(text, options) {
+    const opts = options || {};
     const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (line) {
       return line.trim();
     });
-    if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
-    const headers = splitCsvLine(lines[0]).map(function (h) { return h.toLowerCase(); });
-    const nameIdx = headers.indexOf('name');
-    if (nameIdx < 0) return { ok: false, errors: ['חסרה עמודת name'], players: [] };
-    const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalminutesproxy');
+    if (lines.length < 2) {
+      return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [], columnMapping: null };
+    }
+    const headerCells = splitCsvLine(lines[0]);
+    const suggested = mapUserColumns(headerCells);
+    const mapping = (opts.mapping && typeof opts.mapping === 'object')
+      ? opts.mapping
+      : suggested.mapping;
     const col = {};
-    USER_DATASET_COLUMNS.forEach(function (key) {
-      col[key] = headers.indexOf(key.toLowerCase());
+    Object.keys(mapping).forEach(function (header) {
+      const key = mapping[header];
+      if (!key || USER_DATASET_COLUMNS.indexOf(key) < 0) return;
+      const idx = headerCells.indexOf(header);
+      if (idx < 0) return;
+      if (col[key] == null) col[key] = idx;
     });
+    // Also accept exact lowercased headers that the caller mapped under a different label
+    headerCells.forEach(function (header, idx) {
+      const key = mapping[header] || HEADER_ALIAS_LOOKUP[normalizeHeaderLabel(header)];
+      if (key && col[key] == null && USER_DATASET_COLUMNS.indexOf(key) >= 0) col[key] = idx;
+    });
+    if (col.name == null) {
+      return {
+        ok: false,
+        errors: ['חסרה עמודת name (או כינוי כמו Player / שם)'],
+        players: [],
+        columnMapping: suggested
+      };
+    }
     const players = [];
     const errors = [];
     lines.slice(1).forEach(function (line, i) {
+      const rowNum = i + 2;
       const cells = splitCsvLine(line);
-      const name = cells[nameIdx];
-      if (!name) {
-        errors.push('שורה ' + (i + 2) + ': חסר שם');
+      const nameRaw = cells[col.name];
+      if (!nameRaw) {
+        errors.push('שורה ' + rowNum + ': חסר שם');
         return;
       }
-      const row = { name: name };
+      const row = { name: String(nameRaw).trim() };
+      let failed = false;
       USER_DATASET_COLUMNS.forEach(function (key) {
         if (key === 'name') return;
         const idx = col[key];
-        if (idx < 0) return;
+        if (idx == null || idx < 0) return;
         const raw = cells[idx];
         if (raw === '' || raw == null) return;
-        row[key] = key === 'team' || key === 'position' ? raw : raw;
+        if (isTextField(key)) {
+          row[key] = String(raw).trim();
+          return;
+        }
+        const typed = parseTypedNumber(raw, rowNum, key);
+        if (!typed.ok) {
+          errors.push(typed.error);
+          failed = true;
+          return;
+        }
+        if (typed.value == null) return;
+        row[key] = typed.value;
+        if (key === 'minutes') row.totalMinutesProxy = typed.value;
       });
-      if (minIdx >= 0 && cells[minIdx] !== '') row.totalMinutesProxy = Number(cells[minIdx]);
+      if (failed) return;
+      if (row.minutes != null && row.totalMinutesProxy == null) row.totalMinutesProxy = row.minutes;
       players.push(row);
     });
-    if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [] };
-    return { ok: true, errors: errors, players: players };
+    if (!players.length) {
+      return {
+        ok: false,
+        errors: errors.length ? errors : ['לא נמצאו שחקנים'],
+        players: [],
+        columnMapping: suggested
+      };
+    }
+    return {
+      ok: true,
+      errors: errors,
+      players: players,
+      columnMapping: suggested
+    };
+  }
+
+  function coercePlayerTypes(players, errors) {
+    const out = [];
+    (players || []).forEach(function (row, i) {
+      if (!row || typeof row !== 'object') return;
+      const next = Object.assign({}, row);
+      const rowNum = i + 1;
+      let failed = false;
+      USER_DATASET_COLUMNS.forEach(function (key) {
+        if (isTextField(key)) return;
+        if (next[key] === undefined || next[key] === null || next[key] === '') return;
+        if (typeof next[key] === 'number' && Number.isFinite(next[key])) return;
+        const typed = parseTypedNumber(next[key], rowNum, key);
+        if (!typed.ok) {
+          errors.push(typed.error);
+          failed = true;
+          return;
+        }
+        if (typed.value == null) {
+          delete next[key];
+          return;
+        }
+        next[key] = typed.value;
+        if (key === 'minutes') next.totalMinutesProxy = typed.value;
+      });
+      if (!failed) out.push(next);
+    });
+    return out;
   }
 
   function parseUserDataset(text, options) {
     const opts = options || {};
     const raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').trim();
     if (!raw) {
-      return { ok: false, errors: ['הקובץ ריק'], players: [], provenance: null };
+      return { ok: false, errors: ['הקובץ ריק'], players: [], provenance: null, columnMapping: null };
     }
     let dataset = null;
     let parseErrors = [];
+    let columnMapping = null;
     if (raw.charAt(0) === '{' || raw.charAt(0) === '[') {
       try {
         dataset = JSON.parse(raw);
@@ -2232,10 +3610,19 @@
         return { ok: false, errors: ['JSON לא תקין'], players: [], provenance: null };
       }
     } else {
-      const csv = parseUserCsv(raw);
-      if (!csv.ok) return { ok: false, errors: csv.errors, players: [], provenance: null };
+      const csv = parseUserCsv(raw, { mapping: opts.mapping });
+      if (!csv.ok) {
+        return {
+          ok: false,
+          errors: csv.errors,
+          players: [],
+          provenance: null,
+          columnMapping: csv.columnMapping || null
+        };
+      }
       dataset = { players: csv.players };
       parseErrors = csv.errors || [];
+      columnMapping = csv.columnMapping || null;
     }
     // Unification point: both JSON and CSV branches have produced dataset.
     // Metadata keys OR content overlap fingerprint ⇒ reject; never USER_LICENSED_DATA.
@@ -2270,15 +3657,30 @@
         provenance: null
       };
     }
-    const players = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    const typeErrors = [];
+    const typedPlayers = coercePlayerTypes(
+      eventPlayers(dataset).filter(function (row) { return row && row.name; }),
+      typeErrors
+    );
+    parseErrors = parseErrors.concat(typeErrors);
+    const players = ensureDistinctPlayerIds(typedPlayers);
     if (!players.length) {
-      return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
+      return {
+        ok: false,
+        errors: parseErrors.length ? parseErrors : ['אין שחקנים עם שדה name'],
+        players: [],
+        provenance: null,
+        columnMapping: columnMapping
+      };
     }
     const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
     const coverage = buildCoverage(players);
     const warnings = [];
     if (players.length < 2) warnings.push('שחקן אחד — הדירוג יהיה טריוויאלי');
     if (coverage.banner) warnings.push(coverage.banner);
+    if (columnMapping && columnMapping.unmatchedCount > 0) {
+      warnings.push('עמודות לא ממופות: ' + columnMapping.unmatched.join(', '));
+    }
     return {
       ok: true,
       errors: parseErrors,
@@ -2286,6 +3688,7 @@
       players: players,
       provenance: provenance,
       coverage: coverage,
+      columnMapping: columnMapping,
       source: {
         dataset: opts.fileName || (synthetic ? 'data/user-dataset.example.json' : 'user-upload'),
         competition: (dataset && !Array.isArray(dataset) && (dataset.competition || dataset.comp)) ||
@@ -2304,6 +3707,12 @@
     SEASON_MISLABELED: SEASON_MISLABELED,
     DEFAULT_METRIC: DEFAULT_METRIC,
     positionGroup: positionGroup,
+    DEFAULT_POSITION_ALIASES: DEFAULT_POSITION_ALIASES,
+    MIN_POSITION_PEERS: MIN_POSITION_PEERS,
+    mergePositionAliases: mergePositionAliases,
+    countOtRows: countOtRows,
+    buildNormalizationNote: buildNormalizationNote,
+    normalizeByPosition: normalizeByPosition,
     componentsFromEvents: componentsFromEvents,
     compositeScore: compositeScore,
     applyMetric: applyMetric,
@@ -2316,23 +3725,46 @@
     formatFormula: formatFormula,
     buildLesson: buildLesson,
     fragilityReport: fragilityReport,
+    rankInterval: rankInterval,
+    samplePoisson: samplePoisson,
+    bootstrapSpearmanCi: bootstrapSpearmanCi,
+    permutationPValue: permutationPValue,
+    weightTripleKey: weightTripleKey,
     normalizeMetricSpec: normalizeMetricSpec,
     playerKey: playerKey,
     EVENT_GLOSSARY: EVENT_GLOSSARY,
     RADAR_AXES: RADAR_AXES,
     COMPONENT_RECIPE: COMPONENT_RECIPE,
     DEFENDER_EXERCISE: DEFENDER_EXERCISE,
+    LEARNING_STORAGE_KEY: LEARNING_STORAGE_KEY,
+    emptyLearningState: emptyLearningState,
+    serializeLearningState: serializeLearningState,
+    parseLearningState: parseLearningState,
+    loadLearningState: loadLearningState,
+    saveLearningState: saveLearningState,
+    normalizeLearningClaim: normalizeLearningClaim,
+    expectedTradeoff: expectedTradeoff,
     evaluateExercise: evaluateExercise,
+    createRankCache: createRankCache,
+    metricRankKey: metricRankKey,
+    rankOnce: rankOnce,
+    resetRankCalls: resetRankCalls,
+    getRankCalls: getRankCalls,
+    get RANK_CALLS() { return getRankCalls(); },
     buildCompareRadar: buildCompareRadar,
     radarValues: radarValues,
     methodologyParagraph: methodologyParagraph,
     exportMetricBundle: exportMetricBundle,
+    buildCompletionRecord: buildCompletionRecord,
     EVENT_COLUMNS: EVENT_COLUMNS,
     OUTCOMES: OUTCOMES,
     LEAKY_RHO: LEAKY_RHO,
     WC2018_GROUPS: WC2018_GROUPS,
     worldCupGroup: worldCupGroup,
     assignFold: assignFold,
+    describeSplitLabel: describeSplitLabel,
+    splitIsWorldCupGroups: splitIsWorldCupGroups,
+    EXERCISE_SMALL_SAMPLE_MAX: EXERCISE_SMALL_SAMPLE_MAX,
     spearman: spearman,
     pearson: pearson,
     outcomeValue: outcomeValue,
@@ -2346,7 +3778,15 @@
     bestHelpfulBump: bestHelpfulBump,
     nearNumber: nearNumber,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
+    COURSE_QUIZ: COURSE_QUIZ,
+    quizField: quizField,
+    quizMarkedCorrect: quizMarkedCorrect,
+    matchesMarkedQuiz: matchesMarkedQuiz,
     parseUserDataset: parseUserDataset,
+    mapUserColumns: mapUserColumns,
+    parseTypedNumber: parseTypedNumber,
+    ensureDistinctPlayerIds: ensureDistinctPlayerIds,
+    HEADER_ALIASES: HEADER_ALIASES,
     buildCoverage: buildCoverage,
     takeCount: takeCount,
     COMPONENT_INPUT_FIELDS: COMPONENT_INPUT_FIELDS,
@@ -2358,6 +3798,11 @@
     OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,
     USER_DATA_PROVENANCE: USER_DATA_PROVENANCE,
     SYNTHETIC_PROVENANCE: SYNTHETIC_PROVENANCE,
-    OPEN_DATA_SOURCE: OPEN_DATA_SOURCE
+    OPEN_DATA_SOURCE: OPEN_DATA_SOURCE,
+    WC2018_CAPS: WC2018_CAPS,
+    deriveFileCaps: deriveFileCaps,
+    measureCapSaturation: measureCapSaturation,
+    resolveCapsSource: resolveCapsSource,
+    CAP_RECIPE_KEYS: CAP_RECIPE_KEYS
   };
 }));

@@ -45,3 +45,31 @@ The suite covers:
 - `auditOutcome` measures Spearman vs scoring-input counts; |rho|>=0.95 => leaky; `duelsWon` identical to `tackles` on 605/605 rows
 - BYOD coverage: missing count columns stay null; weights renormalize; missing outcome -> rho null
 - curriculum per90/caps/fragility answers that finish Kante fail when the same sheet is evaluated for Kane
+
+After Stage B item ב3 (rank confidence intervals + fragility no-op fix) on stageA+b1+b2, re-recorded locally:
+
+```text
+node --test test/demo.test.js test/trap.test.js test/byod.test.js
+tests 72
+pass 72
+fail 0
+```
+
+- `rankInterval` is byte-identical across two calls with the same seed
+- low-minute (<300) similar-score players get a wider 90% rank interval than high-minute (>500) peers
+- `fragilityReport(..., {grit:100,...}, 10)` returns a `blocked` grit variant labeled «אין הפרעה אפשרית במשקל 100», not an empty «Grit +10» that blames the minutes threshold
+
+After Stage B item ב4 (holdout lock until weights locked + bootstrap/permutation bands) on stageA+b1+b2+b3, re-recorded locally:
+
+```text
+node --test test/demo.test.js test/trap.test.js test/byod.test.js
+tests 74
+pass 74
+fail 0
+```
+
+- `pearson` / `spearman` return `null` (not 0) for a zero-variance pair
+- with `revealed:false`, test fold exposes `n` but `rho: null`; `createStore.derive` hides test until `weightsLocked`
+- attempt counter increments once per unique normalized weight triple; lock state + attempts persist in `serializeMetricHash` / `parseMetricHash` (`lock=1`, `att=N`)
+- fixed seed `scoutai-demo-001`: bootstrap CI contains learner ρ 0.30; permutation p < 0.01; signed null band surrounds 0
+- curriculum holdout requires weights locked before beats-minutes can pass
