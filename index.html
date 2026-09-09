@@ -132,7 +132,7 @@
         <strong id="minMinutesVal" aria-hidden="true">270</strong>
       </div>
     </div>
-    <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון בתוך GK/DF/MF/FW)</label>
+    <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון mid-rank בתוך GK/DF/MF/FW; תיקו לא מנפח)</label>
     <p id="formulaLine" class="formula"></p>
     <p class="muted">Δ מול מדד הבסיס 40/30/30 בלי נרמול עמדה. שיתוף: המצב נשמר ב־hash של הכתובת — העתיקו מהדפדפן או בלחיצה.</p>
     <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
@@ -188,20 +188,21 @@
 
   <section class="card" id="validate">
     <h2>מעבדת אימות: האם המדד חוזה מדגם מוחזק?</h2>
-    <p class="notice">אין בריפו עונה שנייה של אותן ספירות. ברירת המחדל מפצלת 32 נבחרות לבתים A–D (אימון) מול E–H (מבחן) בתוך מונדיאל 2018. זה מדגם מוחזק, לא «העונה הבאה».</p>
+    <p class="notice">אין בריפו עונה שנייה של אותן ספירות. ברירת המחדל מפצלת 32 נבחרות לבתים A–D (אימון) מול E–H (מבחן) בתוך מונדיאל 2018. זה מדגם מוחזק, לא «העונה הבאה». נקודות ייחוס על אותו מדגם מבחן: דקות בלבד, רכיב בודד חזק, ורצועת אפס מפרמוטציה עם seed קבוע — כדי להבדיל מדד שעובד ממדד חסר ערך.</p>
     <label for="outcomeSelect">יעד לחיזוי (שדה מהקובץ, לא הציון עצמו)</label>
     <select id="outcomeSelect">
       <option value="assists">בישולים — לא בנוסחה</option>
       <option value="dribbles">כדרורים — לא בנוסחה</option>
-      <option value="duelsWon">דו-קרבות שנרכשו — לא בנוסחה</option>
-      <option value="goals">שערים — דליפה דרך Clutch/xG</option>
-      <option value="box">שערים+בישולים — דליפה</option>
+      <option value="duelsWon">דו-קרבות שנרכשו — ביקורת חפיפה נמדדת</option>
+      <option value="goals">שערים — תלות רעיונית ב-Clutch (לא סף העתקה)</option>
+      <option value="box">שערים+בישולים — תלות רעיונית ב-Clutch</option>
     </select>
     <label for="splitSelect">איך מפצלים</label>
     <select id="splitSelect">
       <option value="groups">בתים A–D מול E–H (מומלץ)</option>
       <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
     </select>
+    <p id="validateAudit" class="notice" role="status"></p>
     <p id="validateStatus" class="status" role="status"></p>
     <p id="validateVerdict" class="lab-note"></p>
     <div id="validateStats" class="stats-grid"></div>
@@ -236,7 +237,7 @@
   <section class="card" id="byod">
     <h2>הביאו נתונים שרישיתם בעצמכם</h2>
     <p>הכלי רץ בדפדפן בלבד. הקובץ לא נשלח לשרת. מצב זה קיים כדי ללמוד את אותה נוסחה על נתונים שהמשתמש רשאי להריץ — לא כדי למכור את מונדיאל 2018. <a href="licence.html">רישיון Open Data</a> אוסר ניצול מסחרי של הנתונים הפתוחים ושל ניתוח שנגזר מהם.</p>
-    <p class="notice">קבצים שנראים כמו StatsBomb Open Data (מקור «StatsBomb», או תחרות 43 / עונה 3) יידחו כאן. חזרו לדמו החינמי.</p>
+    <p class="notice">קבצים שנראים כמו StatsBomb Open Data נדחים כאן: מטא־דאטה (מקור «StatsBomb», או תחרות 43 / עונה 3), וגם חפיפת תוכן — טביעת אצבע על זוגות <code>name|team</code> מול 605 השחקנים שסופקו בריפו (סף: לפחות <code>min(20, ceil(30%·שורות))</code> חפיפות). ייצוא CSV מ־Excel של קובץ המונדיאל, JSON בלי מטא־דאטה, או מערך חשוף — יידחו. <strong>מה לא נתפס:</strong> סגל עם שמות ששונו עדיין יעבור; זו הגנה חלקית, לא אחריות מוחלטת. חזרו לדמו החינמי ל־Open Data.</p>
     <label for="userData">קובץ JSON או CSV מקומי</label>
     <input id="userData" type="file" accept=".json,.csv,text/csv,application/json">
     <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
@@ -245,8 +246,8 @@
       <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
       <button id="restoreOpenData" class="secondary" type="button">חזרו לדמו מונדיאל 2018</button>
     </div>
-    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
-    <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. CSV: אותן כותרות בשורה הראשונה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
+    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד. טעינה חוזרת של שורות Open Data (JSON/CSV) תידחה עם detected=STATSBOMB_OPEN_DATA.</p>
+    <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. עמודה חסרה ≠ אפס: רכיב בלי קלטים מוצג כ«לא זמין» והמשקל מנורמל מחדש (לא נדחה הריצה). CSV: אותן כותרות בשורה הראשונה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
   </section>
 
   <section class="card">
@@ -273,11 +274,12 @@
   const courseAnswers = {
     unusedField: '',
     per90: '',
-    kanteCapped: '',
+    cappedField: '',
     weightsManual: '',
-    bumpCanMove: '',
+    fragilityPredict: '',
     splitIsSeason: '',
     whatMatters: '',
+    beatsMinutes: '',
     unusedTerm: '',
     commercial: ''
   };
@@ -347,17 +349,32 @@
     writingHash = false;
   }
 
+  function formatNormComponent(row, key) {
+    const value = row.components && row.components[key];
+    if (value == null || !Number.isFinite(Number(value))) {
+      return escapeHtml('לא זמין');
+    }
+    const tie = row.components && row.components.ties && row.components.ties[key];
+    let html = escapeHtml(value);
+    if (tie && tie.tiedPeers > 1) {
+      html += '<div class="muted">' + escapeHtml(tie.tiedPeers + ' מתוך ' + tie.groupN + ' עמיתים באותו ערך') + '</div>';
+    }
+    return html;
+  }
+
   function renderTable(current) {
     formulaLine.textContent = current.formula;
     const rows = current.rows;
     const spec = current.spec;
     const tag = (current.provenance || 'STATSBOMB_OPEN_DATA');
+    const banner = current.coverageBanner || (current.coverage && current.coverage.banner) || '';
     if (!rows.length) {
-      tableStatus.textContent = tag + ': אין שחקנים מעל סף הדקות.';
+      tableStatus.textContent = tag + ': אין שחקנים מעל סף הדקות.' + (banner ? ' ' + banner : '');
       tableRoot.innerHTML = '';
       return;
     }
-    tableStatus.textContent = tag + ': ' + rows.length + ' שחקנים אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
+    tableStatus.textContent = tag + ': ' + rows.length + ' שחקנים אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.' +
+      (banner ? ' ' + banner : '');
     const body = rows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
       const compared = spec.compareId && row.id === spec.compareId;
@@ -371,9 +388,9 @@
         '<td>' + escapeHtml(row.team || '—') + '</td>' +
         '<td>' + escapeHtml(row.minutes) + '</td>' +
         '<td><span class="badge">' + escapeHtml(rowTag) + '</span> <strong>' + escapeHtml(row.score) + '</strong><div class="muted">' + deltaCell(row.deltaScore) + '</div></td>' +
-        '<td>' + escapeHtml(row.components.grit) + '</td>' +
-        '<td>' + escapeHtml(row.components.involvement) + '</td>' +
-        '<td>' + escapeHtml(row.components.clutch) + '</td>' +
+        '<td>' + formatNormComponent(row, 'grit') + '</td>' +
+        '<td>' + formatNormComponent(row, 'involvement') + '</td>' +
+        '<td>' + formatNormComponent(row, 'clutch') + '</td>' +
       '</tr>';
     }).join('');
     const caption = tag === 'STATSBOMB_OPEN_DATA'
@@ -553,13 +570,59 @@
   function renderValidation(current) {
     const report = current.validation;
     if (!report) return;
-    document.getElementById('validateStatus').textContent =
-      (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
-      ' · אימון n=' + report.train.n + ' ρ=' + report.train.rho +
-      ' · מבחן n=' + report.test.n + ' ρ=' + report.test.rho +
-      (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop);
-    document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
+    const audit = report.audit || {};
+    const auditEl = document.getElementById('validateAudit');
+    const trainRho = report.train && report.train.rho;
+    const testRho = report.test && report.test.rho;
+    const missing = (report.train && report.train.outcomeMissing) || (report.test && report.test.outcomeMissing);
+    const bl = report.baselines || {};
+    const minutesRho = bl.minutes ? bl.minutes.rho : null;
+    const best = bl.bestComponent || null;
+    const band = bl.nullBand || null;
+    const defender = bl.defenderHint || null;
+    if (auditEl) {
+      if (missing) {
+        auditEl.textContent = 'עמודת יעד חסרה בקובץ — אין ביקורת חפיפה ואין ρ לחישוב.';
+      } else if (report.leaky) {
+        auditEl.textContent = 'דליפה נמדדת לפני הצגת ρ: מקסימום Spearman ρ=' +
+          audit.maxRho + ' מול קלט «' + (audit.maxField || '?') + '»' +
+          (audit.identicalRows != null && audit.n != null
+            ? (' · זהות ' + audit.identicalRows + '/' + audit.n + ' שורות')
+            : '') +
+          '. סף העתקה ≥' + (audit.threshold != null ? audit.threshold : 0.95) + '.';
+      } else {
+        auditEl.textContent = 'ביקורת חפיפה: מקסימום ρ=' +
+          (audit.maxRho == null ? '—' : audit.maxRho) +
+          (audit.maxField ? (' מול «' + audit.maxField + '»') : '') +
+          ' · מתחת לסף ' + (audit.threshold != null ? audit.threshold : 0.95) +
+          ' · היעד אינו העתק של קלט ציון.';
+      }
+    }
+    if (missing) {
+      document.getElementById('validateStatus').textContent =
+        'עמודת יעד חסרה. ' + report.splitLabel +
+        ' · אימון n=' + report.train.n + ' ρ=לא זמין' +
+        ' · מבחן n=' + report.test.n + ' ρ=לא זמין';
+    } else if (report.leaky) {
+      document.getElementById('validateStatus').textContent =
+        'דליפה נמדדת. ' + report.splitLabel +
+        ' · אימון n=' + report.train.n + ' · מבחן n=' + report.test.n +
+        ' · ρ מוסתר עד לתיקון';
+    } else {
+      document.getElementById('validateStatus').textContent =
+        'יעד לא בנוסחה. ' + report.splitLabel +
+        ' · אימון n=' + report.train.n + ' ρ=' + (trainRho == null ? 'לא זמין' : trainRho) +
+        ' · מבחן n=' + report.test.n + ' ρ=' + (testRho == null ? 'לא זמין' : testRho) +
+        (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop) +
+        (minutesRho == null ? '' : ' · דקות ρ=' + minutesRho) +
+        (report.beatsMinutes ? ' · עוקף דקות' : ' · לא עוקף דקות');
+    }
+    document.getElementById('validateVerdict').textContent = report.verdict + (missing ? '' : (' ' + report.honesty));
     function rhoLine(label, stats) {
+      if (report.leaky || (stats && stats.redacted)) {
+        return '<article class="lesson-step"><h3>' + label + '</h3>' +
+          '<p>n=' + escapeHtml(stats.n) + ' · Spearman ρ מוסתר (דליפה נמדדת)</p></article>';
+      }
       const cr = stats.componentRho || {};
       return '<article class="lesson-step"><h3>' + label + '</h3>' +
         '<p>n=' + escapeHtml(stats.n) + ' · Spearman ρ=' + escapeHtml(stats.rho) + '</p>' +
@@ -567,8 +630,21 @@
         ' · Involvement ' + escapeHtml(cr.involvement) +
         ' · Clutch ' + escapeHtml(cr.clutch) + '</p></article>';
     }
+    function baselineCard() {
+      return '<article class="lesson-step"><h3>נקודות ייחוס — אותו מדגם מבחן</h3>' +
+        '<p>דקות בלבד: ρ=' + escapeHtml(minutesRho) +
+        (report.beatsMinutes ? ' — המדד עוקף' : ' — המדד לא עוקף') + '</p>' +
+        '<p>רכיב בודד חזק: ' +
+        escapeHtml(best ? (best.label + ' ρ=' + best.rho) : '—') + '</p>' +
+        '<p>רצועת אפס (פרמוטציה seed=' + escapeHtml(band ? band.seed : '') +
+        '): p50(|ρ|)=' + escapeHtml(band ? band.p50 : '') +
+        ' · p95(|ρ|)=' + escapeHtml(band ? band.p95 : '') + '</p>' +
+        '<p>רמז תרגיל הבלמים על אותו מבחן: ρ=' +
+        escapeHtml(defender ? defender.rho : '') +
+        ' (יעד התקפי מול מדד הגנתי — ρ שלילי מלמד על אי־התאמת יעד)</p></article>';
+    }
     document.getElementById('validateStats').innerHTML =
-      rhoLine('אימון', report.train) + rhoLine('מבחן', report.test);
+      rhoLine('אימון', report.train) + rhoLine('מבחן', report.test) + baselineCard();
     function topTable(title, rows, id) {
       return '<table><caption>' + title + '</caption><thead><tr>' +
         '<th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">ציון</th><th scope="col">יעד</th>' +
@@ -584,7 +660,9 @@
       topTable('חמשת הראשונים לפי היעד — מבחן', report.test.topOutcome);
   }
 
-  function courseQuizHtml(lesson) {
+  function courseQuizHtml(lesson, current) {
+    const selected = current && current.selected;
+    const explorer = current && current.explorer;
     if (lesson.id === 'events') {
       return '<label for="ansUnusedField">איזה שדה נאסף ולא נכנס לנוסחה?</label>' +
         '<select id="ansUnusedField">' +
@@ -596,20 +674,33 @@
         '</select>';
     }
     if (lesson.id === 'per90') {
-      return '<label for="ansPer90">90 לחיצות ב-180 דקות = ? ל-90 דקות</label>' +
-        '<select id="ansPer90">' +
-          '<option value="">— בחרו —</option>' +
-          '<option value="90">90</option>' +
-          '<option value="45">45</option>' +
-          '<option value="180">180</option>' +
-        '</select>';
+      const press = selected && selected.counts ? (selected.counts.pressures || 0) : '—';
+      const mins = selected ? (selected.minutes || 0) : '—';
+      const who = selected ? selected.name : 'השחקן הנבחר';
+      return '<label for="ansPer90">' + escapeHtml(who) + ' רשם ' + escapeHtml(press) +
+        ' לחיצות ב-' + escapeHtml(mins) + ' דקות — כמה לחיצות ל-90?</label>' +
+        '<input id="ansPer90" type="number" step="0.01" inputmode="decimal" placeholder="לדוגמה 26.52">';
     }
     if (lesson.id === 'caps') {
-      return '<label for="ansCap">26.5 לחיצות/90 מעל תקרה 18 — מה הסקייל?</label>' +
+      const capped = (explorer && explorer.capped) || [];
+      const used = ((explorer && explorer.rows) || []).filter(function (row) { return row.usedInScore; });
+      const opts = [];
+      const seen = {};
+      capped.forEach(function (row) {
+        seen[row.key] = true;
+        opts.push('<option value="' + escapeHtml(row.key) + '">' + escapeHtml(row.label) + ' (' + escapeHtml(row.key) + ')</option>');
+      });
+      used.forEach(function (row) {
+        if (seen[row.key]) return;
+        if (opts.length >= 6) return;
+        seen[row.key] = true;
+        opts.push('<option value="' + escapeHtml(row.key) + '">' + escapeHtml(row.label) + ' (' + escapeHtml(row.key) + ')</option>');
+      });
+      return '<label for="ansCap">איזה רכיב אצל השחקן הנבחר נחתך בתקרה?</label>' +
         '<select id="ansCap">' +
           '<option value="">— בחרו —</option>' +
-          '<option value="yes">100, כי התקרה חותכת</option>' +
-          '<option value="no">יותר מ-100, כי 26.5 גדול</option>' +
+          opts.join('') +
+          '<option value="none">שום דבר לא נחתך</option>' +
         '</select>';
     }
     if (lesson.id === 'weights') {
@@ -621,11 +712,14 @@
         '</select>';
     }
     if (lesson.id === 'fragility') {
-      return '<label for="ansBump">האם +10 למשקל יכול להזיז את החמישייה?</label>' +
+      const who = selected ? selected.name : 'השחקן הנבחר';
+      return '<label for="ansBump">לפני הגילוי: איזו דחיפת +10 תשפר הכי את דירוג ' + escapeHtml(who) + '?</label>' +
         '<select id="ansBump">' +
           '<option value="">— בחרו —</option>' +
-          '<option value="yes">כן, הדירוג שברירי</option>' +
-          '<option value="no">לא, הציון יציב</option>' +
+          '<option value="grit">Grit +10</option>' +
+          '<option value="involvement">Involvement +10</option>' +
+          '<option value="clutch">Clutch +10</option>' +
+          '<option value="none">שום דחיפה לא משפרת</option>' +
         '</select>';
     }
     if (lesson.id === 'holdout') {
@@ -640,6 +734,12 @@
           '<option value="">— בחרו —</option>' +
           '<option value="test">ρ במבחן</option>' +
           '<option value="train">ρ באימון</option>' +
+        '</select>' +
+        '<label for="ansBeats">האם המדד שלכם עוקף את קו־הבסיס של דקות בלבד?</label>' +
+        '<select id="ansBeats">' +
+          '<option value="">— בחרו —</option>' +
+          '<option value="no">לא עוקף — ρ המדד ≤ ρ דקות</option>' +
+          '<option value="yes">עוקף — ρ המדד גבוה מ-ρ דקות</option>' +
         '</select>';
     }
     if (lesson.id === 'honesty') {
@@ -664,11 +764,12 @@
     const map = {
       ansUnusedField: 'unusedField',
       ansPer90: 'per90',
-      ansCap: 'kanteCapped',
+      ansCap: 'cappedField',
       ansWeights: 'weightsManual',
-      ansBump: 'bumpCanMove',
+      ansBump: 'fragilityPredict',
       ansSeason: 'splitIsSeason',
       ansRho: 'whatMatters',
+      ansBeats: 'beatsMinutes',
       ansTerm: 'unusedTerm',
       ansCommercial: 'commercial'
     };
@@ -682,11 +783,12 @@
     const map = [
       ['ansUnusedField', 'unusedField'],
       ['ansPer90', 'per90'],
-      ['ansCap', 'kanteCapped'],
+      ['ansCap', 'cappedField'],
       ['ansWeights', 'weightsManual'],
-      ['ansBump', 'bumpCanMove'],
+      ['ansBump', 'fragilityPredict'],
       ['ansSeason', 'splitIsSeason'],
       ['ansRho', 'whatMatters'],
+      ['ansBeats', 'beatsMinutes'],
       ['ansTerm', 'unusedTerm'],
       ['ansCommercial', 'commercial']
     ];
@@ -705,6 +807,8 @@
       explorer: current.explorer,
       validation: current.validation,
       exercise: current.exercise,
+      players: store && store.players,
+      fragility: current.fragility,
       answers: answers
     });
     const idx = Math.min(lessons.length - 1, Math.max(0, current.spec.curriculumIndex || 0));
@@ -732,7 +836,7 @@
       '<article class="lesson-step"><h3>' + escapeHtml(lesson.title) + '</h3>' +
       '<p>' + escapeHtml(lesson.body) + '</p>' +
       '<p><strong>תרגיל:</strong> ' + escapeHtml(lesson.exercise) + '</p>' +
-      '<div class="quiz">' + courseQuizHtml(lesson) + '</div>' +
+      '<div class="quiz">' + courseQuizHtml(lesson, current) + '</div>' +
       hintBtn +
       '<ul class="checks">' + lesson.checks.map(function (item) {
         return '<li class="' + (item.pass ? 'pass' : 'fail') + '">' +
@@ -745,13 +849,34 @@
 
   function renderFragility(current) {
     const selectedId = current.selected && current.selected.id;
+    // Predict-before-reveal: hide swing details until the course quiz has a prediction.
+    if (!courseAnswers.fragilityPredict) {
+      selectedSwing.textContent = current.selected
+        ? (current.selected.name + ' — נבאו בשיעור (צעד 6) איזו דחיפת +10 תשפר את הדירוג, ואז חזרו לגילוי.')
+        : 'נבאו בשיעור (צעד 6) לפני הגילוי.';
+      fragilityRoot.innerHTML = '<p class="muted">התוצאות מוסתרות עד שתנבאו בשיעור המלא איזו דחיפה משפרת את השחקן הנבחר.</p>';
+      return;
+    }
     const notes = [];
     (current.fragility || []).forEach(function (variant) {
       const hit = variant.swings.find(function (row) { return row.id === selectedId; });
       if (hit) notes.push(variant.label + ': #' + hit.from + ' → #' + hit.to);
     });
+    const swings = store && current.selected
+      ? ScoutAIDemo.selectedWeightSwing(store.players, current.spec, selectedId, 10)
+      : [];
+    const best = ScoutAIDemo.bestHelpfulBump(swings);
+    const swingNote = swings.length
+      ? swings.map(function (row) {
+        return row.key + ': #' + row.from + '→#' + row.to + ' (' + (row.deltaRank > 0 ? '+' : '') + row.deltaRank + ')';
+      }).join(' · ')
+      : '';
     selectedSwing.textContent = current.selected
-      ? (current.selected.name + (notes.length ? ' — ' + notes.join(' · ') : ' — השחקן לא זז בטופ־5 של אף דחיפה +10.'))
+      ? (current.selected.name +
+        (swingNote ? ' — ' + swingNote : '') +
+        (notes.length ? ' · טופ־5: ' + notes.join(' · ') : ' · לא בטופ־5 של דחיפות +10.') +
+        ' · ניחוש: ' + (courseAnswers.fragilityPredict || '—') +
+        (best ? ' · נכון: ' + best : ''))
       : '';
     fragilityRoot.innerHTML = (current.fragility || []).map(function (variant) {
       const items = variant.swings.length
@@ -927,7 +1052,8 @@
   function applyParsedDataset(parsed, statusText) {
     const byodStatus = document.getElementById('byodStatus');
     if (!parsed.ok) {
-      byodStatus.textContent = (parsed.errors || []).join(' ');
+      const detected = parsed.detected ? (' [' + parsed.detected + ']') : '';
+      byodStatus.textContent = (parsed.errors || []).join(' ') + detected;
       return;
     }
     store = ScoutAIDemo.createStore({ players: parsed.players }, {
@@ -940,8 +1066,12 @@
       document.getElementById('splitSelect').value = 'hash';
     }
     recompute();
-    byodStatus.textContent = statusText ||
+    const base = statusText ||
       (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.');
+    const coverNote = (parsed.coverage && parsed.coverage.banner)
+      || (parsed.warnings || []).filter(function (w) { return String(w).indexOf('לא זמין') >= 0; })[0]
+      || '';
+    byodStatus.textContent = coverNote ? (base + ' ' + coverNote) : base;
   }
 
   document.getElementById('loadUserData').addEventListener('click', function () {

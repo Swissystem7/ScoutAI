@@ -38,9 +38,15 @@ const {
   glossaryForPlayer,
   CURRICULUM_LESSONS,
   WC2018_GROUPS,
+  OUTCOMES,
+  auditOutcome,
+  LEAKY_RHO,
   USER_DATA_PROVENANCE,
   SYNTHETIC_PROVENANCE,
-  OPEN_DATA_PROVENANCE
+  OPEN_DATA_PROVENANCE,
+  selectedWeightSwing,
+  bestHelpfulBump,
+  nearNumber
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
@@ -295,6 +301,54 @@ test('position normalization rescales components inside a position group', () =>
   assert.ok(normHigh.components.grit > normLow.components.grit);
 });
 
+test('mid-rank percentile: five same-position zero-clutch peers each get 50 with tiedPeers===5', () => {
+  const peers = {
+    players: [1, 2, 3, 4, 5].map(function (n) {
+      return {
+        name: 'Zero-MF-' + n,
+        team: 'France',
+        position: 'Center Midfield',
+        totalMinutesProxy: 400,
+        pressures: 10 + n,
+        tackles: 2,
+        interceptions: 1,
+        defensiveActions: 8,
+        progressiveActions: 5,
+        keyPasses: 0,
+        passesCompleted: 50,
+        shotXgSum: 0,
+        boxTouches: 0,
+        shotsOnTarget: 0
+      };
+    })
+  };
+  const rows = applyMetric(peers, {
+    grit: 40, involvement: 30, clutch: 30, minMinutes: 270, normalizePosition: true
+  });
+  assert.equal(rows.length, 5);
+  rows.forEach(function (row) {
+    assert.equal(row.components.clutch, 50);
+    assert.equal(row.components.ties.clutch.tiedPeers, 5);
+    assert.equal(row.components.ties.clutch.groupN, 5);
+  });
+});
+
+test('position mid-rank: no zero-xg GK in top 12 on shipped data at 40/30/30 + normalize', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const rows = applyMetric(wc, {
+    grit: 40, involvement: 30, clutch: 30, minMinutes: 270, normalizePosition: true
+  });
+  assert.ok(rows.slice(0, 12).every(r => !(r.positionGroup === 'GK' && r.components.raw.xg90 === 0)));
+  const zeroStuck = rows.filter(r =>
+    r.positionGroup === 'GK' &&
+    r.components.raw.xg90 === 0 &&
+    r.components.raw.boxTouches90 === 0 &&
+    r.components.raw.shotsOnTarget90 === 0
+  );
+  assert.ok(zeroStuck.length > 0);
+  assert.ok(zeroStuck.every(r => r.components.clutch <= 50));
+});
+
 test('permalink hash encodes and decodes metric state', () => {
   const empty = parseMetricHash('');
   assert.deepEqual(normalizeMetricSpec(empty), normalizeMetricSpec(DEFAULT_METRIC));
@@ -536,16 +590,90 @@ test('WC2018 group split is a complete 16-vs-16 team holdout, not a later season
   assert.equal(report.unassigned, 0);
   assert.match(report.honesty, /אין בריפו עונה שנייה/);
   assert.ok(Number.isFinite(report.test.rho));
-  const leaky = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'goals', splitId: 'groups' });
-  assert.equal(leaky.leaky, true);
-  assert.ok(leaky.test.componentRho.clutch > leaky.test.componentRho.grit);
+  // assists validation.test.rho ≈ 0.30 on the 40/30/30 group split (n=120).
+  assert.ok(report.test.rho >= 0.25 && report.test.rho <= 0.35);
+  assert.ok(report.audit.maxRho < 0.95);
+  // goals: conceptual Clutch overlap remains, but leaky now means measured
+  // copy (|ρ|≥LEAKY_RHO vs a scoring-input count), which goals does not meet.
+  const goalsReport = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'goals', splitId: 'groups' });
+  assert.equal(goalsReport.leaky, false);
+  assert.ok(goalsReport.test.componentRho.clutch > goalsReport.test.componentRho.grit);
   assert.match(html, /מעבדת אימות/);
   assert.match(html, /אין בריפו עונה שנייה/);
+  assert.match(html, /id="validateAudit"/);
+});
+
+test('measured outcome audit flags duelsWon as a tackles copy and keeps assists clean', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const duels = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'duelsWon' });
+  assert.equal(duels.leaky, true);
+  assert.equal(duels.audit.maxRho, 1);
+  assert.equal(duels.audit.maxField, 'tackles');
+  assert.equal(duels.audit.identicalRows, 605);
+  assert.equal(duels.train.rho, null);
+  assert.equal(duels.test.rho, null);
+  assert.equal(duels.test.redacted, true);
+  assert.match(duels.verdict, /דליפה נמדדת|מוסתר/);
+  const assistsAudit = auditOutcome(store.players, 'assists');
+  assert.equal(assistsAudit.leaky, false);
+  assert.ok(assistsAudit.maxRho < 0.95);
+  assert.ok(assistsAudit.maxRho < 0.5);
+  assert.equal(LEAKY_RHO, 0.95);
+  // Guard: no declared-clean outcome may hide a measured copy.
+  OUTCOMES.forEach(function (item) {
+    const audit = auditOutcome(store.players, item.id);
+    if (audit.leaky === false) {
+      assert.ok(
+        audit.maxRho == null || Math.abs(audit.maxRho) <= 0.95,
+        item.id + ' declared/measured clean but overlap ' + audit.maxRho
+      );
+    }
+  });
+  // Static OUTCOMES.leaky:false must not disagree with a measured copy.
+  OUTCOMES.forEach(function (item) {
+    const audit = auditOutcome(store.players, item.id);
+    if (item.leaky === false) {
+      assert.ok(!(audit.maxRho != null && Math.abs(audit.maxRho) > 0.95),
+        item.id + ' has leaky:false but measured overlap ' + audit.maxRho);
+    }
+  });
+});
+
+test('holdout baselines: minutes, best component, seeded null band, and Hebrew לא עוקף', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const opts = { outcomeId: 'assists', splitId: 'groups', seed: 'scoutai-demo-001' };
+  const v = validateMetric(store.players, DEFAULT_METRIC, opts);
+  assert.equal(v.test.rho, 0.3);
+  assert.equal(v.test.n, 120);
+  assert.ok(v.baselines);
+  assert.equal(v.baselines.minutes.rho, 0.31);
+  assert.ok(v.test.rho <= v.baselines.minutes.rho);
+  assert.equal(v.beatsMinutes, false);
+  assert.match(v.verdict, /לא עוקף/);
+  assert.ok(v.baselines.bestComponent);
+  assert.equal(v.baselines.bestComponent.id, 'clutch');
+  assert.equal(v.baselines.bestComponent.rho, v.test.componentRho.clutch);
+  assert.ok(v.baselines.nullBand);
+  assert.equal(v.baselines.nullBand.seed, 'scoutai-demo-001');
+  assert.ok(Number.isFinite(v.baselines.nullBand.p50));
+  assert.ok(Number.isFinite(v.baselines.nullBand.p95));
+  assert.ok(v.baselines.nullBand.p95 >= v.baselines.nullBand.p50);
+  const again = validateMetric(store.players, DEFAULT_METRIC, opts);
+  assert.deepEqual(again.baselines.nullBand, v.baselines.nullBand);
+  assert.ok(v.baselines.defenderHint);
+  assert.ok(v.baselines.defenderHint.rho < 0,
+    'defender-hint metric vs assists on same fold should be negative (goal mismatch)');
+  assert.match(html, /נקודות ייחוס/);
+  assert.match(html, /ansBeats/);
+  assert.match(html, /לא עוקף דקות/);
 });
 
 test('unused outcomes stay available and SAMPLE folds France to train and Brazil to test', () => {
   const store = createStore(SAMPLE);
-  assert.equal(outcomeValue(store.players.find(row => row.name === 'Finisher'), 'goals'), 0);
+  // א4: missing outcome column is null, not fabricated 0 (SAMPLE has no goals field).
+  assert.equal(outcomeValue(store.players.find(row => row.name === 'Finisher'), 'goals'), null);
   assert.ok(store.players[0].counts);
   const report = validateMetric(store.players, { grit: 40, involvement: 30, clutch: 30, minMinutes: 270 }, { splitId: 'groups', outcomeId: 'dribbles' });
   const france = store.players.find(row => row.team === 'France');
@@ -567,49 +695,78 @@ test('mini-curriculum has eight lessons and graduates only after honest holdout 
   assert.equal(failed.find(item => item.id === 'defenders').passed, false);
   assert.equal(failed.find(item => item.id === 'holdout').passed, false);
   const view = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: "N'Golo Kanté|France" }));
+  const press = view.explorer.rows.find(row => row.key === 'pressures');
+  assert.ok(press);
+  const liveBeats = !!(view.validation && view.validation.beatsMinutes);
+  // Binding to the selected player is intentional (א6): fixed "45" / Kanté-only
+  // cap / generic bump answers no longer graduate every selectedId.
+  const kanteAnswers = {
+    unusedField: 'dribbles',
+    per90: String(press.per90),
+    cappedField: 'pressures',
+    weightsManual: 'yes',
+    fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, view.spec, view.selected.id, 10)),
+    splitIsSeason: 'no',
+    whatMatters: 'test',
+    unusedTerm: 'dribble',
+    commercial: 'no',
+    beatsMinutes: liveBeats ? 'yes' : 'no'
+  };
+  const missingBeat = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, kanteAnswers, { beatsMinutes: '' })
+  });
+  assert.equal(missingBeat.find(item => item.id === 'holdout').passed, false,
+    'holdout must fail until beatsMinutes matches live baselines');
   const passed = evaluateCurriculum({
     spec: view.spec,
     selected: view.selected,
     explorer: view.explorer,
     validation: view.validation,
     exercise: view.exercise,
-    answers: {
-      unusedField: 'dribbles',
-      per90: '45',
-      kanteCapped: 'yes',
-      weightsManual: 'yes',
-      bumpCanMove: 'yes',
-      splitIsSeason: 'no',
-      whatMatters: 'test',
-      unusedTerm: 'dribble',
-      commercial: 'no'
-    }
+    players: store.players,
+    fragility: view.fragility,
+    answers: kanteAnswers
   });
   assert.ok(passed.every(item => item.passed), passed.filter(item => !item.passed).map(item => item.id).join(','));
+  const wrongBeat = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, kanteAnswers, {
+      beatsMinutes: liveBeats ? 'no' : 'yes'
+    })
+  });
+  assert.equal(wrongBeat.find(item => item.id === 'holdout').passed, false);
   const seasonLie = evaluateCurriculum({
     spec: view.spec,
     selected: view.selected,
     explorer: view.explorer,
     validation: view.validation,
     exercise: view.exercise,
-    answers: {
-      unusedField: 'dribbles',
-      per90: '45',
-      kanteCapped: 'yes',
-      weightsManual: 'yes',
-      bumpCanMove: 'yes',
-      splitIsSeason: 'yes',
-      whatMatters: 'test',
-      unusedTerm: 'dribble',
-      commercial: 'no'
-    }
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, kanteAnswers, { splitIsSeason: 'yes' })
   });
   assert.equal(seasonLie.find(item => item.id === 'holdout').passed, false);
   assert.match(html, /שיעור מלא: מאירוע למדד מאומת/);
   assert.match(html, /id="course"/);
   assert.match(html, /id="explorer"/);
   assert.match(html, /id="validate"/);
+  assert.match(CURRICULUM_LESSONS.find(item => item.id === 'holdout').body, /דקות בלבד|רצועת אפס|נקודות ייחוס|פרמוטציה/);
+  assert.match(CURRICULUM_LESSONS.find(item => item.id === 'holdout').exercise, /עוקף/);
 });
+
 
 test('every shipped WC2018 score is a pure function of the JSON counts', () => {
   const wc = require('../data/wc2018_event_aggregates.json');
@@ -686,6 +843,115 @@ test('product tree has no factory SaaS, no CI workflows, and no broken root proo
   assert.doesNotMatch(readme, /DEMO_METRIC/);
   assert.doesNotMatch(readme, /LOCAL_VIDEO/);
   assert.match(readme, /data\/wc2018_event_aggregates\.json/);
+});
+
+test('curriculum self-checks bind to selected player: Kanté sheet fails on Kane for per90/caps/fragility', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kanteView = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: "N'Golo Kanté|France" }));
+  const press = kanteView.explorer.rows.find(row => row.key === 'pressures');
+  const kanteSheet = {
+    unusedField: 'dribbles',
+    per90: String(press.per90),
+    cappedField: 'pressures',
+    weightsManual: 'yes',
+    fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, kanteView.spec, kanteView.selected.id, 10)),
+    splitIsSeason: 'no',
+    whatMatters: 'test',
+    unusedTerm: 'dribble',
+    commercial: 'no',
+    beatsMinutes: (!!(kanteView.validation && kanteView.validation.beatsMinutes) ? 'yes' : 'no')
+  };
+  const kantePass = evaluateCurriculum({
+    spec: kanteView.spec,
+    selected: kanteView.selected,
+    explorer: kanteView.explorer,
+    validation: kanteView.validation,
+    exercise: kanteView.exercise,
+    players: store.players,
+    fragility: kanteView.fragility,
+    answers: kanteSheet
+  });
+  assert.ok(kantePass.every(item => item.passed), 'Kanté sheet must graduate on Kanté');
+
+  const kaneView = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: 'Harry Kane|England' }));
+  const cross = evaluateCurriculum({
+    spec: kaneView.spec,
+    selected: kaneView.selected,
+    explorer: kaneView.explorer,
+    validation: kaneView.validation,
+    exercise: kaneView.exercise,
+    players: store.players,
+    fragility: kaneView.fragility,
+    answers: kanteSheet
+  });
+  assert.equal(cross.find(item => item.id === 'per90').passed, false);
+  assert.equal(cross.find(item => item.id === 'caps').passed, false);
+  assert.equal(cross.find(item => item.id === 'fragility').passed, false);
+});
+
+test('per90 check accepts selected-derived value and rejects stale constant when wrong', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const view = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: "N'Golo Kanté|France" }));
+  const press = view.explorer.rows.find(row => row.key === 'pressures');
+  assert.equal(press.per90, 26.52);
+  assert.equal(nearNumber('26.52', press.per90, 0.05), true);
+  assert.equal(nearNumber('45', press.per90, 0.05), false);
+
+  const base = {
+    unusedField: 'dribbles',
+    cappedField: 'pressures',
+    weightsManual: 'yes',
+    fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, view.spec, view.selected.id, 10)),
+    splitIsSeason: 'no',
+    whatMatters: 'test',
+    unusedTerm: 'dribble',
+    commercial: 'no',
+    beatsMinutes: (!!(view.validation && view.validation.beatsMinutes) ? 'yes' : 'no')
+  };
+  const ok = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, base, { per90: String(press.per90) })
+  });
+  assert.equal(ok.find(item => item.id === 'per90').passed, true);
+
+  const stale = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, base, { per90: '45' })
+  });
+  assert.equal(stale.find(item => item.id === 'per90').passed, false);
+
+  const kane = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: 'Harry Kane|England' }));
+  const kanePress = kane.explorer.rows.find(row => row.key === 'pressures');
+  const kaneOk = evaluateCurriculum({
+    spec: kane.spec,
+    selected: kane.selected,
+    explorer: kane.explorer,
+    validation: kane.validation,
+    exercise: kane.exercise,
+    players: store.players,
+    fragility: kane.fragility,
+    answers: Object.assign({}, base, {
+      per90: String(kanePress.per90),
+      cappedField: kane.explorer.capped[0].key,
+      fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, kane.spec, kane.selected.id, 10))
+    })
+  });
+  assert.equal(kaneOk.find(item => item.id === 'per90').passed, true);
+  assert.equal(nearNumber('45', kanePress.per90, 0.05), false);
 });
 
 test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', () => {
