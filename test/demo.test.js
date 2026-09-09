@@ -14,6 +14,10 @@ const {
   compositeScore,
   buildLesson,
   fragilityReport,
+  rankInterval,
+  bootstrapSpearmanCi,
+  permutationPValue,
+  pearson,
   createStore,
   loadLabSources,
   minutesImpossibleForCompetition,
@@ -26,6 +30,12 @@ const {
   radarValues,
   methodologyParagraph,
   exportMetricBundle,
+  LEARNING_STORAGE_KEY,
+  emptyLearningState,
+  serializeLearningState,
+  parseLearningState,
+  loadLearningState,
+  saveLearningState,
   EVENT_GLOSSARY,
   DEFENDER_EXERCISE,
   buildEventExplorer,
@@ -38,17 +48,28 @@ const {
   glossaryForPlayer,
   CURRICULUM_LESSONS,
   WC2018_GROUPS,
+  OUTCOMES,
+  auditOutcome,
+  LEAKY_RHO,
   USER_DATA_PROVENANCE,
   SYNTHETIC_PROVENANCE,
-  OPEN_DATA_PROVENANCE
+  OPEN_DATA_PROVENANCE,
+  selectedWeightSwing,
+  bestHelpfulBump,
+  nearNumber,
+  COURSE_QUIZ,
+  quizMarkedCorrect,
+  matchesMarkedQuiz
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const runtime = fs.readFileSync(path.join(root, 'demo.js'), 'utf8');
+const uiRuntime = fs.readFileSync(path.join(root, 'ui.js'), 'utf8');
+const offerHtml = fs.readFileSync(path.join(root, 'offer.html'), 'utf8');
 
 test('product runtime has no video theater, no demo fixtures, and no outbound network', () => {
-  const productRuntime = `${html}\n${runtime}`;
+  const productRuntime = `${html}\n${runtime}\n${uiRuntime}`;
   const forbidden = [
     /XMLHttpRequest/i, /sendBeacon/i, /WebSocket/i,
     /<form\b/i, /type=["']submit/i, /mailto:/i, /https?:\/\//i,
@@ -139,7 +160,7 @@ test('transparent lesson walks a player from raw per90 numbers to the weighted s
   assert.match(lesson[3].body, /ציון =/);
   assert.match(lesson[3].body, new RegExp(String(rows[0].score)));
   assert.match(html, /שיעור שקוף/);
-  assert.doesNotMatch(html + '\n' + runtime, /https?:\/\//);
+  assert.doesNotMatch(html + '\n' + runtime + '\n' + uiRuntime, /https?:\/\//);
 });
 
 test('fragility lab reports rank swings when one weight is bumped by 10', () => {
@@ -165,6 +186,87 @@ test('fragility lab reports rank swings when one weight is bumped by 10', () => 
   assert.ok(clutchBump.swings.some(row => row.name === 'Finisher' && row.from === 2 && row.to === 1));
   assert.ok(invBump.swings.some(row => row.name === 'Grinder' && row.deltaRank < 0));
   assert.match(html, /מעבדת שבריריות משקלות/);
+});
+
+test('rankInterval is deterministic for the same seed and wider for low-minute players', () => {
+  function player(name, team, minutes, rates) {
+    const f = minutes / 90;
+    return {
+      name: name, team: team, position: 'Center Defensive Midfield',
+      totalMinutesProxy: minutes,
+      pressures: Math.round(rates.press * f),
+      tackles: Math.round(rates.tack * f),
+      interceptions: Math.round(rates.inter * f),
+      defensiveActions: Math.round(rates.def * f),
+      progressiveActions: Math.round(rates.prog * f),
+      keyPasses: Math.round(rates.key * f),
+      passesCompleted: Math.round(rates.pass * f),
+      shotXgSum: Number((rates.xg * f).toFixed(3)),
+      boxTouches: Math.round(rates.box * f),
+      shotsOnTarget: Math.round(rates.sot * f)
+    };
+  }
+  // Stay below per90 caps so Poisson noise moves scaled components.
+  const base = { press: 10, tack: 1.2, inter: 1.0, def: 7, prog: 8, key: 0.8, pass: 40, xg: 0.05, box: 1, sot: 0.3 };
+  function bump(delta) { return Object.assign({}, base, { press: base.press + delta }); }
+  const dataset = {
+    players: [
+      player('LowMin', 'France', 120, base),
+      player('HighMin', 'Germany', 600, base),
+      player('P1', 'Spain', 500, bump(4)),
+      player('P2', 'Brazil', 500, bump(3)),
+      player('P3', 'England', 500, bump(2)),
+      player('P4', 'Belgium', 500, bump(1)),
+      player('P5', 'Croatia', 500, bump(-1)),
+      player('P6', 'Uruguay', 500, bump(-2)),
+      player('P7', 'Portugal', 500, bump(-3)),
+      player('P8', 'Argentina', 500, bump(-4)),
+      player('P9', 'Mexico', 500, bump(-5)),
+      player('P10', 'Switzerland', 500, bump(-6))
+    ]
+  };
+  const store = createStore(dataset);
+  const spec = { grit: 80, involvement: 15, clutch: 5, minMinutes: 90 };
+  const seed = 'scoutai-rank|demo-width';
+  const first = rankInterval(store.players, spec, { seed: seed, samples: 250 });
+  const second = rankInterval(store.players, spec, { seed: seed, samples: 250 });
+  assert.equal(JSON.stringify(first), JSON.stringify(second));
+  const low = first.find(row => row.name === 'LowMin');
+  const high = first.find(row => row.name === 'HighMin');
+  assert.ok(low && high);
+  assert.ok(low.hi - low.lo > high.hi - high.lo);
+  assert.ok(low.top10Share >= 0 && low.top10Share <= 1);
+  assert.match(html, /מרווח 90%/);
+});
+
+test('fragilityReport tags weight-100 bump as blocked instead of blaming minutes', () => {
+  const dataset = {
+    players: [
+      {
+        name: 'Grinder', team: 'France', position: 'Center Defensive Midfield',
+        totalMinutesProxy: 500, pressures: 120, tackles: 20, interceptions: 15,
+        defensiveActions: 80, progressiveActions: 20, keyPasses: 1, passesCompleted: 200,
+        shotXgSum: 0.1, boxTouches: 2, shotsOnTarget: 0
+      },
+      {
+        name: 'Finisher', team: 'Brazil', position: 'Center Forward',
+        totalMinutesProxy: 500, pressures: 20, tackles: 2, interceptions: 1,
+        defensiveActions: 10, progressiveActions: 40, keyPasses: 8, passesCompleted: 80,
+        shotXgSum: 3.2, boxTouches: 40, shotsOnTarget: 8
+      }
+    ]
+  };
+  const report = fragilityReport(dataset, { grit: 100, involvement: 0, clutch: 0, minMinutes: 270 }, 10);
+  const gritVar = report.find(item => item.key === 'grit');
+  assert.ok(gritVar);
+  assert.equal(gritVar.blocked, true);
+  assert.notEqual(gritVar.label, 'Grit +10');
+  assert.match(gritVar.label, /אין הפרעה אפשרית במשקל 100/);
+  assert.equal(gritVar.swings.length, 0);
+  assert.match(html, /אין הפרעה אפשרית במשקל 100/);
+  // Minutes-threshold copy stays for real empty swings; blocked branch must not reuse it.
+  assert.match(html, /variant\.blocked/);
+  assert.match(html, /נסו סף דקות אחר/);
 });
 
 test('createStore prepares players once and derive feeds table, lesson, and fragility', () => {
@@ -199,7 +301,7 @@ test('createStore prepares players once and derive feeds table, lesson, and frag
   assert.ok(gritView.explorer);
   assert.ok(gritView.validation);
   assert.equal(gritView.validation.heldOutSeason, false);
-  assert.equal(gritView.curriculum.length, 8);
+  assert.equal(evaluateCurriculum(gritView).length, 8);
 });
 
 test('loadLabSources fetches only the shipped event aggregate', async () => {
@@ -275,6 +377,24 @@ test('position normalization rescales components inside a position group', () =>
         shotXgSum: 0.1, boxTouches: 2, shotsOnTarget: 0
       },
       {
+        name: 'MF-mid-a', team: 'Brazil', position: 'Center Midfield',
+        totalMinutesProxy: 450, pressures: 70, tackles: 10, interceptions: 8,
+        defensiveActions: 40, progressiveActions: 15, keyPasses: 1, passesCompleted: 140,
+        shotXgSum: 0.08, boxTouches: 2, shotsOnTarget: 0
+      },
+      {
+        name: 'MF-mid-b', team: 'Spain', position: 'Center Midfield',
+        totalMinutesProxy: 440, pressures: 55, tackles: 8, interceptions: 6,
+        defensiveActions: 30, progressiveActions: 12, keyPasses: 1, passesCompleted: 120,
+        shotXgSum: 0.07, boxTouches: 1, shotsOnTarget: 0
+      },
+      {
+        name: 'MF-mid-c', team: 'Belgium', position: 'Left Center Midfield',
+        totalMinutesProxy: 420, pressures: 40, tackles: 5, interceptions: 4,
+        defensiveActions: 20, progressiveActions: 11, keyPasses: 1, passesCompleted: 100,
+        shotXgSum: 0.06, boxTouches: 1, shotsOnTarget: 0
+      },
+      {
         name: 'MF-low', team: 'Croatia', position: 'Left Center Midfield',
         totalMinutesProxy: 400, pressures: 15, tackles: 1, interceptions: 1,
         defensiveActions: 8, progressiveActions: 10, keyPasses: 1, passesCompleted: 80,
@@ -293,6 +413,54 @@ test('position normalization rescales components inside a position group', () =>
   assert.notEqual(rawLow.components.grit, normLow.components.grit);
   assert.ok(normLow.components.normalized);
   assert.ok(normHigh.components.grit > normLow.components.grit);
+});
+
+test('mid-rank percentile: five same-position zero-clutch peers each get 50 with tiedPeers===5', () => {
+  const peers = {
+    players: [1, 2, 3, 4, 5].map(function (n) {
+      return {
+        name: 'Zero-MF-' + n,
+        team: 'France',
+        position: 'Center Midfield',
+        totalMinutesProxy: 400,
+        pressures: 10 + n,
+        tackles: 2,
+        interceptions: 1,
+        defensiveActions: 8,
+        progressiveActions: 5,
+        keyPasses: 0,
+        passesCompleted: 50,
+        shotXgSum: 0,
+        boxTouches: 0,
+        shotsOnTarget: 0
+      };
+    })
+  };
+  const rows = applyMetric(peers, {
+    grit: 40, involvement: 30, clutch: 30, minMinutes: 270, normalizePosition: true
+  });
+  assert.equal(rows.length, 5);
+  rows.forEach(function (row) {
+    assert.equal(row.components.clutch, 50);
+    assert.equal(row.components.ties.clutch.tiedPeers, 5);
+    assert.equal(row.components.ties.clutch.groupN, 5);
+  });
+});
+
+test('position mid-rank: no zero-xg GK in top 12 on shipped data at 40/30/30 + normalize', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const rows = applyMetric(wc, {
+    grit: 40, involvement: 30, clutch: 30, minMinutes: 270, normalizePosition: true
+  });
+  assert.ok(rows.slice(0, 12).every(r => !(r.positionGroup === 'GK' && r.components.raw.xg90 === 0)));
+  const zeroStuck = rows.filter(r =>
+    r.positionGroup === 'GK' &&
+    r.components.raw.xg90 === 0 &&
+    r.components.raw.boxTouches90 === 0 &&
+    r.components.raw.shotsOnTarget90 === 0
+  );
+  assert.ok(zeroStuck.length > 0);
+  assert.ok(zeroStuck.every(r => r.components.clutch <= 50));
 });
 
 test('permalink hash encodes and decodes metric state', () => {
@@ -404,7 +572,8 @@ test('position labels put center-backs with defenders and CDM with midfielders',
 test('guided defender exercise fails the default 40/30/30 and passes a grit-first metric', () => {
   const wc = require('../data/wc2018_event_aggregates.json');
   const failed = evaluateExercise(wc, DEFAULT_METRIC);
-  const passed = evaluateExercise(wc, DEFENDER_EXERCISE.hint);
+  const claim = { roseComponent: 'grit', costGroup: 'FW' };
+  const passed = evaluateExercise(wc, DEFENDER_EXERCISE.hint, claim);
   assert.equal(failed.id, 'defenders-sensible');
   assert.equal(failed.passed, false);
   assert.ok(failed.checks.some(item => item.id === 'defenders-surface' && item.pass === false));
@@ -412,6 +581,7 @@ test('guided defender exercise fails the default 40/30/30 and passes a grit-firs
   assert.equal(passed.passed, true);
   assert.ok(passed.dfNow > failed.dfNow);
   assert.ok(passed.checks.every(item => item.pass));
+  assert.ok(passed.checks.some(item => item.id === 'tradeoff-defence' && item.pass === true));
   const gritOnly = applyMetric(DEFENDERS, { grit: 80, involvement: 15, clutch: 5, minMinutes: 270 });
   const stopper = gritOnly.find(row => row.name === 'Stopper');
   const poacher = gritOnly.find(row => row.name === 'Poacher');
@@ -419,6 +589,55 @@ test('guided defender exercise fails the default 40/30/30 and passes a grit-firs
   assert.equal(stopper.positionGroup, 'DF');
   assert.match(html, /תרגיל מודרך/);
   assert.match(html, /בדיקה עצמית/);
+  assert.match(html, /הצהרת פשרה/);
+  assert.match(html, /defenceText/);
+});
+
+test('learning state serialize/parse round-trips and corrupt input yields empty default', () => {
+  const sample = {
+    answers: { unusedField: 'dribbles', per90: '12.5', commercial: 'no' },
+    defence: 'הגנה בעברית — למה Grit עלה ו־FW שילמו.',
+    roseComponent: 'grit',
+    costGroup: 'FW'
+  };
+  const raw = serializeLearningState(sample);
+  const again = parseLearningState(raw);
+  assert.equal(again.answers.unusedField, 'dribbles');
+  assert.equal(again.answers.per90, '12.5');
+  assert.equal(again.defence, sample.defence);
+  assert.equal(again.roseComponent, 'grit');
+  assert.equal(again.costGroup, 'FW');
+  assert.equal(LEARNING_STORAGE_KEY, 'scoutai.learning.v1');
+  const empty = emptyLearningState();
+  assert.equal(parseLearningState('not-json{{{').defence, empty.defence);
+  assert.equal(parseLearningState(null).roseComponent, '');
+  assert.equal(parseLearningState(undefined).costGroup, '');
+  assert.equal(parseLearningState('{]').answers.commercial, '');
+  assert.doesNotThrow(() => parseLearningState(Buffer.from([0xff, 0xfe]).toString('binary')));
+  const mem = {
+    data: Object.create(null),
+    getItem(key) { return this.data[key]; },
+    setItem(key, value) { this.data[key] = String(value); }
+  };
+  assert.equal(saveLearningState(mem, sample), true);
+  assert.equal(loadLearningState(mem).defence, sample.defence);
+  assert.equal(loadLearningState(null).defence, '');
+  assert.equal(saveLearningState({ setItem() { throw new Error('quota'); } }, sample), false);
+});
+
+test('evaluateExercise rejects no-cost-to-forwards claim with both live median numbers', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const bad = evaluateExercise(wc, DEFENDER_EXERCISE.hint, {
+    roseComponent: 'grit',
+    costGroup: 'no cost to forwards'
+  });
+  assert.equal(bad.passed, false);
+  const trade = bad.checks.find(item => item.id === 'tradeoff-defence');
+  assert.ok(trade);
+  assert.equal(trade.pass, false);
+  assert.match(String(trade.detail), new RegExp(String(bad.medianDf)));
+  assert.match(String(trade.detail), new RegExp(String(bad.medianFw)));
+  assert.ok(bad.medianDf != null && bad.medianFw != null);
 });
 
 test('comparison radar is built from the same raw caps as the score recipe', () => {
@@ -447,11 +666,24 @@ test('comparison radar is built from the same raw caps as the score recipe', () 
 test('metric export is local, non-commercial, and citation-ready without a network URL', () => {
   const store = createStore(DEFENDERS);
   const view = store.derive(DEFENDER_EXERCISE.hint, DEFAULT_METRIC);
-  const bundle = exportMetricBundle(view.spec, view.selected, { compared: view.compared });
+  const defence = 'הגנה מילה-במילה: בחרתי Grit כי בלמים לא חיו על xG, ו־FW שילמו בחציון.';
+  const bundle = exportMetricBundle(view.spec, view.selected, {
+    compared: view.compared,
+    learning: {
+      defence: defence,
+      passed: true,
+      roseComponent: 'grit',
+      costGroup: 'FW',
+      record: [{ id: 'tradeoff-defence', pass: true, label: 'פשרה' }]
+    }
+  });
   assert.equal(bundle.commercial, false);
   assert.equal(bundle.generatedLocally, true);
   assert.equal(bundle.provenance, 'STATSBOMB_OPEN_DATA');
   assert.equal(bundle.source.competitionId, 43);
+  assert.equal(bundle.learning.defence, defence);
+  assert.equal(bundle.learning.passed, true);
+  assert.equal(bundle.commercial, false);
   assert.match(bundle.methodologyHe, /לא כהמלצת סקאוטינג/);
   assert.match(bundle.methodologyHe, /אוסר שימוש מסחרי/);
   assert.match(bundle.methodologyHe, /מונדיאל 2018/);
@@ -461,6 +693,8 @@ test('metric export is local, non-commercial, and citation-ready without a netwo
   assert.match(methodologyParagraph(view.spec, view.selected), /משקלות ידניות/);
   assert.match(html, /ייצוא המדד/);
   assert.match(html, /scoutai-metric\.json/);
+  assert.match(html, /ההגנה שלכם/);
+  assert.match(offerHtml, /כותב בעצמו|הגנה/);
 });
 
 test('glossary names the StatsBomb event types that feed the score and the ones that do not', () => {
@@ -471,7 +705,7 @@ test('glossary names the StatsBomb event types that feed the score and the ones 
   assert.ok(EVENT_GLOSSARY.some(item => item.usedInScore === false && /Dribble/.test(item.type)));
   assert.ok(EVENT_GLOSSARY.some(item => item.feeds === 'סף דקות'));
   assert.match(html, /מילון סוגי אירועים/);
-  assert.match(html + '\n' + runtime, /לא בנוסחה/);
+  assert.match(html + '\n' + runtime + '\n' + uiRuntime, /לא בנוסחה/);
 });
 
 test('event explorer rebuilds Kanté\'s file counts into a per90 receipt without inventing a match log', () => {
@@ -517,6 +751,8 @@ test('Spearman is 1 on a monotone pair and -1 when reversed', () => {
   assert.equal(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1);
   assert.equal(spearman([1, 2, 3, 4], [40, 30, 20, 10]), -1);
   assert.equal(spearman([1], [1]), null);
+  assert.equal(pearson([1, 1, 1], [2, 2, 2]), null);
+  assert.equal(spearman([5, 5, 5], [1, 2, 3]), null);
 });
 
 test('WC2018 group split is a complete 16-vs-16 team holdout, not a later season', () => {
@@ -536,16 +772,90 @@ test('WC2018 group split is a complete 16-vs-16 team holdout, not a later season
   assert.equal(report.unassigned, 0);
   assert.match(report.honesty, /אין בריפו עונה שנייה/);
   assert.ok(Number.isFinite(report.test.rho));
-  const leaky = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'goals', splitId: 'groups' });
-  assert.equal(leaky.leaky, true);
-  assert.ok(leaky.test.componentRho.clutch > leaky.test.componentRho.grit);
+  // assists validation.test.rho ≈ 0.30 on the 40/30/30 group split (n=120).
+  assert.ok(report.test.rho >= 0.25 && report.test.rho <= 0.35);
+  assert.ok(report.audit.maxRho < 0.95);
+  // goals: conceptual Clutch overlap remains, but leaky now means measured
+  // copy (|ρ|≥LEAKY_RHO vs a scoring-input count), which goals does not meet.
+  const goalsReport = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'goals', splitId: 'groups' });
+  assert.equal(goalsReport.leaky, false);
+  assert.ok(goalsReport.test.componentRho.clutch > goalsReport.test.componentRho.grit);
   assert.match(html, /מעבדת אימות/);
   assert.match(html, /אין בריפו עונה שנייה/);
+  assert.match(html, /id="validateAudit"/);
+});
+
+test('measured outcome audit flags duelsWon as a tackles copy and keeps assists clean', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const duels = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'duelsWon' });
+  assert.equal(duels.leaky, true);
+  assert.equal(duels.audit.maxRho, 1);
+  assert.equal(duels.audit.maxField, 'tackles');
+  assert.equal(duels.audit.identicalRows, 605);
+  assert.equal(duels.train.rho, null);
+  assert.equal(duels.test.rho, null);
+  assert.equal(duels.test.redacted, true);
+  assert.match(duels.verdict, /דליפה נמדדת|מוסתר/);
+  const assistsAudit = auditOutcome(store.players, 'assists');
+  assert.equal(assistsAudit.leaky, false);
+  assert.ok(assistsAudit.maxRho < 0.95);
+  assert.ok(assistsAudit.maxRho < 0.5);
+  assert.equal(LEAKY_RHO, 0.95);
+  // Guard: no declared-clean outcome may hide a measured copy.
+  OUTCOMES.forEach(function (item) {
+    const audit = auditOutcome(store.players, item.id);
+    if (audit.leaky === false) {
+      assert.ok(
+        audit.maxRho == null || Math.abs(audit.maxRho) <= 0.95,
+        item.id + ' declared/measured clean but overlap ' + audit.maxRho
+      );
+    }
+  });
+  // Static OUTCOMES.leaky:false must not disagree with a measured copy.
+  OUTCOMES.forEach(function (item) {
+    const audit = auditOutcome(store.players, item.id);
+    if (item.leaky === false) {
+      assert.ok(!(audit.maxRho != null && Math.abs(audit.maxRho) > 0.95),
+        item.id + ' has leaky:false but measured overlap ' + audit.maxRho);
+    }
+  });
+});
+
+test('holdout baselines: minutes, best component, seeded null band, and Hebrew לא עוקף', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const opts = { outcomeId: 'assists', splitId: 'groups', seed: 'scoutai-demo-001' };
+  const v = validateMetric(store.players, DEFAULT_METRIC, opts);
+  assert.equal(v.test.rho, 0.3);
+  assert.equal(v.test.n, 120);
+  assert.ok(v.baselines);
+  assert.equal(v.baselines.minutes.rho, 0.31);
+  assert.ok(v.test.rho <= v.baselines.minutes.rho);
+  assert.equal(v.beatsMinutes, false);
+  assert.match(v.verdict, /לא עוקף/);
+  assert.ok(v.baselines.bestComponent);
+  assert.equal(v.baselines.bestComponent.id, 'clutch');
+  assert.equal(v.baselines.bestComponent.rho, v.test.componentRho.clutch);
+  assert.ok(v.baselines.nullBand);
+  assert.equal(v.baselines.nullBand.seed, 'scoutai-demo-001');
+  assert.ok(Number.isFinite(v.baselines.nullBand.p50));
+  assert.ok(Number.isFinite(v.baselines.nullBand.p95));
+  assert.ok(v.baselines.nullBand.p95 >= v.baselines.nullBand.p50);
+  const again = validateMetric(store.players, DEFAULT_METRIC, opts);
+  assert.deepEqual(again.baselines.nullBand, v.baselines.nullBand);
+  assert.ok(v.baselines.defenderHint);
+  assert.ok(v.baselines.defenderHint.rho < 0,
+    'defender-hint metric vs assists on same fold should be negative (goal mismatch)');
+  assert.match(html, /נקודות ייחוס/);
+  assert.match(runtime + '\n' + uiRuntime, /ansBeats/);
+  assert.match(html, /לא עוקף דקות/);
 });
 
 test('unused outcomes stay available and SAMPLE folds France to train and Brazil to test', () => {
   const store = createStore(SAMPLE);
-  assert.equal(outcomeValue(store.players.find(row => row.name === 'Finisher'), 'goals'), 0);
+  // א4: missing outcome column is null, not fabricated 0 (SAMPLE has no goals field).
+  assert.equal(outcomeValue(store.players.find(row => row.name === 'Finisher'), 'goals'), null);
   assert.ok(store.players[0].counts);
   const report = validateMetric(store.players, { grit: 40, involvement: 30, clutch: 30, minMinutes: 270 }, { splitId: 'groups', outcomeId: 'dribbles' });
   const france = store.players.find(row => row.team === 'France');
@@ -566,50 +876,88 @@ test('mini-curriculum has eight lessons and graduates only after honest holdout 
   assert.equal(failed.length, 8);
   assert.equal(failed.find(item => item.id === 'defenders').passed, false);
   assert.equal(failed.find(item => item.id === 'holdout').passed, false);
-  const view = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: "N'Golo Kanté|France" }));
+  const view = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, {
+    selectedId: "N'Golo Kanté|France",
+    weightsLocked: true
+  }));
+  const press = view.explorer.rows.find(row => row.key === 'pressures');
+  assert.ok(press);
+  const liveBeats = !!(view.validation && view.validation.beatsMinutes);
+  // Binding to the selected player is intentional (א6): fixed "45" / Kanté-only
+  // cap / generic bump answers no longer graduate every selectedId.
+  const kanteAnswers = {
+    unusedField: 'dribbles',
+    per90: String(press.per90),
+    cappedField: 'pressures',
+    weightsManual: 'yes',
+    fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, view.spec, view.selected.id, 10)),
+    splitIsSeason: 'no',
+    whatMatters: 'test',
+    unusedTerm: 'dribble',
+    commercial: 'no',
+    beatsMinutes: liveBeats ? 'yes' : 'no',
+    roseComponent: 'grit',
+    costGroup: 'FW'
+  };
+  const missingBeat = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, kanteAnswers, { beatsMinutes: '' })
+  });
+  assert.equal(missingBeat.find(item => item.id === 'holdout').passed, false,
+    'holdout must fail until beatsMinutes matches live baselines');
   const passed = evaluateCurriculum({
     spec: view.spec,
     selected: view.selected,
     explorer: view.explorer,
     validation: view.validation,
     exercise: view.exercise,
-    answers: {
-      unusedField: 'dribbles',
-      per90: '45',
-      kanteCapped: 'yes',
-      weightsManual: 'yes',
-      bumpCanMove: 'yes',
-      splitIsSeason: 'no',
-      whatMatters: 'test',
-      unusedTerm: 'dribble',
-      commercial: 'no'
-    }
+    players: store.players,
+    fragility: view.fragility,
+    answers: kanteAnswers
   });
   assert.ok(passed.every(item => item.passed), passed.filter(item => !item.passed).map(item => item.id).join(','));
+  const wrongBeat = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, kanteAnswers, {
+      beatsMinutes: liveBeats ? 'no' : 'yes'
+    })
+  });
+  assert.equal(wrongBeat.find(item => item.id === 'holdout').passed, false);
   const seasonLie = evaluateCurriculum({
     spec: view.spec,
     selected: view.selected,
     explorer: view.explorer,
     validation: view.validation,
     exercise: view.exercise,
-    answers: {
-      unusedField: 'dribbles',
-      per90: '45',
-      kanteCapped: 'yes',
-      weightsManual: 'yes',
-      bumpCanMove: 'yes',
-      splitIsSeason: 'yes',
-      whatMatters: 'test',
-      unusedTerm: 'dribble',
-      commercial: 'no'
-    }
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, kanteAnswers, { splitIsSeason: 'yes' })
   });
   assert.equal(seasonLie.find(item => item.id === 'holdout').passed, false);
   assert.match(html, /שיעור מלא: מאירוע למדד מאומת/);
   assert.match(html, /id="course"/);
   assert.match(html, /id="explorer"/);
   assert.match(html, /id="validate"/);
+  assert.match(CURRICULUM_LESSONS.find(item => item.id === 'holdout').body, /דקות בלבד|רצועת אפס|נקודות ייחוס|פרמוטציה/);
+  assert.match(CURRICULUM_LESSONS.find(item => item.id === 'holdout').body, /נעל את המשקלים/);
+  assert.match(CURRICULUM_LESSONS.find(item => item.id === 'holdout').exercise, /עוקף/);
+  assert.match(CURRICULUM_LESSONS.find(item => item.id === 'holdout').exercise, /נעלו משקלים/);
+  assert.match(html, /נעל את המשקלים האלה/);
+  assert.match(html, /id="lockWeights"/);
 });
+
 
 test('every shipped WC2018 score is a pure function of the JSON counts', () => {
   const wc = require('../data/wc2018_event_aggregates.json');
@@ -688,11 +1036,205 @@ test('product tree has no factory SaaS, no CI workflows, and no broken root proo
   assert.match(readme, /data\/wc2018_event_aggregates\.json/);
 });
 
+test('curriculum self-checks bind to selected player: Kanté sheet fails on Kane for per90/caps/fragility', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kanteView = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, {
+    selectedId: "N'Golo Kanté|France",
+    weightsLocked: true
+  }));
+  const press = kanteView.explorer.rows.find(row => row.key === 'pressures');
+  const kanteSheet = {
+    unusedField: 'dribbles',
+    per90: String(press.per90),
+    cappedField: 'pressures',
+    weightsManual: 'yes',
+    fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, kanteView.spec, kanteView.selected.id, 10)),
+    splitIsSeason: 'no',
+    whatMatters: 'test',
+    unusedTerm: 'dribble',
+    commercial: 'no',
+    beatsMinutes: (!!(kanteView.validation && kanteView.validation.beatsMinutes) ? 'yes' : 'no'),
+    roseComponent: 'grit',
+    costGroup: 'FW'
+  };
+  const kantePass = evaluateCurriculum({
+    spec: kanteView.spec,
+    selected: kanteView.selected,
+    explorer: kanteView.explorer,
+    validation: kanteView.validation,
+    exercise: kanteView.exercise,
+    players: store.players,
+    fragility: kanteView.fragility,
+    answers: kanteSheet
+  });
+  assert.ok(kantePass.every(item => item.passed), 'Kanté sheet must graduate on Kanté');
+
+  const kaneView = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: 'Harry Kane|England' }));
+  const cross = evaluateCurriculum({
+    spec: kaneView.spec,
+    selected: kaneView.selected,
+    explorer: kaneView.explorer,
+    validation: kaneView.validation,
+    exercise: kaneView.exercise,
+    players: store.players,
+    fragility: kaneView.fragility,
+    answers: kanteSheet
+  });
+  assert.equal(cross.find(item => item.id === 'per90').passed, false);
+  assert.equal(cross.find(item => item.id === 'caps').passed, false);
+  assert.equal(cross.find(item => item.id === 'fragility').passed, false);
+});
+
+test('per90 check accepts selected-derived value and rejects stale constant when wrong', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const view = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: "N'Golo Kanté|France" }));
+  const press = view.explorer.rows.find(row => row.key === 'pressures');
+  assert.equal(press.per90, 26.52);
+  assert.equal(nearNumber('26.52', press.per90, 0.05), true);
+  assert.equal(nearNumber('45', press.per90, 0.05), false);
+
+  const base = {
+    unusedField: 'dribbles',
+    cappedField: 'pressures',
+    weightsManual: 'yes',
+    fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, view.spec, view.selected.id, 10)),
+    splitIsSeason: 'no',
+    whatMatters: 'test',
+    unusedTerm: 'dribble',
+    commercial: 'no',
+    beatsMinutes: (!!(view.validation && view.validation.beatsMinutes) ? 'yes' : 'no'),
+    roseComponent: 'grit',
+    costGroup: 'FW'
+  };
+  const ok = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, base, { per90: String(press.per90) })
+  });
+  assert.equal(ok.find(item => item.id === 'per90').passed, true);
+
+  const stale = evaluateCurriculum({
+    spec: view.spec,
+    selected: view.selected,
+    explorer: view.explorer,
+    validation: view.validation,
+    exercise: view.exercise,
+    players: store.players,
+    fragility: view.fragility,
+    answers: Object.assign({}, base, { per90: '45' })
+  });
+  assert.equal(stale.find(item => item.id === 'per90').passed, false);
+
+  const kane = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, { selectedId: 'Harry Kane|England' }));
+  const kanePress = kane.explorer.rows.find(row => row.key === 'pressures');
+  const kaneOk = evaluateCurriculum({
+    spec: kane.spec,
+    selected: kane.selected,
+    explorer: kane.explorer,
+    validation: kane.validation,
+    exercise: kane.exercise,
+    players: store.players,
+    fragility: kane.fragility,
+    answers: Object.assign({}, base, {
+      per90: String(kanePress.per90),
+      cappedField: kane.explorer.capped[0].key,
+      fragilityPredict: bestHelpfulBump(selectedWeightSwing(store.players, kane.spec, kane.selected.id, 10))
+    })
+  });
+  assert.equal(kaneOk.find(item => item.id === 'per90').passed, true);
+  assert.equal(nearNumber('45', kanePress.per90, 0.05), false);
+});
+
 test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', () => {
   assert.match(html, /href="#course"/);
   assert.match(html, /דלגו לשיעור המלא/);
   assert.match(html, /id="outcomeSelect"/);
   assert.match(html, /id="splitSelect"/);
   assert.match(html, /aria-label="צעדי השיעור המלא"/);
-  assert.doesNotMatch(html + '\n' + runtime, /https?:\/\//);
+  assert.doesNotMatch(html + '\n' + runtime + '\n' + uiRuntime, /https?:\/\//);
+});
+
+
+test('holdout lock: revealed:false exposes n but rho null; attempts unique; CI/p deterministic', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const opts = { outcomeId: 'assists', splitId: 'groups', seed: 'scoutai-demo-001' };
+  const hidden = validateMetric(store.players, DEFAULT_METRIC, Object.assign({}, opts, { revealed: false }));
+  assert.equal(hidden.test.n, 120);
+  assert.equal(hidden.test.rho, null);
+  assert.equal(hidden.revealed, false);
+  assert.equal(hidden.baselines.rhoCi, null);
+
+  const first = validateMetric(store.players, DEFAULT_METRIC, opts);
+  const second = validateMetric(store.players, DEFAULT_METRIC, opts);
+  assert.deepEqual(first.baselines.rhoCi, second.baselines.rhoCi);
+  assert.ok(first.baselines.rhoCi.lo <= 0.30 && first.baselines.rhoCi.hi >= 0.30);
+  assert.equal(first.test.rho, 0.3);
+  assert.ok(first.baselines.permutationP < 0.01);
+  assert.equal(first.baselines.permutationP, second.baselines.permutationP);
+  const band = first.baselines.signedNullBand;
+  assert.ok(band.lo < 0 && band.hi > 0, 'signed null band surrounds 0');
+
+  const a = store.derive(Object.assign({}, DEFAULT_METRIC));
+  assert.equal(a.validation.revealed, false);
+  assert.equal(a.validation.test.rho, null);
+  assert.equal(a.validation.lock.attempts, 1);
+  const b = store.derive(Object.assign({}, DEFAULT_METRIC, { grit: 55, involvement: 25, clutch: 20 }));
+  assert.equal(b.validation.lock.attempts, 2);
+  const c = store.derive(Object.assign({}, DEFAULT_METRIC));
+  assert.equal(c.validation.lock.attempts, 2, 'same normalized triple does not increment');
+  const locked = store.derive(Object.assign({}, DEFAULT_METRIC, { weightsLocked: true }));
+  assert.equal(locked.validation.revealed, true);
+  assert.equal(locked.validation.test.rho, 0.3);
+  assert.equal(locked.validation.lock.attempts, 2);
+  assert.match(locked.validation.verdict, /CI|בוטסטרפ/);
+  assert.match(locked.validation.verdict, /פרמוטציה|p=/);
+
+  const hash = serializeMetricHash(locked.spec);
+  assert.match(hash, /lock=1/);
+  assert.match(hash, /att=2/);
+  const parsed = parseMetricHash(hash);
+  assert.equal(parsed.weightsLocked, true);
+  assert.equal(parsed.weightAttempts, 2);
+});
+
+test('holdout lock curriculum requires weightsLocked before beats-minutes passes', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const unlocked = store.derive(Object.assign({}, DEFENDER_EXERCISE.hint, {
+    selectedId: "N'Golo Kanté|France"
+  }));
+  const sheet = evaluateCurriculum({
+    spec: unlocked.spec,
+    selected: unlocked.selected,
+    explorer: unlocked.explorer,
+    validation: unlocked.validation,
+    exercise: unlocked.exercise,
+    players: store.players,
+    fragility: unlocked.fragility,
+    answers: {
+      unusedField: 'dribbles',
+      per90: '1',
+      cappedField: 'pressures',
+      weightsManual: 'yes',
+      fragilityPredict: 'grit',
+      splitIsSeason: 'no',
+      whatMatters: 'test',
+      unusedTerm: 'dribble',
+      commercial: 'no',
+      beatsMinutes: 'no'
+    }
+  });
+  assert.equal(sheet.find(item => item.id === 'holdout').passed, false);
+  assert.equal(
+    sheet.find(item => item.id === 'holdout').checks.find(c => c.id === 'weights-locked').pass,
+    false
+  );
 });
