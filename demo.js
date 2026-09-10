@@ -479,6 +479,19 @@
     return counts;
   }
 
+  // Which count fields the file row really carries (a finite number under
+  // that key). countsFromRow turns a missing key into 0 so the score can run;
+  // the ledger must not then claim the 0 was read from the file.
+  function countsPresentInRow(row) {
+    const present = {};
+    COUNT_FIELDS.forEach(function (key) {
+      present[key] = !!row && typeof row === 'object' &&
+        Object.prototype.hasOwnProperty.call(row, key) &&
+        Number.isFinite(Number(row[key]));
+    });
+    return present;
+  }
+
   function preparePlayer(row, options) {
     const opts = options || {};
     const provenance = opts.provenance || row.provenance || OPEN_DATA_PROVENANCE;
@@ -498,6 +511,8 @@
       matchesPlayed: row.matchesPlayed,
       group: WC2018_TEAM_GROUP[row.team] || null,
       counts: countsFromRow(row),
+      countsInFile: countsPresentInRow(row),
+      minutesField: row.totalMinutesProxy != null ? 'totalMinutesProxy' : (row.minutes != null ? 'minutes' : null),
       per90File: row.per90 || null,
       per90Rates: rates,
       components: componentsFromRates(rates),
@@ -1329,6 +1344,7 @@
         usedInScore: col.usedInScore,
         filePath: 'players[].' + col.key,
         sourceField: ledgerSourceField(player, col.key, col.per90Field),
+        inFile: col.key === 'totalMinutesProxy' ? true : countInFile(player, col.key),
         total: col.key === 'shotXgSum' ? round2(total) : total,
         minutes: minutes,
         per90: computed90,
@@ -1383,13 +1399,24 @@
 
   // rawPer90 reads the file's own per90 block when it has a finite number for
   // the field and only then falls back to count*90/minutes. The ledger reports
-  // whichever path was actually taken, never a plausible-looking guess.
+  // whichever path was actually taken, never a plausible-looking guess - and
+  // when NEITHER key exists in the file (a BYOD upload with a subset of the
+  // columns) it reports null: the pipeline used 0 for that field, but it did
+  // not read that 0 from anywhere.
+  function countInFile(player, countKey) {
+    const present = player && player.countsInFile;
+    if (present && Object.prototype.hasOwnProperty.call(present, countKey)) return !!present[countKey];
+    // rows prepared elsewhere (no countsInFile receipt): trust the counts map
+    return !!(player && player.counts && Object.prototype.hasOwnProperty.call(player.counts, countKey));
+  }
+
   function ledgerSourceField(player, countKey, per90Key) {
     const fromFile = player && player.per90File;
     if (per90Key && fromFile && Number.isFinite(Number(fromFile[per90Key]))) {
       return 'players[].per90.' + per90Key;
     }
-    return 'players[].' + countKey;
+    if (countInFile(player, countKey)) return 'players[].' + countKey;
+    return null;
   }
 
   function ledgerPer90(player, countKey, per90Key) {
@@ -1458,6 +1485,8 @@
     const shrunkRates = (displayed && displayed.shrunkRates) || null;
     const components = LEDGER_FIELDS.map(function (col) {
       const value = per90ByKey[col.key];
+      const sourceField = ledgerSourceField(prepared, col.key, col.per90Field);
+      const inFile = countInFile(prepared, col.key);
       const cap = Number(col.cap) || 0;
       let capped;
       let pairedPer90 = null;
@@ -1481,7 +1510,10 @@
         label: col.label,
         feeds: pillar,
         eventType: col.type,
-        raw: finiteOr(counts[col.key], 0),
+        // raw is the count READ FROM THE FILE; null when the file has no such
+        // key (the pipeline then used 0, and per90 says so)
+        raw: inFile ? finiteOr(counts[col.key], 0) : null,
+        inFile: inFile,
         per90: finiteOr(value, 0),
         // under position normalisation the rate the caps really saw is the
         // shrunk one; null whenever no shrinkage ran
@@ -1492,8 +1524,8 @@
         recipeWeight: Number(col.weight),
         weight: finiteOr(weight, 0),
         contribution: finiteOr(scaled * weight, 0),
-        sourceField: ledgerSourceField(prepared, col.key, col.per90Field),
-        countField: 'players[].' + col.key,
+        sourceField: sourceField,
+        countField: inFile ? 'players[].' + col.key : null,
         sharesCapWith: col.pairWith ? 'players[].' + col.pairWith : null,
         pairedPer90: pairedPer90 == null ? null : finiteOr(pairedPer90, 0)
       };
@@ -1536,7 +1568,7 @@
       minutes: finiteOr(prepared.minutes, 0),
       dataset: (store && store.source && store.source.dataset) || null,
       provenance: (store && store.provenance) || prepared.provenance || null,
-      minutesField: 'players[].totalMinutesProxy',
+      minutesField: prepared.minutesField ? 'players[].' + prepared.minutesField : null,
       weights: {
         grit: metric.grit,
         involvement: metric.involvement,

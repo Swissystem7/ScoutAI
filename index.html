@@ -408,18 +408,25 @@
     if (lessonIndex === 1 || lessonIndex === 2) {
       const ledger = current.ledger;
       const num = function (value, digits) {
-        return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
+        return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
       };
-      extra = '<table><caption>פנקס גזירה — כל מספר בטבלה הזאת מגיע משדה אמיתי בקובץ</caption><thead><tr>' +
-        '<th scope="col">שדה בקובץ</th><th scope="col">ספירה</th><th scope="col">ל-90</th>' +
+      const normalised = !!(ledger && ledger.normalized);
+      extra = '<table><caption>פנקס גזירה — כל מספר בטבלה הזאת מגיע משדה אמיתי בקובץ, או אומר שאין כזה</caption><thead><tr>' +
+        '<th scope="col">שדה בקובץ</th><th scope="col">ספירה</th><th scope="col">ל-90' + (normalised ? ' → אחרי כיווץ' : '') + '</th>' +
         '<th scope="col">אחרי תקרה</th><th scope="col">סקייל 0–100</th><th scope="col">משקל</th>' +
         '<th scope="col">תרומה</th><th scope="col">נכנס ל</th></tr></thead><tbody>' +
         ((ledger && ledger.components) || []).map(function (row) {
-          return '<tr data-source-field="' + escapeHtml(row.sourceField) + '">' +
-            '<th scope="row"><code>' + escapeHtml(row.sourceField) + '</code>' +
+          // sourceField null = the uploaded file has no such key; the pipeline
+          // used 0 and the ledger says so instead of naming a path that is not there
+          const field = row.sourceField == null
+            ? '<span class="down">לא בקובץ</span>'
+            : '<code>' + escapeHtml(row.sourceField) + '</code>';
+          return '<tr data-source-field="' + escapeHtml(row.sourceField == null ? '' : row.sourceField) + '">' +
+            '<th scope="row">' + field +
             '<div class="muted">' + escapeHtml(row.label) + '</div></th>' +
             '<td>' + escapeHtml(num(row.raw, 2)) + '</td>' +
-            '<td>' + escapeHtml(num(row.per90, 2)) + '</td>' +
+            '<td>' + escapeHtml(num(row.per90, 2)) +
+              (row.shrunkPer90 == null ? '' : ' → ' + escapeHtml(num(row.shrunkPer90, 2))) + '</td>' +
             '<td>' + escapeHtml(num(row.capped, 2)) + ' / ' + escapeHtml(row.cap) + '</td>' +
             '<td>' + escapeHtml(num(row.scaled, 1)) + '</td>' +
             '<td>' + escapeHtml(num(row.weight, 4)) + '</td>' +
@@ -562,7 +569,10 @@
         (explorer.rows || []).map(function (row) {
           return '<tr id="field-' + escapeHtml(row.key) + '" data-field="' + escapeHtml(row.key) + '"' +
             (row.usedInScore ? '' : ' class="unused"') + '>' +
-            '<th scope="row"><code>' + escapeHtml(row.filePath) + '</code><div class="muted">' + escapeHtml(row.label) + '</div></th>' +
+            '<th scope="row">' + (row.inFile === false
+              ? '<span class="down">לא בקובץ</span> <code>' + escapeHtml(row.filePath) + '</code>'
+              : '<code>' + escapeHtml(row.filePath) + '</code>') +
+              '<div class="muted">' + escapeHtml(row.label) + '</div></th>' +
             '<td>' + escapeHtml(row.type) + '</td>' +
             '<td>' + escapeHtml(row.total) + '</td>' +
             '<td>' + escapeHtml(row.per90) + '</td>' +

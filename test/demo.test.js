@@ -47,6 +47,7 @@ const {
   worldCupGroup,
   assignFold,
   outcomeValue,
+  parseUserDataset,
   glossaryForPlayer,
   CURRICULUM_LESSONS,
   WC2018_GROUPS,
@@ -1261,4 +1262,57 @@ test('the lesson table and the counts explorer are drawn from the ledger', () =>
   assert.match(html, /reconciliation\.componentsSum/);
   assert.match(html, /reconciliation\.total/);
   assert.match(html, /ledger\.impact/);
+});
+
+// --- verification round: findings 1-5 --------------------------------------
+
+
+test('a BYOD file without the per90 block reports null for fields it does not contain', () => {
+  const players = [
+    { name: 'Only Two', team: 'Home', position: 'Center Back', minutes: 400, pressures: 40, passesCompleted: 100 },
+    { name: 'Full Row', team: 'Away', position: 'Center Forward', minutes: 400, pressures: 10, tackles: 1, interceptions: 0, defensiveActions: 4, progressiveActions: 20, keyPasses: 6, passesCompleted: 50, shotXgSum: 2, boxTouches: 20, shotsOnTarget: 4 }
+  ];
+  const store = createStore({ players: players }, { provenance: USER_DATA_PROVENANCE });
+  const thin = explainScore(playerKey(players[0]), { grit: 40, involvement: 30, clutch: 30, minMinutes: 90 }, store);
+  const named = thin.components.filter(item => item.sourceField != null);
+  assert.deepEqual(named.map(item => item.sourceField), ['players[].pressures', 'players[].passesCompleted']);
+  assert.deepEqual(named.map(item => item.raw), [40, 100]);
+  thin.components.filter(item => item.sourceField == null).forEach((item) => {
+    assert.equal(item.raw, null, item.name);
+    assert.equal(item.inFile, false);
+    assert.equal(item.countField, null);
+    assert.equal(item.per90, 0, 'the pipeline used 0 for ' + item.name);
+    assert.equal(item.contribution, 0);
+  });
+  assert.equal(thin.components.filter(item => item.sourceField == null).length, 8);
+  assert.equal(thin.minutesField, 'players[].minutes');
+  // the ledger still closes on the score the table shows
+  const view = store.derive({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90, selectedId: playerKey(players[0]) });
+  assert.equal(view.ledger.impact, view.selected.score);
+  assert.ok(Math.abs(view.ledger.reconciliation.componentsSum + view.ledger.reconciliation.total - view.ledger.impact) < 1e-9);
+  // the counts explorer says the same
+  const explorerRow = view.explorer.rows.find(row => row.key === 'shotXgSum');
+  assert.equal(explorerRow.sourceField, null);
+  assert.equal(explorerRow.inFile, false);
+  assert.equal(view.explorer.rows.find(row => row.key === 'pressures').inFile, true);
+  // the full row resolves every field through the count path (no per90 block)
+  const full = explainScore(playerKey(players[1]), { grit: 40, involvement: 30, clutch: 30, minMinutes: 90 }, store);
+  assert.ok(full.components.every(item => item.sourceField === 'players[].' + item.name));
+  // a CSV upload with a subset of columns takes the same path
+  const csv = parseUserDataset('name,team,position,minutes,pressures,passesCompleted\nCsv,Home,Left Back,300,20,80', { attested: true });
+  const csvStore = createStore({ players: csv.players }, { provenance: USER_DATA_PROVENANCE });
+  const csvLedger = explainScore(csvStore.players[0].id, DEFAULT_METRIC, csvStore);
+  assert.equal(csvLedger.components.filter(item => item.sourceField == null).length, 8);
+  assert.equal(csvLedger.minutesField, 'players[].totalMinutesProxy');
+  // and the page prints "not in the file" rather than a <code> path
+  assert.match(html, /row\.sourceField == null/);
+  assert.match(html, /לא בקובץ/);
+  assert.match(html, /row\.inFile === false/);
+  // the shipped file resolves everything, so nothing there is null
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const wcStore = createStore(wc);
+  wcStore.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, wcStore);
+    assert.ok(ledger.components.every(item => item.sourceField != null && item.raw != null && item.inFile), player.name);
+  });
 });
