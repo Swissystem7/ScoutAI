@@ -834,10 +834,33 @@
     persistHash(current.spec);
   }
 
+  // The bootstrap interval (~100 ms on the shipped file) never runs inside
+  // derive(). recompute() draws the lab at once with the interval marked
+  // "computing", and validationInterval() fills it in 300 ms after the last
+  // slider input (or right away on 'change'). Once computed for a spec it is
+  // memoised in the store, so later derive() calls show it immediately.
+  let intervalTimer = null;
+  const INTERVAL_DEBOUNCE_MS = 300;
+  function refreshInterval() {
+    intervalTimer = null;
+    if (!store || !view || !store.validationInterval) return;
+    const report = store.validationInterval(view.spec);
+    view.validation = report;
+    renderValidation(view);
+    // renderCurriculum reads current.validation as well: without this the
+    // course panel keeps the "computing" label until the next slider move.
+    renderCurriculum(view);
+  }
+  function scheduleInterval(delay) {
+    if (intervalTimer) clearTimeout(intervalTimer);
+    intervalTimer = setTimeout(refreshInterval, delay == null ? INTERVAL_DEBOUNCE_MS : delay);
+  }
+
   function recompute() {
     if (!store) return;
     view = store.derive(readSpecFromControls(), ScoutAIDemo.DEFAULT_METRIC);
     renderAll(view);
+    if (view.validation && !view.validation.intervalReady) scheduleInterval();
   }
 
   ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
@@ -851,6 +874,7 @@
 
   ['wGrit', 'wInv', 'wClutch', 'minMinutes'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', recompute);
+    document.getElementById(id).addEventListener('change', function () { scheduleInterval(0); });
   });
   document.getElementById('normPos').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);

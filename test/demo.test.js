@@ -1269,6 +1269,72 @@ test('the lesson table and the counts explorer are drawn from the ledger', () =>
 // --- verification round: findings 1-5 --------------------------------------
 
 
+test('derive never runs the bootstrap; validationInterval does, once per spec, and the lab wires it debounced', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  assert.equal(store.bootstrapRuns, 0);
+
+  const first = store.derive(DEFAULT_METRIC);
+  store.derive(Object.assign({}, DEFAULT_METRIC, { grit: 41 }));
+  store.derive(Object.assign({}, DEFAULT_METRIC, { minMinutes: 300 }));
+  assert.equal(store.bootstrapRuns, 0, 'derive ran the bootstrap');
+  // before the interval exists the label says so instead of showing a bare rho
+  assert.equal(first.validation.intervalReady, false);
+  assert.equal(first.validation.test.ci.reason, 'pending');
+  assert.equal(first.validation.test.rhoLabel, RHO + ' = 0.30 [רווח בטחון בחישוב…]');
+  assert.equal(first.validation.test.rho, 0.3);
+
+  const report = store.validationInterval(DEFAULT_METRIC);
+  assert.equal(store.bootstrapRuns, 2, 'one bootstrap per fold');
+  assert.equal(report.intervalReady, true);
+  assert.deepEqual(report.test.ci, bootstrapSpearman(
+    applyMetric(wc, DEFAULT_METRIC)
+      .filter(row => assignFold(row, 'groups') === 'test')
+      .map(row => [row.score, outcomeValue(row, 'assists')]),
+    { iterations: 1000, seed: 42 }
+  ));
+  assert.equal(report.test.rhoLabel, RHO + ' = 0.30 [0.14, 0.45]');
+  // memoised: the same spec never pays twice, and derive now sees it for free
+  store.validationInterval(Object.assign({}, DEFAULT_METRIC, { selectedId: 'x' }));
+  assert.equal(store.bootstrapRuns, 2);
+  const again = store.derive(DEFAULT_METRIC);
+  assert.equal(store.bootstrapRuns, 2);
+  assert.equal(again.validation.intervalReady, true);
+  assert.deepEqual(again.validation.test.ci, report.test.ci);
+  assert.equal(again.validation.verdict, report.verdict);
+  // A moved weight changes the fold pairs, so memoising cannot spare a drag
+  // the cost: 232 of the 240 displayed scores move for grit 40 -> 41 alone.
+  // That is why the interval is debounced out of derive() rather than cached
+  // inside it.
+  const base = applyMetric(wc, DEFAULT_METRIC);
+  const nudged = {};
+  applyMetric(wc, Object.assign({}, DEFAULT_METRIC, { grit: 41 }))
+    .forEach((row) => { nudged[row.id] = row.score; });
+  assert.equal(base.length, 240);
+  assert.equal(base.filter(row => nudged[row.id] !== row.score).length, 232);
+  store.validationInterval(Object.assign({}, DEFAULT_METRIC, { grit: 41 }));
+  assert.equal(store.bootstrapRuns, 4);
+
+  // the page: interval is scheduled after derive, debounced, and on change
+  assert.match(html, /store\.validationInterval\(/);
+  assert.match(html, /INTERVAL_DEBOUNCE_MS = 300/);
+  assert.match(html, /addEventListener\('change', function \(\) \{ scheduleInterval\(0\); \}\)/);
+  assert.match(html, /intervalReady/);
+  assert.match(html, /ci\.reason === 'pending'/);
+  assert.match(html, /קטן מדי לרווח/);
+  assert.match(html, /percentile bootstrap/);
+
+  // the bootstrap options are validated at the edge: a bad iterations option
+  // falls back with a note instead of throwing out of validateMetric
+  const bad = validateMetric(store.players, DEFAULT_METRIC, { iterations: 10, bootstrap: false });
+  assert.equal(bad.bootstrap.iterations, 1000);
+  assert.equal(bad.bootstrap.notes.length, 1);
+  assert.match(bad.bootstrap.notes[0], /iterations 10/);
+  assert.doesNotThrow(() => createStore(wc, { bootstrap: { iterations: 10 } }).derive(DEFAULT_METRIC));
+  const badStore = createStore(wc, { bootstrap: { iterations: 10 } });
+  assert.equal(badStore.validationInterval(DEFAULT_METRIC).bootstrap.iterations, 1000);
+});
+
 test('bootstrapSpearman refuses non-integer or oversized iterations, applies one seed rule, floors n, and counts degenerate replicates', () => {
   const perfect = [];
   for (let i = 1; i <= 40; i += 1) perfect.push([i, i * 3]);
@@ -1312,6 +1378,9 @@ test('bootstrapSpearman refuses non-integer or oversized iterations, applies one
   assert.equal(thin.test.ci.reason, 'n<10');
   assert.equal(thin.test.rhoLabel, RHO + ' = 0.87 [n=5 קטן מדי לרווח]');
   assert.match(thin.verdict, /n=5 קטן מ-10/);
+  assert.equal(thin.intervalReady, true);
+  // the pending state is a different reason and never claims the floor
+  assert.notEqual(validateMetric(store.players, DEFAULT_METRIC, { bootstrap: false }).test.ci.reason, 'n<10');
 
   // degenerate replicates are counted and dropped, not mapped to rho = 0:
   // n = 10 real pairs with 7 zero-assist players give 8 one-sided resamples

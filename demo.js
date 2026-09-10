@@ -581,9 +581,9 @@
     ];
   }
 
-  function fragilityFromPrepared(prepared, spec, delta) {
+  function fragilityFromPrepared(prepared, spec, delta, ranked) {
     const step = delta == null ? 10 : delta;
-    const baseRows = scorePrepared(prepared, spec);
+    const baseRows = ranked || scorePrepared(prepared, spec);
     const byId = {};
     baseRows.forEach(function (row) { byId[row.id] = row; });
     const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
@@ -634,20 +634,86 @@
     const players = flagImpossibleMinutes(eventPlayers(rawPlayers).map(function (row) {
       return preparePlayer(row, { provenance: provenance });
     }));
+
+    // --- bootstrap interval, kept OUT of derive() -------------------------
+    //
+    // derive() runs on every 'input' event of four sliders. A 1000-replicate
+    // bootstrap on both folds costs ~85 ms per call on the shipped file (the
+    // rest of derive is ~4 ms), so it must never sit on that path. The fold
+    // pairs are a pure function of the ranking spec (weights, minMinutes,
+    // normalisation) and of outcome/split - and they DO change whenever a
+    // weight moves, because every score moves - so memoising cannot hide the
+    // cost from a slider drag. Instead:
+    //   * derive() only LOOKS UP an interval already computed for the exact
+    //     same key; a miss leaves ci null and the label says "computing".
+    //   * validationInterval(spec) computes (and memoises) it; index.html
+    //     calls it debounced after the last input and on 'change'.
+    // bootstrapRuns counts real bootstrap executions so a test can pin the
+    // invariant "derive never runs the bootstrap".
+    const intervalCache = {};
+    const intervalOrder = [];
+    const INTERVAL_CACHE_SIZE = 16;
+    const bootstrapOptions = {
+      iterations: opts.bootstrap && opts.bootstrap.iterations != null
+        ? opts.bootstrap.iterations : BOOTSTRAP_DEFAULTS.iterations,
+      seed: opts.bootstrap && opts.bootstrap.seed != null
+        ? opts.bootstrap.seed : BOOTSTRAP_DEFAULTS.seed
+    };
+    function intervalKey(metric, outcomeId, splitId, fold) {
+      return [
+        metric.grit, metric.involvement, metric.clutch, metric.minMinutes,
+        metric.normalizePosition ? 1 : 0, outcomeId, splitId, fold,
+        bootstrapOptions.iterations, String(bootstrapOptions.seed)
+      ].join('|');
+    }
+    function lookupInterval(pairs, options, context) {
+      const key = intervalKey(context.metric, context.outcomeId, context.splitId, context.fold);
+      return Object.prototype.hasOwnProperty.call(intervalCache, key) ? intervalCache[key] : null;
+    }
+    function computeInterval(pairs, options, context) {
+      const key = intervalKey(context.metric, context.outcomeId, context.splitId, context.fold);
+      if (Object.prototype.hasOwnProperty.call(intervalCache, key)) return intervalCache[key];
+      const ci = bootstrapSpearman(pairs, options);
+      api.bootstrapRuns += 1;
+      intervalCache[key] = ci;
+      intervalOrder.push(key);
+      while (intervalOrder.length > INTERVAL_CACHE_SIZE) delete intervalCache[intervalOrder.shift()];
+      return ci;
+    }
+    function validationInterval(spec) {
+      const metric = normalizeMetricSpec(spec);
+      return validateMetric(players, metric, {
+        outcomeId: metric.outcomeId,
+        splitId: metric.splitId,
+        iterations: bootstrapOptions.iterations,
+        seed: bootstrapOptions.seed,
+        bootstrap: computeInterval
+      });
+    }
+
     function derive(spec, baselineSpec) {
       const metric = normalizeMetricSpec(spec);
-      let rows = scorePrepared(players, metric);
+      // one ranking of the file per derive(); fragility, validation and the
+      // ledger all reuse it instead of ranking again
+      const ranked = scorePrepared(players, metric);
+      primeRankedRows(api, metric, ranked);
+      let rows = ranked;
       if (baselineSpec) rows = attachDeltas(rows, scorePrepared(players, baselineSpec));
       const selected = rows.find(function (row) { return row.id === metric.selectedId; }) || rows[0] || null;
       if (selected && !metric.selectedId) metric.selectedId = selected.id;
       const compared = findPrepared(rows, players, metric.compareId);
-      const fragility = fragilityFromPrepared(players, metric, 10);
+      const fragility = fragilityFromPrepared(players, metric, 10, ranked);
       const layer = { provenance: provenance, source: source };
       const explorer = buildEventExplorer(selected, layer);
       const validation = validateMetric(players, metric, {
         outcomeId: metric.outcomeId,
-        splitId: metric.splitId
+        splitId: metric.splitId,
+        iterations: bootstrapOptions.iterations,
+        seed: bootstrapOptions.seed,
+        bootstrap: lookupInterval,
+        ranked: ranked
       });
+      const exercise = evaluateExercise(players, metric);
       return {
         spec: metric,
         rows: rows,
@@ -658,7 +724,7 @@
         mapping: lessonMapping(selected),
         fragility: fragility,
         formula: formatFormula(metric),
-        exercise: evaluateExercise(players, metric),
+        exercise: exercise,
         radar: buildCompareRadar(selected, compared),
         explorer: explorer,
         validation: validation,
@@ -668,7 +734,7 @@
           selected: selected,
           explorer: explorer,
           validation: validation,
-          exercise: evaluateExercise(players, metric),
+          exercise: exercise,
           answers: {}
         }),
         exportBundle: exportMetricBundle(metric, selected, {
@@ -682,7 +748,15 @@
         ledger: selected ? explainScore(selected.id, metric, api) : null
       };
     }
-    const api = { players: players, derive: derive, provenance: provenance, source: source };
+    const api = {
+      players: players,
+      derive: derive,
+      validationInterval: validationInterval,
+      bootstrapRuns: 0,
+      bootstrap: bootstrapOptions,
+      provenance: provenance,
+      source: source
+    };
     return api;
   }
 
@@ -1432,12 +1506,23 @@
   // asked for one player at a time. Memoise the ranking per (store, spec).
   const LEDGER_ROW_CACHE = typeof WeakMap === 'function' ? new WeakMap() : null;
 
-  function rankedRowsFor(store, metric) {
-    const players = (store && store.players) || [];
-    const key = [
+  function rankedRowsKey(metric) {
+    return [
       metric.grit, metric.involvement, metric.clutch,
       metric.minMinutes, metric.normalizePosition ? 1 : 0
     ].join('|');
+  }
+
+  // derive() already holds the ranking for its spec; it hands it over so the
+  // ledger does not rank the file a second time on the slider path.
+  function primeRankedRows(store, metric, rows) {
+    if (!LEDGER_ROW_CACHE || !store || !rows) return;
+    LEDGER_ROW_CACHE.set(store, { key: rankedRowsKey(metric), rows: rows });
+  }
+
+  function rankedRowsFor(store, metric) {
+    const players = (store && store.players) || [];
+    const key = rankedRowsKey(metric);
     if (!LEDGER_ROW_CACHE || !store) return scorePrepared(players, metric);
     const hit = LEDGER_ROW_CACHE.get(store);
     if (hit && hit.key === key) return hit.rows;
@@ -1850,14 +1935,26 @@
     return 'ABCD'.indexOf(group) >= 0 ? 'train' : 'test';
   }
 
-  function foldStats(rows, outcomeId, bootstrap) {
+  // bootstrap.run is the function that produces the interval for one fold:
+  // bootstrapSpearman itself by default, a store's memoised/lookup variant
+  // from derive(), or false to skip. A null result means "no interval yet",
+  // and the label says so rather than showing a bare rho.
+  function foldStats(rows, outcomeId, bootstrap, context) {
     const scores = rows.map(function (row) { return row.score; });
     const outcomes = rows.map(function (row) { return outcomeValue(row, outcomeId); });
     const rho = spearman(scores, outcomes);
+    const rhoRaw = spearmanRaw(scores, outcomes);
     const boot = bootstrap || BOOTSTRAP_DEFAULTS;
-    const ci = bootstrapSpearman(scores.map(function (score, i) {
-      return [score, outcomes[i]];
-    }), { iterations: boot.iterations, seed: boot.seed });
+    const run = boot.run === false ? null : (typeof boot.run === 'function' ? boot.run : bootstrapSpearman);
+    const pairs = scores.map(function (score, i) { return [score, outcomes[i]]; });
+    let ci = run ? run(pairs, { iterations: boot.iterations, seed: boot.seed }, Object.assign({}, context, { pairs: pairs })) : null;
+    if (!ci) {
+      ci = {
+        rho: rhoRaw == null ? null : round3(rhoRaw), lo: null, hi: null,
+        iterations: boot.iterations, effectiveIterations: 0, degenerateCount: 0,
+        seed: boot.seed, n: rows.length, minN: BOOTSTRAP_MIN_N, reason: 'pending'
+      };
+    }
     const byOutcome = rows.slice().sort(function (a, b) {
       return outcomeValue(b, outcomeId) - outcomeValue(a, outcomeId);
     });
@@ -1887,7 +1984,9 @@
     const splitId = opts.splitId || metric.splitId;
     const meta = outcomeMeta(outcomeId);
     const players = asPrepared(prepared);
-    const ranked = scorePrepared(players, metric);
+    // opts.ranked: the caller's own scorePrepared(players, metric) - derive()
+    // passes it so the slider path ranks the file once, not twice
+    const ranked = opts.ranked || scorePrepared(players, metric);
     const train = [];
     const test = [];
     const unassigned = [];
@@ -1916,10 +2015,12 @@
     const bootstrap = {
       iterations: iterations,
       seed: seed,
+      run: opts.bootstrap === false ? false : (typeof opts.bootstrap === 'function' ? opts.bootstrap : undefined),
       notes: notes
     };
-    const trainStats = foldStats(train, outcomeId, bootstrap);
-    const testStats = foldStats(test, outcomeId, bootstrap);
+    const context = { metric: metric, outcomeId: outcomeId, splitId: splitId };
+    const trainStats = foldStats(train, outcomeId, bootstrap, Object.assign({ fold: 'train' }, context));
+    const testStats = foldStats(test, outcomeId, bootstrap, Object.assign({ fold: 'test' }, context));
     const drop = (trainStats.rho != null && testStats.rho != null)
       ? round2(trainStats.rho - testStats.rho)
       : null;
@@ -1939,6 +2040,7 @@
       test: testStats,
       rhoDrop: drop,
       bootstrap: { iterations: iterations, seed: seed, notes: notes },
+      intervalReady: testStats.ci.reason !== 'pending' && trainStats.ci.reason !== 'pending',
       heldOutRhoLabel: testStats.rhoLabel,
       verdict: validationVerdict(trainStats, testStats, meta)
     };
