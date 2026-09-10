@@ -88,6 +88,60 @@ test('parses CSV and the shipped synthetic example', () => {
   assert.equal(store.derive({ minMinutes: 90 }).rows.length, 4);
 });
 
+test('a BYOD upload with two same-named team-mates keeps every row its own per-90 rates', () => {
+  // A CSV has no id column, so playerKey() falls back to name|team and six
+  // rows of "Alex Smith / Rovers" collapse to ONE key. normalizeByPosition
+  // must therefore join the shrunk rates back to their originals BY INDEX:
+  // a find(item => item.id === row.id) join hands every one of them the FIRST
+  // row's numbers. The SCORES survive that (they are computed from the shrunk
+  // rates, which are right either way), so only the receipts betray it - which
+  // is exactly why nothing caught it before.
+  const header = [
+    'name', 'team', 'position', 'minutes', 'pressures', 'tackles', 'interceptions',
+    'defensiveActions', 'progressiveActions', 'keyPasses', 'passesCompleted',
+    'shotXgSum', 'boxTouches', 'shotsOnTarget'
+  ].join(',');
+  const minutes = [300, 500, 700, 900, 1100, 1300];
+  const pressures = [40, 100, 160, 220, 280, 340];
+  const csv = [header].concat(minutes.map((m, i) => [
+    'Alex Smith', 'Rovers', 'Center Back', m, pressures[i], 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ].join(','))).join('\n');
+
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'duplicate-names.csv' });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players.length, 6);
+
+  const store = createStore({ players: parsed.players },
+    { provenance: parsed.provenance, source: parsed.source });
+  assert.equal(new Set(store.players.map(row => row.id)).size, 1,
+    'the six rows really do share one name|team key');
+
+  const view = store.derive({
+    grit: 40, involvement: 30, clutch: 30, minMinutes: 90, normalizePosition: true
+  });
+  assert.equal(view.rows.length, 6);
+  const byMinutes = new Map(view.rows.map(row => [row.minutes, row]));
+  assert.equal(byMinutes.size, 6);
+
+  // pressures * 90 / minutes, round2 - one number per row, derived by hand:
+  // 40/300 -> 12, 100/500 -> 18, 160/700 -> 20.57, 220/900 -> 22,
+  // 280/1100 -> 22.91, 340/1300 -> 23.54
+  const expected = [12, 18, 20.57, 22, 22.91, 23.54];
+  minutes.forEach((m, i) => {
+    assert.equal(byMinutes.get(m).components.raw.pressures90, expected[i], 'minutes ' + m);
+  });
+  // the failure this pins: all six rows wearing row 0's 12 pressures/90
+  assert.equal(new Set(expected).size, 6);
+  assert.notDeepEqual(
+    minutes.map(m => byMinutes.get(m).components.raw.pressures90),
+    minutes.map(() => 12)
+  );
+  // the shrunk rate the caps really saw stays per-row too, and rises with
+  // minutes as the prior lets go: 17.63 at 300 minutes, 22.98 at 1300
+  const shrunk = minutes.map(m => Math.round(byMinutes.get(m).shrunkRates.pressures * 100) / 100);
+  assert.deepEqual(shrunk, [17.63, 19.6, 20.89, 21.79, 22.46, 22.98]);
+});
+
 test('methodology and export stay source-honest', () => {
   const open = methodologyParagraph({ grit: 40, involvement: 30, clutch: 30, minMinutes: 270 });
   assert.match(open, /אוסר שימוש מסחרי/);
