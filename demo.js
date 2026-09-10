@@ -148,21 +148,48 @@
     return per90(player[totalKey], minutes);
   }
 
-  function componentsFromEvents(player) {
-    const press = rawPer90(player, 'pressures', 'pressuresPer90');
-    const tackles = rawPer90(player, 'tackles', 'tacklesPer90');
-    const intercepts = rawPer90(player, 'interceptions', 'interceptionsPer90');
-    const defense = rawPer90(player, 'defensiveActions', 'defensiveActionsPer90');
+  // The ten per-90 rates that reach the score, keyed by their count field.
+  // This is the ONLY place the file is read for the score; every later stage
+  // (shrinkage, caps, scaling, round1, percentile) works on these numbers.
+  const RATE_FIELDS = Object.freeze([
+    ['pressures', 'pressuresPer90'],
+    ['tackles', 'tacklesPer90'],
+    ['interceptions', 'interceptionsPer90'],
+    ['defensiveActions', 'defensiveActionsPer90'],
+    ['progressiveActions', 'progressiveActionsPer90'],
+    ['keyPasses', 'keyPassesPer90'],
+    ['passesCompleted', 'passesCompletedPer90'],
+    ['shotXgSum', 'shotXgSumPer90'],
+    ['boxTouches', 'boxTouchesPer90'],
+    ['shotsOnTarget', 'shotsOnTargetPer90']
+  ]);
+  const RATE_KEYS = Object.freeze(RATE_FIELDS.map(function (pair) { return pair[0]; }));
+
+  function ratesFromEvents(player) {
+    const rates = {};
+    RATE_FIELDS.forEach(function (pair) {
+      rates[pair[0]] = rawPer90(player, pair[0], pair[1]);
+    });
+    return rates;
+  }
+
+  // caps -> 0-100 scale -> recipe weights -> round1, from per-90 rates.
+  function componentsFromRates(rates) {
+    const r = rates || {};
+    const press = Number(r.pressures) || 0;
+    const tackles = Number(r.tackles) || 0;
+    const intercepts = Number(r.interceptions) || 0;
+    const defense = Number(r.defensiveActions) || 0;
     const grit = round1(scaleCap(press, 18) * 0.45 + scaleCap(tackles + intercepts, 6) * 0.3 + scaleCap(defense, 14) * 0.25);
 
-    const prog = rawPer90(player, 'progressiveActions', 'progressiveActionsPer90');
-    const keyPasses = rawPer90(player, 'keyPasses', 'keyPassesPer90');
-    const passes = rawPer90(player, 'passesCompleted', 'passesCompletedPer90');
+    const prog = Number(r.progressiveActions) || 0;
+    const keyPasses = Number(r.keyPasses) || 0;
+    const passes = Number(r.passesCompleted) || 0;
     const involvement = round1(scaleCap(prog, 22) * 0.5 + scaleCap(keyPasses, 4) * 0.3 + scaleCap(passes, 80) * 0.2);
 
-    const xg = rawPer90(player, 'shotXgSum', 'shotXgSumPer90');
-    const box = rawPer90(player, 'boxTouches', 'boxTouchesPer90');
-    const onTarget = rawPer90(player, 'shotsOnTarget', 'shotsOnTargetPer90');
+    const xg = Number(r.shotXgSum) || 0;
+    const box = Number(r.boxTouches) || 0;
+    const onTarget = Number(r.shotsOnTarget) || 0;
     const clutch = round1(scaleCap(xg, 0.6) * 0.4 + scaleCap(box, 8) * 0.35 + scaleCap(onTarget, 2) * 0.25);
 
     return {
@@ -183,13 +210,32 @@
     };
   }
 
+  function componentsFromEvents(player) {
+    return componentsFromRates(ratesFromEvents(player));
+  }
+
+  // Percentile inside a position group, average-rank convention for ties.
+  //
+  // A player's percentile is the mean ascending rank of his value among the
+  // peers (himself included), divided by n. An untied value therefore sits
+  // exactly where "count of peers <= value" put it before; a block of t tied
+  // values shares the CENTRE of the block, (below + (t+1)/2) / n, instead of
+  // its top. This is the same mid-rank convention rankValues() already uses
+  // for Spearman. It matters because 25 of the 27 eligible keepers have
+  // exactly 0 Clutch events: with the old rule the tie-block at the bottom of
+  // the GK group was awarded 25/27 = 92.6 - for having nothing - and rode
+  // that into the top of the table; with the average rank the same block
+  // shares 13/27 = 48.1. Identical evidence inside a group gets one shared
+  // value; minutes never separate two players with the same numbers.
   function percentile(value, peers) {
     if (!peers.length) return 50;
     let below = 0;
+    let tied = 0;
     for (let i = 0; i < peers.length; i += 1) {
-      if (peers[i] <= value) below += 1;
+      if (peers[i] < value) below += 1;
+      else if (peers[i] === value) tied += 1;
     }
-    return round1(below / peers.length * 100);
+    return round1((below + (tied + 1) / 2) / peers.length * 100);
   }
 
   function readPath(row, path) {
@@ -288,19 +334,68 @@
     });
   }
 
+  // Per-90 rates of a prepared player (per90File preferred, else count*90/min),
+  // the same numbers componentsFromEvents read when the player was prepared.
+  function preparedRates(row) {
+    if (row && row.per90Rates) return row.per90Rates;
+    return ratesFromEvents({
+      per90: row && row.per90File,
+      totalMinutesProxy: row && row.minutes,
+      pressures: row && row.counts && row.counts.pressures,
+      tackles: row && row.counts && row.counts.tackles,
+      interceptions: row && row.counts && row.counts.interceptions,
+      defensiveActions: row && row.counts && row.counts.defensiveActions,
+      progressiveActions: row && row.counts && row.counts.progressiveActions,
+      keyPasses: row && row.counts && row.counts.keyPasses,
+      passesCompleted: row && row.counts && row.counts.passesCompleted,
+      shotXgSum: row && row.counts && row.counts.shotXgSum,
+      boxTouches: row && row.counts && row.counts.boxTouches,
+      shotsOnTarget: row && row.counts && row.counts.shotsOnTarget
+    });
+  }
+
+  // Position normalisation, in the order the backlog (S2) specifies:
+  //
+  //   per-90 rate  ->  shrinkByPosition (per rate, k minutes)
+  //                ->  caps, 0-100 scale, recipe weights, round1
+  //                ->  percentile inside the position group
+  //
+  // The shrinkage is applied to each of the ten PER-90 RATES, before any cap.
+  // Applying it after the caps (as an earlier revision did) turned the
+  // estimator into a minutes ranking: for a capped or zero-evidence value
+  // adj = k*mu/(m+k) is strictly monotone in minutes, so 25 keepers with the
+  // same 0 Clutch events came out in 21 distinct percentiles ordered by how
+  // little they had played. Shrinking the rate first means two players who
+  // both clear a cap after shrinkage are equal at 100, and players with
+  // identical evidence stay identical through round1 - tiny k*mu/(m+k)
+  // differences among zero-evidence players (of the order 0.0004 xG/90) are
+  // absorbed by round1 on the 0-100 component and percentiled as one tie.
   function normalizeByPosition(rows, options) {
     const opts = options || {};
     const k = opts.k == null ? SHRINK_DEFAULT_K : opts.k;
-    // Shrink before ranking. Without this a 282-minute keeper with one lucky
-    // number out-percentiles a 700-minute regular inside his own group, and
-    // the whole point of normalisation is undone by small samples.
-    const shrunk = COMPONENT_KEYS.reduce(function (acc, componentKey) {
+    const withRates = (rows || []).map(function (row) {
+      return Object.assign({}, row, { per90Rates: preparedRates(row) });
+    });
+    const shrunk = RATE_KEYS.reduce(function (acc, rateKey) {
       return shrinkByPosition(acc, {
-        key: 'components.' + componentKey,
+        key: 'per90Rates.' + rateKey,
         minutesKey: 'minutes',
         k: k
       });
-    }, rows);
+    }, withRates).map(function (row, i) {
+      // shrinkByPosition maps the list in place, so index i is still the same
+      // player. Joining on row.id instead would be O(n^2) and would pick the
+      // wrong original whenever two rows share a name+team key.
+      const original = withRates[i] || row;
+      const components = componentsFromRates(row.per90Rates);
+      return Object.assign({}, row, {
+        shrunkRates: row.per90Rates,
+        per90Rates: original.per90Rates,
+        components: Object.assign(components, {
+          raw: original.components ? original.components.raw : components.raw
+        })
+      });
+    });
     const groups = {};
     shrunk.forEach(function (row) {
       const key = row.positionGroup || 'OT';
@@ -317,10 +412,12 @@
           involvement: percentile(row.components.involvement, peers.involvement),
           clutch: percentile(row.components.clutch, peers.clutch),
           raw: row.components.raw,
+          // the 0-100 components computed from the SHRUNK rates, i.e. the
+          // values the percentile above ranked
           shrunk: {
-            grit: round2(row.components.grit),
-            involvement: round2(row.components.involvement),
-            clutch: round2(row.components.clutch)
+            grit: row.components.grit,
+            involvement: row.components.involvement,
+            clutch: row.components.clutch
           },
           normalized: true,
           shrinkK: k
@@ -386,6 +483,8 @@
     const opts = options || {};
     const provenance = opts.provenance || row.provenance || OPEN_DATA_PROVENANCE;
     const minutes = row.totalMinutesProxy || row.minutes || 0;
+    // the file is read for the score exactly once, here
+    const rates = ratesFromEvents(row);
     const defaultComp = provenance === OPEN_DATA_PROVENANCE ? 'WorldCup2018' : 'USER_DATASET';
     return {
       id: playerKey(row),
@@ -400,7 +499,8 @@
       group: WC2018_TEAM_GROUP[row.team] || null,
       counts: countsFromRow(row),
       per90File: row.per90 || null,
-      components: componentsFromEvents(row),
+      per90Rates: rates,
+      components: componentsFromRates(rates),
       provenance: provenance
     };
   }
@@ -997,7 +1097,9 @@
       'Involvement = 0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות שהושלמו. ' +
       'Clutch = 0.40×xG + 0.35×נגיעות ברחבה + 0.25×בעיטות למסגרת — התווית לימודית, לא מודל רגעים מכריעים. ' +
       'סף הדקות הוא ' + metric.minMinutes +
-      (metric.normalizePosition ? '; הרכיבים הם אחוזון בתוך קבוצת עמדה.' : '; בלי נרמול עמדה.') +
+      (metric.normalizePosition
+        ? '; כל קצב ל-90 כווץ לפי דקות אל ממוצע העמדה (k=' + SHRINK_DEFAULT_K + ' דקות) לפני התקרות, והרכיבים הם אחוזון בתוך קבוצת עמדה (דירוג ממוצע לתיקו).'
+        : '; בלי נרמול עמדה.') +
       ' המשקלות ידניות ושרירותיות, בלי כיול מדעי.' + playerBit;
     if (provenance === USER_DATA_PROVENANCE) {
       return 'המדד חושב במעבדת ScoutAI ככלי לימוד, לא כהמלצת סקאוטינג ולא כחוות דעת רפואית או חוזית. ' +
@@ -1353,6 +1455,7 @@
     });
 
     const counts = prepared.counts || {};
+    const shrunkRates = (displayed && displayed.shrunkRates) || null;
     const components = LEDGER_FIELDS.map(function (col) {
       const value = per90ByKey[col.key];
       const cap = Number(col.cap) || 0;
@@ -1380,6 +1483,9 @@
         eventType: col.type,
         raw: finiteOr(counts[col.key], 0),
         per90: finiteOr(value, 0),
+        // under position normalisation the rate the caps really saw is the
+        // shrunk one; null whenever no shrinkage ran
+        shrunkPer90: shrunkRates ? finiteOr(shrunkRates[col.key], 0) : null,
         cap: cap,
         capped: finiteOr(capped, 0),
         scaled: finiteOr(scaled, 0),
@@ -1409,7 +1515,8 @@
         share: share,
         contribution: value * share,
         transform: normalized
-          ? 'shrinkByPosition(k=' + finiteOr(parts.shrinkK, SHRINK_DEFAULT_K) + ') then within-position percentile'
+          ? 'shrinkByPosition(k=' + finiteOr(parts.shrinkK, SHRINK_DEFAULT_K) +
+            ') on each per-90 rate, then caps, scale, round1, then within-position percentile (average rank for ties)'
           : 'round1'
       };
     });
@@ -2138,6 +2245,9 @@
     bootstrapSpearman: bootstrapSpearman,
     formatRhoWithCi: formatRhoWithCi,
     BOOTSTRAP_MIN_ITERATIONS: BOOTSTRAP_MIN_ITERATIONS,
+    percentile: percentile,
+    componentsFromRates: componentsFromRates,
+    RATE_KEYS: RATE_KEYS,
     outcomeValue: outcomeValue,
     buildEventExplorer: buildEventExplorer,
     explainScore: explainScore,

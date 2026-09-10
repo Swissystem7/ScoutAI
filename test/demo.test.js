@@ -37,6 +37,10 @@ const {
   validateMetric,
   evaluateCurriculum,
   spearman,
+  spearmanRaw,
+  percentile,
+  componentsFromRates,
+  RATE_KEYS,
   bootstrapSpearman,
   formatRhoWithCi,
   BOOTSTRAP_MIN_ITERATIONS,
@@ -893,55 +897,133 @@ test('shrinkByPosition is pure, deterministic, group-local, and refuses nonsense
   assert.equal(nested[0].per90.pressuresPer90, 40);
 });
 
-test('position normalisation shrinks before ranking, so the shipped top-12 keeps at most 2 goalkeepers', () => {
+test('percentile shares the centre of a tie block and leaves untied values where they were', () => {
+  // untied: (below + 1) / n, exactly the old "count of peers <= value"
+  assert.equal(percentile(3, [1, 2, 3, 4]), 75);
+  assert.equal(percentile(4, [1, 2, 3, 4]), 100);
+  assert.equal(percentile(1, [1, 2, 3, 4]), 25);
+  // a tie block shares its average rank: 25 zeros and 2 non-zeros in a
+  // 27-strong group -> (0 + 26/2) / 27 = 48.1, not 25/27 = 92.6
+  const keepers = new Array(25).fill(0).concat([0.5, 1]);
+  assert.equal(percentile(0, keepers), 48.1);
+  assert.equal(percentile(0.5, keepers), 96.3);
+  assert.equal(percentile(1, keepers), 100);
+  // a whole group tied is the middle, and a group of one is 100 as before
+  assert.equal(percentile(5, [5, 5, 5]), 66.7);
+  assert.equal(percentile(5, [5]), 100);
+  assert.equal(percentile(5, []), 50);
+});
+
+test('position normalisation shrinks the per-90 rates before the caps, and identical evidence stays one tie', () => {
   const wc = require('../data/wc2018_event_aggregates.json');
   const spec = Object.assign({}, DEFAULT_METRIC, { normalizePosition: true });
   const ranked = applyMetric(wc, spec);
 
-  // Pinned from what the pipeline actually produces with k = 450, not from a
-  // hand-written table. If the separate percentile self-exclusion PR lands,
-  // these ranks move and this pin has to be recomputed on purpose.
+  // --- the backlog's three acceptance criteria, measured -----------------
+  // (1)+(2) k/(m+k): 90 min -> 450/540 = 83.3% of the way, 2700 -> 14.3%
+  const rows = [
+    { name: 'cameo', positionGroup: 'MF', minutes: 90, per90Rates: { pressures: 40 } },
+    { name: 'regular', positionGroup: 'MF', minutes: 2700, per90Rates: { pressures: 40 } },
+    { name: 'anchor', positionGroup: 'MF', minutes: 2700, per90Rates: { pressures: 10 } }
+  ];
+  const out = shrinkByPosition(rows, { key: 'per90Rates.pressures', k: SHRINK_DEFAULT_K });
+  const moved = (row) => {
+    const d = row.shrinkage['per90Rates.pressures'];
+    return Math.abs(d.adjusted - d.raw) / Math.abs(d.positionMean - d.raw);
+  };
+  assert.ok(moved(out[0]) >= 0.6, 'cameo moved ' + moved(out[0]));
+  assert.ok(moved(out[1]) < 0.15, 'regular moved ' + moved(out[1]));
+  // (3) at most 2 goalkeepers in the shipped top-12
+  const top12 = ranked.slice(0, 12);
+  const keepersOnTop = top12.filter(row => row.positionGroup === 'GK');
+  assert.ok(keepersOnTop.length <= 2, keepersOnTop.length + ' goalkeepers in the top 12');
+
+  // --- the pin: what the corrected pipeline produces with k = 450 ---------
+  // Recomputed from the code, not from any table. If percentile changes
+  // again (PR #12 replaces its tie rule), this moves and must be recomputed.
   assert.deepEqual(
-    ranked.slice(0, 12).map(row => [row.rank, row.name, row.positionGroup, row.score]),
+    top12.map(row => [row.rank, row.name, row.positionGroup, row.score]),
     [
-      [1, 'Marcelo Vieira da Silva Júnior', 'DF', 93.75],
-      [2, 'Mathew Ryan', 'GK', 92.6],
-      [3, 'Thomas Meunier', 'DF', 89.36],
-      [4, 'Gylfi Þór Sigurðsson', 'FW', 88.25],
-      [5, 'Mário Figueira Fernandes', 'DF', 87.21],
-      [6, 'Joshua Kimmich', 'DF', 83.34],
-      [7, 'Antoine Griezmann', 'FW', 83.25],
-      [8, 'Keylor Navas Gamboa', 'GK', 82.24],
-      [9, 'Salman Mohammed Al Faraj', 'MF', 81.05],
-      [10, 'Rodrigo Bentancur Colmán', 'MF', 75.75],
-      [11, 'Toni Kroos', 'MF', 75.64],
-      [12, 'Carlos Henrique Casimiro', 'MF', 75.3]
+      [1, 'Marcelo Vieira da Silva Júnior', 'DF', 93.93],
+      [2, 'Thomas Meunier', 'DF', 92.09],
+      [3, 'Gylfi Þór Sigurðsson', 'FW', 88.02],
+      [4, 'Mário Figueira Fernandes', 'DF', 85.59],
+      [5, 'Joshua Kimmich', 'DF', 83.34],
+      [6, 'Salman Mohammed Al Faraj', 'MF', 81.64],
+      [7, 'Mathew Ryan', 'GK', 81.47],
+      [8, 'Keylor Navas Gamboa', 'GK', 81.1],
+      [9, 'Toni Kroos', 'MF', 77.64],
+      [10, 'Jordi Alba Ramos', 'DF', 77.46],
+      [11, 'Ricardo Iván Rodríguez Araya', 'DF', 77.36],
+      [12, 'Victor Moses', 'FW', 77.14]
     ]
   );
-  const keepers = ranked.slice(0, 12).filter(row => row.positionGroup === 'GK');
-  assert.ok(keepers.length <= 2, keepers.length + ' goalkeepers in the top 12');
-
-  // the same run twice gives the same order
   assert.deepEqual(applyMetric(wc, spec).map(row => row.id), ranked.map(row => row.id));
 
-  // 25 of the 27 eligible keepers have exactly 0 Clutch events. Before
-  // shrinkage they all shared one percentile and rode it into the top of the
-  // table; minutes-weighted shrinkage toward the (small, non-zero) keeper mean
-  // breaks that block tie.
+  // --- zero-evidence keepers are NOT ordered by minutes -------------------
+  // 25 of the 27 eligible keepers have 0 xG, 0 box touches, 0 shots on
+  // target. Shrinking the RATE gives each of them k*mu/(m+k) of the order of
+  // 0.0004 xG/90 - a number that round1 on the 0-100 component turns into
+  // the same 0.1 for all 25 - and the percentile then hands the block one
+  // shared value. An earlier revision shrank the already-capped 0-100
+  // component instead and produced 21 distinct percentiles ordered purely by
+  // minutes (rho(minutes, Clutch) = -0.90 inside GK).
   const keeperRows = ranked.filter(row => row.positionGroup === 'GK');
   assert.equal(keeperRows.length, 27);
-  const distinctClutch = new Set(keeperRows.map(row => row.components.clutch));
-  assert.ok(distinctClutch.size >= 20, 'only ' + distinctClutch.size + ' distinct keeper Clutch percentiles');
+  const noEvidence = keeperRows.filter(row =>
+    row.counts.shotXgSum === 0 && row.counts.boxTouches === 0 && row.counts.shotsOnTarget === 0);
+  assert.equal(noEvidence.length, 25);
+  assert.equal(new Set(noEvidence.map(row => row.components.shrunk.clutch)).size, 1);
+  assert.equal(new Set(noEvidence.map(row => row.components.clutch)).size, 1);
+  assert.equal(noEvidence[0].components.clutch, 48.1);   // (0 + 26/2) / 27
+  const rhoAll = spearmanRaw(keeperRows.map(row => row.minutes), keeperRows.map(row => row.components.clutch));
+  assert.ok(Math.abs(rhoAll) < 0.1, 'rho(minutes, Clutch percentile) inside GK = ' + rhoAll);
+  // Mathew Ryan (282 minutes) is in the table for his Grit and Involvement
+  // percentiles among keepers, not for a Clutch he never showed
+  const ryan = ranked.find(row => row.name === 'Mathew Ryan');
+  assert.equal(ryan.minutes, 282);
+  assert.equal(ryan.components.clutch, 48.1);
+  assert.equal(ryan.rank, 7);
 
-  // the ledger keeps the shrunk value next to the raw one, and it is not a
-  // percentile - it is still on the 0-100 component scale
+  // --- two players both over a cap after shrinkage end equal ---------------
+  // Short (300 min) and Long (700 min) both clear every Grit cap even after
+  // shrinkage toward a group of five modest regulars; the earlier revision
+  // put them 6.96 Grit points apart for the 400 minutes alone.
+  const modestRow = (i) => ({ name: 'Modest' + i, team: 'T', position: 'Center Back', totalMinutesProxy: 1000, pressures: 60, tackles: 10, interceptions: 0, defensiveActions: 20, progressiveActions: 15, keyPasses: 1, passesCompleted: 150, shotXgSum: 0, boxTouches: 0, shotsOnTarget: 0 });
+  const capped = {
+    players: [
+      { name: 'Short', team: 'T', position: 'Center Back', totalMinutesProxy: 300, pressures: 200, tackles: 40, interceptions: 40, defensiveActions: 120, progressiveActions: 10, keyPasses: 1, passesCompleted: 100, shotXgSum: 0, boxTouches: 0, shotsOnTarget: 0 },
+      { name: 'Long', team: 'T', position: 'Center Back', totalMinutesProxy: 700, pressures: 460, tackles: 90, interceptions: 90, defensiveActions: 280, progressiveActions: 20, keyPasses: 2, passesCompleted: 200, shotXgSum: 0, boxTouches: 0, shotsOnTarget: 0 },
+      modestRow(1), modestRow(2), modestRow(3), modestRow(4), modestRow(5)
+    ]
+  };
+  const cappedRows = applyMetric(capped, { grit: 100, involvement: 0, clutch: 0, minMinutes: 90, normalizePosition: true });
+  const short = cappedRows.find(row => row.name === 'Short');
+  const long = cappedRows.find(row => row.name === 'Long');
+  const modest = cappedRows.find(row => row.name === 'Modest1');
+  assert.ok(short.shrunkRates.pressures > 18 && long.shrunkRates.pressures > 18, 'both over the cap after shrinkage');
+  assert.ok(short.shrunkRates.pressures !== long.shrunkRates.pressures, 'the rates differ');
+  assert.ok(modest.shrunkRates.pressures < 18, 'the modest regular stays under the cap');
+  assert.equal(short.components.shrunk.grit, 100);
+  assert.equal(long.components.shrunk.grit, 100);
+  assert.equal(short.components.grit, long.components.grit);
+  assert.equal(short.score, long.score);
+  assert.ok(modest.components.grit < short.components.grit);
+
+  // --- receipts -------------------------------------------------------------
   const top = ranked[0];
   assert.equal(top.components.normalized, true);
   assert.equal(top.components.shrinkK, 450);
-  assert.ok(top.components.shrunk.grit > 0 && top.components.shrunk.grit < top.components.grit);
-  assert.deepEqual(Object.keys(top.shrinkage).sort(), [
-    'components.clutch', 'components.grit', 'components.involvement'
-  ]);
+  assert.deepEqual(Object.keys(top.shrinkage).sort(), RATE_KEYS.map(key => 'per90Rates.' + key).sort());
+  assert.deepEqual(Object.keys(top.shrunkRates).sort(), RATE_KEYS.slice().sort());
+  // the shrunk component is what the percentile ranked: recompute it from
+  // the shrunk rates with the same recipe
+  keeperRows.concat(top12).forEach((row) => {
+    const again = componentsFromRates(row.shrunkRates);
+    assert.equal(again.grit, row.components.shrunk.grit, row.name);
+    assert.equal(again.involvement, row.components.shrunk.involvement, row.name);
+    assert.equal(again.clutch, row.components.shrunk.clutch, row.name);
+  });
   assert.equal(typeof JSON.parse(JSON.stringify(top)).components.shrunk.grit, 'number');
 
   // shrinkage stays off when normalisation is off: the plain ranking is
@@ -949,6 +1031,7 @@ test('position normalisation shrinks before ranking, so the shipped top-12 keeps
   const plain = applyMetric(wc, DEFAULT_METRIC);
   assert.equal(plain[0].components.normalized, undefined);
   assert.equal(plain[0].components.shrunk, undefined);
+  assert.equal(plain[0].shrunkRates, undefined);
   assert.equal(plain.slice(0, 12).filter(row => row.positionGroup === 'GK').length, 0);
 });
 
@@ -1145,7 +1228,10 @@ test('the ledger is a stable, JSON-serialisable derivation tree for one player',
     Object.assign({}, DEFAULT_METRIC, { normalizePosition: true }), store);
   assert.equal(normalised.normalized, true);
   assert.equal(normalised.pillars[0].transform,
-    'shrinkByPosition(k=450) then within-position percentile');
+    'shrinkByPosition(k=450) on each per-90 rate, then caps, scale, round1, then within-position percentile (average rank for ties)');
+  // and the ledger shows the rate the caps really saw next to the raw one
+  assert.ok(normalised.components.every(item => typeof item.shrunkPer90 === 'number'));
+  assert.ok(ledger.components.every(item => item.shrunkPer90 === null));
   assert.ok(Math.abs(
     normalised.reconciliation.componentsSum + normalised.reconciliation.total - normalised.impact
   ) < 1e-9);
