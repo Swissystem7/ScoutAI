@@ -900,6 +900,51 @@ test('shrinkByPosition is pure, deterministic, group-local, and refuses nonsense
   assert.equal(nested[0].per90.pressuresPer90, 40);
 });
 
+test('a negative minutes cell is clamped in the returned map, not only in the position mean', () => {
+  // A BYOD CSV can carry a negative minutes cell. Math.max(0, ...) appears
+  // twice in shrinkByPosition - once when the minutes-weighted position mean
+  // is built, once when each row is shrunk - and only the first was covered.
+  // Without the second the denominator (minutes + k) drops BELOW k and can go
+  // negative, and the "shrunk" value then lands further from the group than
+  // the raw one instead of closer to it.
+  const rows = [
+    { name: 'typo', positionGroup: 'DF', minutes: -600, pressuresPer90: 30 },
+    { name: 'regular', positionGroup: 'DF', minutes: 900, pressuresPer90: 10 },
+    { name: 'squad', positionGroup: 'DF', minutes: 300, pressuresPer90: 22 }
+  ];
+  const out = shrinkByPosition(rows, { key: 'pressuresPer90', k: 450 });
+  const by = name => out.find(row => row.name === name);
+
+  // hand-derived. The mean already clamps: (0*30 + 900*10 + 300*22) / 1200 =
+  // 13. Then, with the row clamp in place:
+  //   typo    (0*30    + 450*13) /  450 = 13    - all prior, zero own weight
+  //   regular (900*10  + 450*13) / 1350 = 11
+  //   squad   (300*22  + 450*13) /  750 = 16.6
+  assert.equal(by('typo').shrinkage.pressuresPer90.positionMean, 13);
+  assert.equal(by('typo').pressuresPer90, 13);
+  assert.equal(by('regular').pressuresPer90, 11);
+  assert.ok(Math.abs(by('squad').pressuresPer90 - 16.6) < 1e-12);
+
+  // WITHOUT the clamp the negative row divides by (-600 + 450) = -150 and
+  // comes out at (-18000 + 5850) / -150 = 81: further from the group than the
+  // 30 it started at, and above every real value in the file.
+  assert.notEqual(by('typo').pressuresPer90, 81);
+  const values = out.map(row => row.pressuresPer90);
+  assert.ok(Math.max.apply(null, values) <= 30, String(values));
+
+  // the receipt says the same thing: no own weight, all prior, and the
+  // denominator never falls below k for anybody
+  assert.equal(by('typo').shrinkage.pressuresPer90.minutes, 0);
+  assert.equal(by('typo').shrinkage.pressuresPer90.ownWeight, 0);
+  assert.equal(by('typo').shrinkage.pressuresPer90.priorWeight, 1);
+  out.forEach((row) => {
+    const receipt = row.shrinkage.pressuresPer90;
+    assert.ok(receipt.ownWeight >= 0 && receipt.ownWeight <= 1, row.name);
+    assert.ok(receipt.priorWeight > 0 && receipt.priorWeight <= 1, row.name);
+    assert.ok(receipt.minutes >= 0, row.name);
+  });
+});
+
 test('percentile shares the centre of a tie block and leaves untied values where they were', () => {
   // untied: (below + 1) / n, exactly the old "count of peers <= value"
   assert.equal(percentile(3, [1, 2, 3, 4]), 75);
