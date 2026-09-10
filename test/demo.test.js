@@ -1268,6 +1268,76 @@ test('the lesson table and the counts explorer are drawn from the ledger', () =>
 
 // --- verification round: findings 1-5 --------------------------------------
 
+test('the ledger reconciliation binds to numbers the test recomputes itself', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const ranked = applyMetric(wc, DEFAULT_METRIC);
+  const byId = {};
+  ranked.forEach((row) => { byId[row.id] = row; });
+  const total = DEFAULT_METRIC.grit + DEFAULT_METRIC.involvement + DEFAULT_METRIC.clutch;
+  const round1 = v => Math.round(v * 10) / 10;
+  const round2 = v => Math.round(v * 100) / 100;
+
+  let checked = 0;
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    const recon = ledger.reconciliation;
+
+    // pillar.fromComponents recomputed from the components array
+    const fromComponents = { grit: 0, involvement: 0, clutch: 0 };
+    ledger.components.forEach((item) => {
+      // scaled recomputed from per90 and cap (the pair split for tackles/
+      // interceptions is checked separately below)
+      if (!item.sharesCapWith) {
+        const scaled = Math.min(item.cap, Math.max(0, item.per90)) / item.cap * 100;
+        assert.ok(Math.abs(scaled - item.scaled) < 1e-9, item.name);
+      }
+      fromComponents[item.feeds] += item.scaled * item.recipeWeight;
+    });
+    const pair = ledger.components.filter(item => item.sharesCapWith);
+    const pairScaled = Math.min(6, pair[0].per90 + pair[1].per90) / 6 * 100;
+    assert.ok(Math.abs(pair[0].scaled + pair[1].scaled - pairScaled) < 1e-9);
+
+    // pillar value = round1(fromComponents) - the component the table shows
+    let pillarSum = 0;
+    ledger.pillars.forEach((pillar) => {
+      assert.ok(Math.abs(pillar.fromComponents - fromComponents[pillar.name]) < 1e-9, player.name + ' ' + pillar.name);
+      assert.equal(pillar.value, round1(fromComponents[pillar.name]), player.name + ' ' + pillar.name);
+      assert.equal(pillar.value, player.components[pillar.name]);
+      pillarSum += pillar.value * DEFAULT_METRIC[pillar.name] / total;
+    });
+    // componentsSum recomputed from scaled x recipeWeight x pillar share
+    let componentsSum = 0;
+    ['grit', 'involvement', 'clutch'].forEach((key) => {
+      componentsSum += fromComponents[key] * DEFAULT_METRIC[key] / total;
+    });
+    assert.ok(Math.abs(recon.componentsSum - componentsSum) < 1e-9, player.name);
+    // pillarSum is the weighted sum of the ROUNDED pillars, never the same
+    // number as componentsSum unless the roundings happen to cancel
+    assert.ok(Math.abs(recon.pillarSum - pillarSum) < 1e-9, player.name);
+    assert.ok(Math.abs(recon.pillarRounding - (pillarSum - componentsSum)) < 1e-9, player.name);
+    // impact = round2(pillarSum) = the table
+    assert.equal(ledger.impact, round2(pillarSum), player.name);
+    assert.ok(Math.abs(recon.displayRounding - (ledger.impact - pillarSum)) < 1e-9, player.name);
+    if (byId[player.id]) assert.equal(ledger.impact, byId[player.id].score);
+    checked += 1;
+  });
+  assert.equal(checked, 605);
+
+  // among DISPLAYED players (>= 270 minutes) the largest residual is
+  // Hector Moreno's 0.04117375; Seung-Woo Lee's 0.0467 is below minMinutes
+  let worst = null;
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    if (ledger.displayed && (!worst || Math.abs(ledger.reconciliation.total) > Math.abs(worst.reconciliation.total))) worst = ledger;
+  });
+  assert.match(worst.name, /Moreno/);
+  assert.equal(worst.rank, 194);
+  assert.ok(Math.abs(worst.reconciliation.total - 0.04117375) < 1e-9, String(worst.reconciliation.total));
+  const lee = store.players.find(row => /Seung-Woo Lee/.test(row.name));
+  assert.ok(lee.minutes < DEFAULT_METRIC.minMinutes);
+  assert.equal(explainScore(lee.id, DEFAULT_METRIC, store).displayed, false);
+});
 
 test('derive never runs the bootstrap; validationInterval does, once per spec, and the lab wires it debounced', () => {
   const wc = require('../data/wc2018_event_aggregates.json');
