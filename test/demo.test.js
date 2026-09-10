@@ -1431,6 +1431,63 @@ test('the ledger names the position-normalisation transform instead of calling i
   assert.match(html, /זה לא עיגול/);
 });
 
+// --- verification round 2: finding 3 ---------------------------------------
+
+test('the interval cache is keyed by minMinutes, so a 5-player fold never borrows the 120-player interval', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const at = m => Object.assign({}, DEFAULT_METRIC, { minMinutes: m });
+
+  // 270 minutes: 240 eligible players split 120 train / 120 held out by World
+  // Cup group (A-D train, E-H test). 120 >= BOOTSTRAP_MIN_N, so there is a
+  // real bootstrap interval.
+  const wide = store.validationInterval(at(270));
+  assert.equal(wide.test.n, 120);
+  assert.equal(wide.train.n, 120);
+  assert.equal(wide.test.ci.n, 120);
+  assert.ok(wide.test.ci.lo != null && wide.test.ci.hi != null);
+  assert.equal(wide.test.ci.reason, null);
+  const afterWide = store.bootstrapRuns;
+  assert.ok(afterWide > 0);
+
+  // 600 minutes on the SAME store: 16 eligible, 11 train, and FIVE held out -
+  // Harry Maguire, John Stones, Jordan Pickford, Kieran Trippier and Thibaut
+  // Courtois. Five is below BOOTSTRAP_MIN_N, so there is no interval at all,
+  // and rho has to stand there bare and say so. Every one of these numbers is
+  // hand-counted off the file (minutes >= 600, team in groups E-H), and
+  // rho = 0.866 is Spearman on those five score/assist pairs with the same
+  // mid-rank convention rankValues uses.
+  const narrow = store.validationInterval(at(600));
+  assert.equal(narrow.train.n, 11);
+  assert.equal(narrow.test.n, 5);
+  assert.equal(narrow.test.ci.n, 5, 'the 5-player fold is showing the ' + narrow.test.ci.n + '-player interval');
+  assert.equal(narrow.test.ci.lo, null);
+  assert.equal(narrow.test.ci.hi, null);
+  assert.equal(narrow.test.ci.reason, 'n<10');
+  assert.equal(narrow.test.ci.rho, 0.866);
+  assert.match(narrow.test.rhoLabel, /0\.87/);
+  assert.match(narrow.test.rhoLabel, /n=5/);
+  assert.notEqual(narrow.test.rhoLabel, wide.test.rhoLabel);
+  assert.match(narrow.verdict, /n=5/);
+  // a different minMinutes is a different key, so it really did recompute
+  assert.ok(store.bootstrapRuns > afterWide, 'the 600-minute fold reused a cached interval');
+
+  // and the other way round, on a fresh store: computing the 5-player fold
+  // first must not hand its "no interval" to the 120-player fold
+  const other = createStore(wc);
+  const narrowFirst = other.validationInterval(at(600));
+  assert.equal(narrowFirst.test.ci.n, 5);
+  const wideSecond = other.validationInterval(at(270));
+  assert.equal(wideSecond.test.ci.n, 120);
+  assert.ok(wideSecond.test.ci.lo != null && wideSecond.test.ci.hi != null);
+  assert.equal(wideSecond.test.rhoLabel, wide.test.rhoLabel);
+
+  // asking twice for the same spec is a cache HIT, not a recompute
+  const runsBefore = other.bootstrapRuns;
+  assert.deepEqual(other.validationInterval(at(270)).test.ci, wideSecond.test.ci);
+  assert.equal(other.bootstrapRuns, runsBefore);
+});
+
 test('derive never runs the bootstrap; validationInterval does, once per spec, and the lab wires it debounced', () => {
   const wc = require('../data/wc2018_event_aggregates.json');
   const store = createStore(wc);
