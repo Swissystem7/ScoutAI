@@ -111,6 +111,10 @@
     return Math.round(Number(value) * 100) / 100;
   }
 
+  function round3(value) {
+    return Math.round(Number(value) * 1000) / 1000;
+  }
+
   function playerKey(row) {
     if (row && row.id != null && String(row.id)) return String(row.id);
     return String(row && row.name || '') + '|' + String(row && row.team || '');
@@ -1172,7 +1176,9 @@
     return ranks;
   }
 
-  function pearson(xs, ys) {
+  // pearsonRaw keeps full double precision. pearson() stays the rounded
+  // display value the lab has always shown, so nothing on screen moves.
+  function pearsonRaw(xs, ys) {
     const n = xs.length;
     if (n < 2) return null;
     let sx = 0;
@@ -1192,12 +1198,131 @@
     const num = n * sxy - sx * sy;
     const den = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
     if (!den) return 0;
-    return round2(num / den);
+    return num / den;
+  }
+
+  function pearson(xs, ys) {
+    const raw = pearsonRaw(xs, ys);
+    return raw == null ? null : round2(raw);
+  }
+
+  function spearmanRaw(xs, ys) {
+    if (!xs || !ys || xs.length !== ys.length || xs.length < 2) return null;
+    return pearsonRaw(rankValues(xs), rankValues(ys));
   }
 
   function spearman(xs, ys) {
-    if (!xs || !ys || xs.length !== ys.length || xs.length < 2) return null;
-    return pearson(rankValues(xs), rankValues(ys));
+    const raw = spearmanRaw(xs, ys);
+    return raw == null ? null : round2(raw);
+  }
+
+  // Inline mulberry32. No ambient randomness, no clock, no dependency: the
+  // whole bootstrap is a pure function of (pairs, iterations, seed), so two
+  // runs on two machines return bit-identical doubles.
+  function mulberry32(seed) {
+    let a = Number(seed) >>> 0;
+    return function next() {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function toScoreTargetPair(entry) {
+    if (Array.isArray(entry)) return [Number(entry[0]) || 0, Number(entry[1]) || 0];
+    if (entry && typeof entry === 'object') {
+      const x = entry.score != null ? entry.score : entry.x;
+      const y = entry.target != null
+        ? entry.target
+        : (entry.outcome != null ? entry.outcome : entry.y);
+      return [Number(x) || 0, Number(y) || 0];
+    }
+    return [0, 0];
+  }
+
+  // Linear-interpolation percentile on an ascending array (R type 7 / the
+  // numpy default). This is the textbook percentile bootstrap interval.
+  function percentileOfSorted(sorted, p) {
+    const n = sorted.length;
+    if (!n) return null;
+    if (n === 1) return sorted[0];
+    const pos = (n - 1) * p;
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+  }
+
+  const BOOTSTRAP_MIN_ITERATIONS = 50;
+  const BOOTSTRAP_DEFAULTS = Object.freeze({ iterations: 1000, seed: 42 });
+
+  // Percentile bootstrap for Spearman rho: resample the (score, target) pairs
+  // with replacement, recompute rho on every resample, then read the 2.5 and
+  // 97.5 percentiles off the sorted replicate distribution. rho itself stays
+  // the point estimate on the real sample - the interval never moves it.
+  function bootstrapSpearman(pairs, options) {
+    const opts = options || {};
+    const asked = opts.iterations == null ? BOOTSTRAP_DEFAULTS.iterations : Number(opts.iterations);
+    const iterations = Number.isFinite(asked) ? Math.trunc(asked) : NaN;
+    const seed = opts.seed == null ? BOOTSTRAP_DEFAULTS.seed : opts.seed;
+    if (!Number.isFinite(iterations) || iterations < BOOTSTRAP_MIN_ITERATIONS) {
+      throw new RangeError(
+        'bootstrapSpearman needs at least ' + BOOTSTRAP_MIN_ITERATIONS +
+        ' iterations, got ' + String(opts.iterations)
+      );
+    }
+    const rows = (pairs || []).map(toScoreTargetPair);
+    const n = rows.length;
+    if (n < 2) {
+      return { rho: null, lo: null, hi: null, iterations: iterations, seed: seed, n: n };
+    }
+    const xs = new Array(n);
+    const ys = new Array(n);
+    for (let i = 0; i < n; i += 1) {
+      xs[i] = rows[i][0];
+      ys[i] = rows[i][1];
+    }
+    const point = spearmanRaw(xs, ys);
+    const random = mulberry32(hashSeed(String(seed)));
+    const replicates = new Array(iterations);
+    const rx = new Array(n);
+    const ry = new Array(n);
+    for (let b = 0; b < iterations; b += 1) {
+      for (let i = 0; i < n; i += 1) {
+        const pick = Math.min(n - 1, Math.floor(random() * n));
+        rx[i] = xs[pick];
+        ry[i] = ys[pick];
+      }
+      // A resample with zero variance on one side has no defined rho;
+      // pearsonRaw already reports 0 for that degenerate case.
+      const value = spearmanRaw(rx, ry);
+      replicates[b] = value == null ? 0 : value;
+    }
+    replicates.sort(function (a, b) { return a - b; });
+    return {
+      rho: round3(point),
+      lo: round3(percentileOfSorted(replicates, 0.025)),
+      hi: round3(percentileOfSorted(replicates, 0.975)),
+      iterations: iterations,
+      seed: seed,
+      n: n
+    };
+  }
+
+  function formatRhoValue(value) {
+    const num = Number(value);
+    if (value == null || !Number.isFinite(num)) return '\u2014';
+    const fixed = Math.abs(num).toFixed(2);
+    return (num < 0 && Number(fixed) !== 0) ? '\u2212' + fixed : fixed;
+  }
+
+  // "rho = 0.30 [-0.05, 0.58]" - the lab never shows a bare rho again.
+  function formatRhoWithCi(ci) {
+    if (!ci || ci.rho == null) return '\u03c1 = \u2014';
+    return '\u03c1 = ' + formatRhoValue(ci.rho) +
+      ' [' + formatRhoValue(ci.lo) + ', ' + formatRhoValue(ci.hi) + ']';
   }
 
   function worldCupGroup(team) {
@@ -1213,16 +1338,22 @@
     return 'ABCD'.indexOf(group) >= 0 ? 'train' : 'test';
   }
 
-  function foldStats(rows, outcomeId) {
+  function foldStats(rows, outcomeId, bootstrap) {
     const scores = rows.map(function (row) { return row.score; });
     const outcomes = rows.map(function (row) { return outcomeValue(row, outcomeId); });
     const rho = spearman(scores, outcomes);
+    const boot = bootstrap || BOOTSTRAP_DEFAULTS;
+    const ci = bootstrapSpearman(scores.map(function (score, i) {
+      return [score, outcomes[i]];
+    }), { iterations: boot.iterations, seed: boot.seed });
     const byOutcome = rows.slice().sort(function (a, b) {
       return outcomeValue(b, outcomeId) - outcomeValue(a, outcomeId);
     });
     return {
       n: rows.length,
       rho: rho,
+      ci: ci,
+      rhoLabel: formatRhoWithCi(ci),
       topMetric: rows.slice(0, 5).map(function (row) {
         return { id: row.id, name: row.name, team: row.team, score: row.score, outcome: outcomeValue(row, outcomeId) };
       }),
@@ -1254,8 +1385,12 @@
       else if (fold === 'test') test.push(row);
       else unassigned.push(row);
     });
-    const trainStats = foldStats(train, outcomeId);
-    const testStats = foldStats(test, outcomeId);
+    const bootstrap = {
+      iterations: opts.iterations == null ? BOOTSTRAP_DEFAULTS.iterations : opts.iterations,
+      seed: opts.seed == null ? BOOTSTRAP_DEFAULTS.seed : opts.seed
+    };
+    const trainStats = foldStats(train, outcomeId, bootstrap);
+    const testStats = foldStats(test, outcomeId, bootstrap);
     const drop = (trainStats.rho != null && testStats.rho != null)
       ? round2(trainStats.rho - testStats.rho)
       : null;
@@ -1274,6 +1409,8 @@
       train: trainStats,
       test: testStats,
       rhoDrop: drop,
+      bootstrap: bootstrap,
+      heldOutRhoLabel: testStats.rhoLabel,
       verdict: validationVerdict(trainStats, testStats, meta)
     };
   }
@@ -1288,7 +1425,7 @@
     }
     if (testStats.rho == null) notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
     else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
-    else notes.push('ρ במבחן ' + testStats.rho + ' הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג.');
+    else notes.push(testStats.rhoLabel + ' במבחן הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג. הסוגריים הם רווח בטחון 95% מ-bootstrap עם seed קבוע.');
     return notes.join(' ');
   }
 
@@ -1682,7 +1819,11 @@
     worldCupGroup: worldCupGroup,
     assignFold: assignFold,
     spearman: spearman,
+    spearmanRaw: spearmanRaw,
     pearson: pearson,
+    bootstrapSpearman: bootstrapSpearman,
+    formatRhoWithCi: formatRhoWithCi,
+    BOOTSTRAP_MIN_ITERATIONS: BOOTSTRAP_MIN_ITERATIONS,
     outcomeValue: outcomeValue,
     buildEventExplorer: buildEventExplorer,
     glossaryForPlayer: glossaryForPlayer,

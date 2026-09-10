@@ -32,6 +32,9 @@ const {
   validateMetric,
   evaluateCurriculum,
   spearman,
+  bootstrapSpearman,
+  formatRhoWithCi,
+  BOOTSTRAP_MIN_ITERATIONS,
   worldCupGroup,
   assignFold,
   outcomeValue,
@@ -695,4 +698,102 @@ test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', ()
   assert.match(html, /id="splitSelect"/);
   assert.match(html, /aria-label="צעדי השיעור המלא"/);
   assert.doesNotMatch(html + '\n' + runtime, /https?:\/\//);
+});
+
+// --- S1: bootstrap confidence interval for the held-out Spearman rho -------
+
+const RHO = '\u03c1';
+const MINUS = '\u2212';
+const EMDASH = '\u2014';
+
+test('bootstrapSpearman pins the held-out interval of the shipped file for seed 42', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const ranked = applyMetric(wc, DEFAULT_METRIC);
+  const heldOut = ranked
+    .filter(row => assignFold(row, 'groups') === 'test')
+    .map(row => [row.score, outcomeValue(row, 'assists')]);
+  assert.equal(heldOut.length, 120);
+
+  const ci = bootstrapSpearman(heldOut, { iterations: 1000, seed: 42 });
+  // Pinned from what the correct algorithm actually produces, not from the
+  // backlog: percentile bootstrap (R type 7 percentiles) over 1000
+  // mulberry32 resamples of the 120 held-out (score, assists) pairs.
+  assert.equal(ci.rho, 0.3);
+  assert.equal(ci.lo, 0.137);
+  assert.equal(ci.hi, 0.45);
+  assert.equal(ci.iterations, 1000);
+  assert.equal(ci.seed, 42);
+  assert.equal(ci.n, 120);
+  assert.ok(ci.lo < ci.rho && ci.rho < ci.hi, 'point estimate sits inside the interval');
+
+  // bit-for-bit: same input, same seed, byte-identical JSON on every run.
+  const again = bootstrapSpearman(heldOut, { iterations: 1000, seed: 42 });
+  assert.deepEqual(again, ci);
+  assert.equal(JSON.stringify(again), JSON.stringify(ci));
+
+  // a different seed moves the interval but never the point estimate
+  const other = bootstrapSpearman(heldOut, { iterations: 1000, seed: 7 });
+  assert.equal(other.rho, ci.rho);
+  assert.notDeepEqual([other.lo, other.hi], [ci.lo, ci.hi]);
+
+  // the validation lab reports exactly the same interval object
+  const store = createStore(wc);
+  const report = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'assists', splitId: 'groups' });
+  assert.deepEqual(report.test.ci, ci);
+  assert.equal(report.test.rhoLabel, RHO + ' = 0.30 [0.14, 0.45]');
+  assert.equal(report.heldOutRhoLabel, report.test.rhoLabel);
+  assert.equal(report.train.rhoLabel, RHO + ' = 0.26 [0.10, 0.42]');
+  // the verdict quotes the interval, never a bare rho
+  assert.ok(report.verdict.includes(report.test.rhoLabel));
+});
+
+test('bootstrapSpearman returns rho 1 on perfectly correlated pairs and guards the iteration floor', () => {
+  const perfect = [];
+  for (let i = 1; i <= 40; i += 1) perfect.push([i, i * 3]);
+  const ci = bootstrapSpearman(perfect, { iterations: 500, seed: 7 });
+  assert.equal(ci.rho, 1);
+  assert.ok(ci.lo >= 0.99, 'lo ' + ci.lo);
+  assert.ok(ci.hi >= 0.99, 'hi ' + ci.hi);
+
+  const reversed = perfect.map(pair => [pair[0], -pair[1]]);
+  assert.equal(bootstrapSpearman(reversed, { iterations: 500, seed: 7 }).rho, -1);
+
+  assert.equal(BOOTSTRAP_MIN_ITERATIONS, 50);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 49 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 0 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: -1 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 'many' }), RangeError);
+  assert.equal(bootstrapSpearman(perfect, { iterations: 50 }).iterations, 50);
+
+  // defaults are 1000 iterations / seed 42
+  const defaults = bootstrapSpearman(perfect);
+  assert.equal(defaults.iterations, 1000);
+  assert.equal(defaults.seed, 42);
+
+  // {score, target} objects are accepted as well as [score, target] pairs
+  const objects = perfect.map(pair => ({ score: pair[0], target: pair[1] }));
+  assert.deepEqual(bootstrapSpearman(objects, { iterations: 500, seed: 7 }), ci);
+
+  // too few pairs is reported, not faked
+  const thin = bootstrapSpearman([[1, 1]], { iterations: 100 });
+  assert.equal(thin.rho, null);
+  assert.equal(thin.lo, null);
+  assert.equal(thin.hi, null);
+  assert.equal(thin.n, 1);
+});
+
+test('the lab never displays a bare held-out rho again', () => {
+  assert.equal(
+    formatRhoWithCi({ rho: 0.3, lo: -0.05, hi: 0.58 }),
+    RHO + ' = 0.30 [' + MINUS + '0.05, 0.58]'
+  );
+  assert.equal(formatRhoWithCi(null), RHO + ' = ' + EMDASH);
+  assert.match(html, /report\.train\.rhoLabel/);
+  assert.match(html, /report\.test\.rhoLabel/);
+  assert.match(html, /stats\.rhoLabel/);
+  assert.doesNotMatch(html, /report\.test\.rho\b(?!Label)/);
+  assert.match(html, /percentile bootstrap/);
+  // the PRNG is inline and seeded - no ambient randomness in the runtime
+  assert.match(runtime, /function mulberry32/);
+  assert.doesNotMatch(runtime + html, /Math\.random/);
 });

@@ -555,14 +555,17 @@
     if (!report) return;
     document.getElementById('validateStatus').textContent =
       (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
-      ' · אימון n=' + report.train.n + ' ρ=' + report.train.rho +
-      ' · מבחן n=' + report.test.n + ' ρ=' + report.test.rho +
+      ' · אימון n=' + report.train.n + ' ' + report.train.rhoLabel +
+      ' · מבחן n=' + report.test.n + ' ' + report.test.rhoLabel +
       (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop);
     document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
     function rhoLine(label, stats) {
       const cr = stats.componentRho || {};
       return '<article class="lesson-step"><h3>' + label + '</h3>' +
-        '<p>n=' + escapeHtml(stats.n) + ' · Spearman ρ=' + escapeHtml(stats.rho) + '</p>' +
+        '<p>n=' + escapeHtml(stats.n) + ' · Spearman ' + escapeHtml(stats.rhoLabel) + '</p>' +
+        '<p class="muted">הסוגריים הם רווח בטחון 95% (percentile bootstrap, ' +
+        escapeHtml(stats.ci ? stats.ci.iterations : 0) + ' דגימות, seed ' +
+        escapeHtml(stats.ci ? stats.ci.seed : 0) + ') — לא טווח של עונה חדשה.</p>' +
         '<p class="muted">ρ רכיבים מול היעד: Grit ' + escapeHtml(cr.grit) +
         ' · Involvement ' + escapeHtml(cr.involvement) +
         ' · Clutch ' + escapeHtml(cr.clutch) + '</p></article>';
