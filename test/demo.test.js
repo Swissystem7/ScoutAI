@@ -21,6 +21,8 @@ const {
   WORLD_CUP_MAX_MINUTES,
   normalizeMetricSpec,
   positionGroup,
+  shrinkByPosition,
+  SHRINK_DEFAULT_K,
   evaluateExercise,
   buildCompareRadar,
   radarValues,
@@ -29,12 +31,25 @@ const {
   EVENT_GLOSSARY,
   DEFENDER_EXERCISE,
   buildEventExplorer,
+  explainScore,
+  LEDGER_FIELDS,
+  playerKey,
   validateMetric,
   evaluateCurriculum,
   spearman,
+  spearmanRaw,
+  percentile,
+  componentsFromRates,
+  RATE_KEYS,
+  bootstrapSpearman,
+  formatRhoWithCi,
+  BOOTSTRAP_MIN_ITERATIONS,
+  BOOTSTRAP_MAX_ITERATIONS,
+  BOOTSTRAP_MIN_N,
   worldCupGroup,
   assignFold,
   outcomeValue,
+  parseUserDataset,
   glossaryForPlayer,
   CURRICULUM_LESSONS,
   WC2018_GROUPS,
@@ -695,4 +710,1009 @@ test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', ()
   assert.match(html, /id="splitSelect"/);
   assert.match(html, /aria-label="צעדי השיעור המלא"/);
   assert.doesNotMatch(html + '\n' + runtime, /https?:\/\//);
+});
+
+// --- S1: bootstrap confidence interval for the held-out Spearman rho -------
+
+const RHO = '\u03c1';
+const MINUS = '\u2212';
+const EMDASH = '\u2014';
+
+test('bootstrapSpearman pins the held-out interval of the shipped file for seed 42', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const ranked = applyMetric(wc, DEFAULT_METRIC);
+  const heldOut = ranked
+    .filter(row => assignFold(row, 'groups') === 'test')
+    .map(row => [row.score, outcomeValue(row, 'assists')]);
+  assert.equal(heldOut.length, 120);
+
+  const ci = bootstrapSpearman(heldOut, { iterations: 1000, seed: 42 });
+  // Pinned from what the correct algorithm actually produces, not from the
+  // backlog: percentile bootstrap (R type 7 percentiles) over 1000
+  // mulberry32 resamples of the 120 held-out (score, assists) pairs.
+  assert.equal(ci.rho, 0.3);
+  assert.equal(ci.lo, 0.137);
+  assert.equal(ci.hi, 0.45);
+  assert.equal(ci.iterations, 1000);
+  assert.equal(ci.seed, 42);
+  assert.equal(ci.n, 120);
+  assert.ok(ci.lo < ci.rho && ci.rho < ci.hi, 'point estimate sits inside the interval');
+
+  // bit-for-bit: same input, same seed, byte-identical JSON on every run.
+  const again = bootstrapSpearman(heldOut, { iterations: 1000, seed: 42 });
+  assert.deepEqual(again, ci);
+  assert.equal(JSON.stringify(again), JSON.stringify(ci));
+
+  // a different seed moves the interval but never the point estimate
+  const other = bootstrapSpearman(heldOut, { iterations: 1000, seed: 7 });
+  assert.equal(other.rho, ci.rho);
+  assert.notDeepEqual([other.lo, other.hi], [ci.lo, ci.hi]);
+
+  // the validation lab reports exactly the same interval object
+  const store = createStore(wc);
+  const report = validateMetric(store.players, DEFAULT_METRIC, { outcomeId: 'assists', splitId: 'groups' });
+  assert.deepEqual(report.test.ci, ci);
+  assert.equal(report.test.rhoLabel, RHO + ' = 0.30 [0.14, 0.45]');
+  assert.equal(report.heldOutRhoLabel, report.test.rhoLabel);
+  assert.equal(report.train.rhoLabel, RHO + ' = 0.26 [0.10, 0.42]');
+  // the verdict quotes the interval, never a bare rho
+  assert.ok(report.verdict.includes(report.test.rhoLabel));
+});
+
+test('bootstrapSpearman returns rho 1 on perfectly correlated pairs and guards the iteration floor', () => {
+  const perfect = [];
+  for (let i = 1; i <= 40; i += 1) perfect.push([i, i * 3]);
+  const ci = bootstrapSpearman(perfect, { iterations: 500, seed: 7 });
+  assert.equal(ci.rho, 1);
+  assert.ok(ci.lo >= 0.99, 'lo ' + ci.lo);
+  assert.ok(ci.hi >= 0.99, 'hi ' + ci.hi);
+
+  const reversed = perfect.map(pair => [pair[0], -pair[1]]);
+  assert.equal(bootstrapSpearman(reversed, { iterations: 500, seed: 7 }).rho, -1);
+
+  assert.equal(BOOTSTRAP_MIN_ITERATIONS, 50);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 49 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 0 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: -1 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 'many' }), RangeError);
+  assert.equal(bootstrapSpearman(perfect, { iterations: 50 }).iterations, 50);
+
+  // defaults are 1000 iterations / seed 42
+  const defaults = bootstrapSpearman(perfect);
+  assert.equal(defaults.iterations, 1000);
+  assert.equal(defaults.seed, 42);
+
+  // {score, target} objects are accepted as well as [score, target] pairs
+  const objects = perfect.map(pair => ({ score: pair[0], target: pair[1] }));
+  assert.deepEqual(bootstrapSpearman(objects, { iterations: 500, seed: 7 }), ci);
+
+  // too few pairs is reported, not faked
+  const thin = bootstrapSpearman([[1, 1]], { iterations: 100 });
+  assert.equal(thin.rho, null);
+  assert.equal(thin.lo, null);
+  assert.equal(thin.hi, null);
+  assert.equal(thin.n, 1);
+});
+
+test('the lab never displays a bare held-out rho again', () => {
+  assert.equal(
+    formatRhoWithCi({ rho: 0.3, lo: -0.05, hi: 0.58 }),
+    RHO + ' = 0.30 [' + MINUS + '0.05, 0.58]'
+  );
+  assert.equal(formatRhoWithCi(null), RHO + ' = ' + EMDASH);
+  assert.match(html, /report\.train\.rhoLabel/);
+  assert.match(html, /report\.test\.rhoLabel/);
+  assert.match(html, /stats\.rhoLabel/);
+  assert.doesNotMatch(html, /report\.test\.rho\b(?!Label)/);
+  assert.match(html, /percentile bootstrap/);
+  // the PRNG is inline and seeded - no ambient randomness in the runtime
+  assert.match(runtime, /function mulberry32/);
+  assert.doesNotMatch(runtime + html, /Math\.random/);
+});
+
+// --- S2: minutes-weighted shrinkage toward the position mean ---------------
+
+test('shrinkByPosition moves a 90-minute cameo 5/6 of the way to the position mean and a 2700-minute regular only 1/7', () => {
+  const rows = [
+    { name: 'cameo', positionGroup: 'MF', minutes: 90, pressuresPer90: 40 },
+    { name: 'regular', positionGroup: 'MF', minutes: 2700, pressuresPer90: 40 },
+    { name: 'anchorA', positionGroup: 'MF', minutes: 2700, pressuresPer90: 10 },
+    { name: 'anchorB', positionGroup: 'MF', minutes: 2700, pressuresPer90: 10 }
+  ];
+  const out = shrinkByPosition(rows, { key: 'pressuresPer90', minutesKey: 'minutes', k: 450 });
+  const byName = name => out.find(row => row.name === name);
+
+  // mu_pos is MINUTES-weighted, not a plain average of the four numbers:
+  // (90*40 + 2700*40 + 2700*10 + 2700*10) / 8190 = 165600 / 8190
+  const mu = byName('cameo').shrinkage.pressuresPer90.positionMean;
+  assert.ok(Math.abs(mu - 165600 / 8190) < 1e-12, 'mu ' + mu);
+  assert.ok(Math.abs(mu - 20.21978021978022) < 1e-9, 'mu ' + mu);
+  assert.notEqual(mu, 25, 'a plain mean would be 25 - this one is minutes-weighted');
+
+  const movedFraction = (row) => {
+    const detail = row.shrinkage.pressuresPer90;
+    return Math.abs(detail.adjusted - detail.raw) / Math.abs(detail.positionMean - detail.raw);
+  };
+
+  // adj = (m*v + k*mu) / (m + k), so the distance travelled toward mu is
+  // exactly k/(m+k): 450/540 = 83.33% at 90 minutes, 450/3150 = 14.29% at 2700.
+  const cameo = byName('cameo');
+  const regular = byName('regular');
+  assert.ok(Math.abs(movedFraction(cameo) - 450 / 540) < 1e-12);
+  assert.ok(Math.abs(movedFraction(regular) - 450 / 3150) < 1e-12);
+  assert.ok(movedFraction(cameo) >= 0.6, 'cameo moved ' + movedFraction(cameo));
+  assert.ok(movedFraction(regular) < 0.15, 'regular moved ' + movedFraction(regular));
+  assert.equal(cameo.shrinkage.pressuresPer90.priorWeight, 450 / 540);
+  assert.equal(regular.shrinkage.pressuresPer90.priorWeight, 450 / 3150);
+  assert.equal(cameo.shrinkage.pressuresPer90.ownWeight, 90 / 540);
+
+  // the formula itself, spelled out
+  assert.ok(Math.abs(cameo.pressuresPer90 - (90 * 40 + 450 * mu) / (90 + 450)) < 1e-12);
+  assert.ok(Math.abs(regular.pressuresPer90 - (2700 * 40 + 450 * mu) / (2700 + 450)) < 1e-12);
+
+  // and the cameo, despite the identical raw 40, now sits below the regular
+  assert.ok(cameo.pressuresPer90 < regular.pressuresPer90);
+});
+
+test('shrinkByPosition is pure, deterministic, group-local, and refuses nonsense options', () => {
+  const rows = [
+    { name: 'mf', positionGroup: 'MF', minutes: 900, pressuresPer90: 30 },
+    { name: 'gk', positionGroup: 'GK', minutes: 900, pressuresPer90: 2 }
+  ];
+  const once = shrinkByPosition(rows, { key: 'pressuresPer90' });
+  const twice = shrinkByPosition(rows, { key: 'pressuresPer90' });
+  assert.deepEqual(twice, once);
+  assert.equal(JSON.stringify(twice), JSON.stringify(once));
+
+  // the caller's rows are never touched
+  assert.equal(rows[0].pressuresPer90, 30);
+  assert.equal(rows[0].shrinkage, undefined);
+
+  // a group of one has itself as its own mean, so nothing moves
+  assert.equal(once.find(row => row.name === 'gk').pressuresPer90, 2);
+  assert.equal(once.find(row => row.name === 'mf').pressuresPer90, 30);
+
+  assert.equal(SHRINK_DEFAULT_K, 450);
+  assert.equal(once[0].shrinkage.pressuresPer90.k, 450);
+
+  // k = 0 means "trust the player completely" and is an exact no-op
+  const wider = [
+    { positionGroup: 'MF', minutes: 90, pressuresPer90: 40 },
+    { positionGroup: 'MF', minutes: 900, pressuresPer90: 4 }
+  ];
+  assert.deepEqual(
+    shrinkByPosition(wider, { key: 'pressuresPer90', k: 0 }).map(row => row.pressuresPer90),
+    [40, 4]
+  );
+
+  assert.throws(() => shrinkByPosition(wider, {}), TypeError);
+  assert.throws(() => shrinkByPosition(wider, { key: 'pressuresPer90', k: -1 }), RangeError);
+  assert.throws(() => shrinkByPosition(wider, { key: 'pressuresPer90', k: 'lots' }), RangeError);
+  assert.deepEqual(shrinkByPosition([], { key: 'pressuresPer90' }), []);
+
+  // dotted paths reach into nested per-90 blocks without mutating the source
+  const nested = [
+    { positionGroup: 'MF', minutes: 90, per90: { pressuresPer90: 40 } },
+    { positionGroup: 'MF', minutes: 900, per90: { pressuresPer90: 4 } }
+  ];
+  const deep = shrinkByPosition(nested, { key: 'per90.pressuresPer90', k: 450 });
+  assert.ok(deep[0].per90.pressuresPer90 < 40);
+  assert.equal(nested[0].per90.pressuresPer90, 40);
+});
+
+test('a negative minutes cell is clamped in the returned map, not only in the position mean', () => {
+  // A BYOD CSV can carry a negative minutes cell. Math.max(0, ...) appears
+  // twice in shrinkByPosition - once when the minutes-weighted position mean
+  // is built, once when each row is shrunk - and only the first was covered.
+  // Without the second the denominator (minutes + k) drops BELOW k and can go
+  // negative, and the "shrunk" value then lands further from the group than
+  // the raw one instead of closer to it.
+  const rows = [
+    { name: 'typo', positionGroup: 'DF', minutes: -600, pressuresPer90: 30 },
+    { name: 'regular', positionGroup: 'DF', minutes: 900, pressuresPer90: 10 },
+    { name: 'squad', positionGroup: 'DF', minutes: 300, pressuresPer90: 22 }
+  ];
+  const out = shrinkByPosition(rows, { key: 'pressuresPer90', k: 450 });
+  const by = name => out.find(row => row.name === name);
+
+  // hand-derived. The mean already clamps: (0*30 + 900*10 + 300*22) / 1200 =
+  // 13. Then, with the row clamp in place:
+  //   typo    (0*30    + 450*13) /  450 = 13    - all prior, zero own weight
+  //   regular (900*10  + 450*13) / 1350 = 11
+  //   squad   (300*22  + 450*13) /  750 = 16.6
+  assert.equal(by('typo').shrinkage.pressuresPer90.positionMean, 13);
+  assert.equal(by('typo').pressuresPer90, 13);
+  assert.equal(by('regular').pressuresPer90, 11);
+  assert.ok(Math.abs(by('squad').pressuresPer90 - 16.6) < 1e-12);
+
+  // WITHOUT the clamp the negative row divides by (-600 + 450) = -150 and
+  // comes out at (-18000 + 5850) / -150 = 81: further from the group than the
+  // 30 it started at, and above every real value in the file.
+  assert.notEqual(by('typo').pressuresPer90, 81);
+  const values = out.map(row => row.pressuresPer90);
+  assert.ok(Math.max.apply(null, values) <= 30, String(values));
+
+  // the receipt says the same thing: no own weight, all prior, and the
+  // denominator never falls below k for anybody
+  assert.equal(by('typo').shrinkage.pressuresPer90.minutes, 0);
+  assert.equal(by('typo').shrinkage.pressuresPer90.ownWeight, 0);
+  assert.equal(by('typo').shrinkage.pressuresPer90.priorWeight, 1);
+  out.forEach((row) => {
+    const receipt = row.shrinkage.pressuresPer90;
+    assert.ok(receipt.ownWeight >= 0 && receipt.ownWeight <= 1, row.name);
+    assert.ok(receipt.priorWeight > 0 && receipt.priorWeight <= 1, row.name);
+    assert.ok(receipt.minutes >= 0, row.name);
+  });
+});
+
+test('percentile shares the centre of a tie block and leaves untied values where they were', () => {
+  // untied: (below + 1) / n, exactly the old "count of peers <= value"
+  assert.equal(percentile(3, [1, 2, 3, 4]), 75);
+  assert.equal(percentile(4, [1, 2, 3, 4]), 100);
+  assert.equal(percentile(1, [1, 2, 3, 4]), 25);
+  // a tie block shares its average rank: 25 zeros and 2 non-zeros in a
+  // 27-strong group -> (0 + 26/2) / 27 = 48.1, not 25/27 = 92.6
+  const keepers = new Array(25).fill(0).concat([0.5, 1]);
+  assert.equal(percentile(0, keepers), 48.1);
+  assert.equal(percentile(0.5, keepers), 96.3);
+  assert.equal(percentile(1, keepers), 100);
+  // a whole group tied is the middle, and a group of one is 100 as before
+  assert.equal(percentile(5, [5, 5, 5]), 66.7);
+  assert.equal(percentile(5, [5]), 100);
+  assert.equal(percentile(5, []), 50);
+});
+
+test('position normalisation shrinks the per-90 rates before the caps, and identical evidence stays one tie', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const spec = Object.assign({}, DEFAULT_METRIC, { normalizePosition: true });
+  const ranked = applyMetric(wc, spec);
+
+  // --- the backlog's three acceptance criteria, measured -----------------
+  // (1)+(2) k/(m+k): 90 min -> 450/540 = 83.3% of the way, 2700 -> 14.3%
+  const rows = [
+    { name: 'cameo', positionGroup: 'MF', minutes: 90, per90Rates: { pressures: 40 } },
+    { name: 'regular', positionGroup: 'MF', minutes: 2700, per90Rates: { pressures: 40 } },
+    { name: 'anchor', positionGroup: 'MF', minutes: 2700, per90Rates: { pressures: 10 } }
+  ];
+  const out = shrinkByPosition(rows, { key: 'per90Rates.pressures', k: SHRINK_DEFAULT_K });
+  const moved = (row) => {
+    const d = row.shrinkage['per90Rates.pressures'];
+    return Math.abs(d.adjusted - d.raw) / Math.abs(d.positionMean - d.raw);
+  };
+  assert.ok(moved(out[0]) >= 0.6, 'cameo moved ' + moved(out[0]));
+  assert.ok(moved(out[1]) < 0.15, 'regular moved ' + moved(out[1]));
+  // (3) at most 2 goalkeepers in the shipped top-12
+  const top12 = ranked.slice(0, 12);
+  const keepersOnTop = top12.filter(row => row.positionGroup === 'GK');
+  assert.ok(keepersOnTop.length <= 2, keepersOnTop.length + ' goalkeepers in the top 12');
+
+  // --- the pin: what the corrected pipeline produces with k = 450 ---------
+  // Recomputed from the code, not from any table. If percentile changes
+  // again (PR #12 replaces its tie rule), this moves and must be recomputed.
+  assert.deepEqual(
+    top12.map(row => [row.rank, row.name, row.positionGroup, row.score]),
+    [
+      [1, 'Marcelo Vieira da Silva Júnior', 'DF', 93.93],
+      [2, 'Thomas Meunier', 'DF', 92.09],
+      [3, 'Gylfi Þór Sigurðsson', 'FW', 88.02],
+      [4, 'Mário Figueira Fernandes', 'DF', 85.59],
+      [5, 'Joshua Kimmich', 'DF', 83.34],
+      [6, 'Salman Mohammed Al Faraj', 'MF', 81.64],
+      [7, 'Mathew Ryan', 'GK', 81.47],
+      [8, 'Keylor Navas Gamboa', 'GK', 81.1],
+      [9, 'Toni Kroos', 'MF', 77.64],
+      [10, 'Jordi Alba Ramos', 'DF', 77.46],
+      [11, 'Ricardo Iván Rodríguez Araya', 'DF', 77.36],
+      [12, 'Victor Moses', 'FW', 77.14]
+    ]
+  );
+  assert.deepEqual(applyMetric(wc, spec).map(row => row.id), ranked.map(row => row.id));
+
+  // --- zero-evidence keepers are NOT ordered by minutes -------------------
+  // 25 of the 27 eligible keepers have 0 xG, 0 box touches, 0 shots on
+  // target. Shrinking the RATE gives each of them k*mu/(m+k) of the order of
+  // 0.0004 xG/90 - a number that round1 on the 0-100 component turns into
+  // the same 0.1 for all 25 - and the percentile then hands the block one
+  // shared value. An earlier revision shrank the already-capped 0-100
+  // component instead and produced 21 distinct percentiles ordered purely by
+  // minutes (rho(minutes, Clutch) = -0.90 inside GK).
+  const keeperRows = ranked.filter(row => row.positionGroup === 'GK');
+  assert.equal(keeperRows.length, 27);
+  const noEvidence = keeperRows.filter(row =>
+    row.counts.shotXgSum === 0 && row.counts.boxTouches === 0 && row.counts.shotsOnTarget === 0);
+  assert.equal(noEvidence.length, 25);
+  assert.equal(new Set(noEvidence.map(row => row.components.shrunk.clutch)).size, 1);
+  assert.equal(new Set(noEvidence.map(row => row.components.clutch)).size, 1);
+  assert.equal(noEvidence[0].components.clutch, 48.1);   // (0 + 26/2) / 27
+  const rhoAll = spearmanRaw(keeperRows.map(row => row.minutes), keeperRows.map(row => row.components.clutch));
+  assert.ok(Math.abs(rhoAll) < 0.1, 'rho(minutes, Clutch percentile) inside GK = ' + rhoAll);
+  // Mathew Ryan (282 minutes) is in the table for his Grit and Involvement
+  // percentiles among keepers, not for a Clutch he never showed
+  const ryan = ranked.find(row => row.name === 'Mathew Ryan');
+  assert.equal(ryan.minutes, 282);
+  assert.equal(ryan.components.clutch, 48.1);
+  assert.equal(ryan.rank, 7);
+
+  // --- two players both over a cap after shrinkage end equal ---------------
+  // Short (300 min) and Long (700 min) both clear every Grit cap even after
+  // shrinkage toward a group of five modest regulars; the earlier revision
+  // put them 6.96 Grit points apart for the 400 minutes alone.
+  const modestRow = (i) => ({ name: 'Modest' + i, team: 'T', position: 'Center Back', totalMinutesProxy: 1000, pressures: 60, tackles: 10, interceptions: 0, defensiveActions: 20, progressiveActions: 15, keyPasses: 1, passesCompleted: 150, shotXgSum: 0, boxTouches: 0, shotsOnTarget: 0 });
+  const capped = {
+    players: [
+      { name: 'Short', team: 'T', position: 'Center Back', totalMinutesProxy: 300, pressures: 200, tackles: 40, interceptions: 40, defensiveActions: 120, progressiveActions: 10, keyPasses: 1, passesCompleted: 100, shotXgSum: 0, boxTouches: 0, shotsOnTarget: 0 },
+      { name: 'Long', team: 'T', position: 'Center Back', totalMinutesProxy: 700, pressures: 460, tackles: 90, interceptions: 90, defensiveActions: 280, progressiveActions: 20, keyPasses: 2, passesCompleted: 200, shotXgSum: 0, boxTouches: 0, shotsOnTarget: 0 },
+      modestRow(1), modestRow(2), modestRow(3), modestRow(4), modestRow(5)
+    ]
+  };
+  const cappedRows = applyMetric(capped, { grit: 100, involvement: 0, clutch: 0, minMinutes: 90, normalizePosition: true });
+  const short = cappedRows.find(row => row.name === 'Short');
+  const long = cappedRows.find(row => row.name === 'Long');
+  const modest = cappedRows.find(row => row.name === 'Modest1');
+  assert.ok(short.shrunkRates.pressures > 18 && long.shrunkRates.pressures > 18, 'both over the cap after shrinkage');
+  assert.ok(short.shrunkRates.pressures !== long.shrunkRates.pressures, 'the rates differ');
+  assert.ok(modest.shrunkRates.pressures < 18, 'the modest regular stays under the cap');
+  assert.equal(short.components.shrunk.grit, 100);
+  assert.equal(long.components.shrunk.grit, 100);
+  assert.equal(short.components.grit, long.components.grit);
+  assert.equal(short.score, long.score);
+  assert.ok(modest.components.grit < short.components.grit);
+
+  // --- receipts -------------------------------------------------------------
+  const top = ranked[0];
+  assert.equal(top.components.normalized, true);
+  assert.equal(top.components.shrinkK, 450);
+  assert.deepEqual(Object.keys(top.shrinkage).sort(), RATE_KEYS.map(key => 'per90Rates.' + key).sort());
+  assert.deepEqual(Object.keys(top.shrunkRates).sort(), RATE_KEYS.slice().sort());
+  // the shrunk component is what the percentile ranked: recompute it from
+  // the shrunk rates with the same recipe
+  keeperRows.concat(top12).forEach((row) => {
+    const again = componentsFromRates(row.shrunkRates);
+    assert.equal(again.grit, row.components.shrunk.grit, row.name);
+    assert.equal(again.involvement, row.components.shrunk.involvement, row.name);
+    assert.equal(again.clutch, row.components.shrunk.clutch, row.name);
+  });
+  assert.equal(typeof JSON.parse(JSON.stringify(top)).components.shrunk.grit, 'number');
+
+  // shrinkage stays off when normalisation is off: the plain ranking is
+  // untouched by S2 and no keeper is anywhere near the top.
+  const plain = applyMetric(wc, DEFAULT_METRIC);
+  assert.equal(plain[0].components.normalized, undefined);
+  assert.equal(plain[0].components.shrunk, undefined);
+  assert.equal(plain[0].shrunkRates, undefined);
+  assert.equal(plain.slice(0, 12).filter(row => row.positionGroup === 'GK').length, 0);
+});
+
+// --- S3: provenance ledger for every displayed number ----------------------
+
+// Walks data/wc2018_event_aggregates.json for a path such as
+// "players[].per90.pressuresPer90" and reports whether it is a real numeric
+// key on that player's record.
+function resolveSourceField(fileRow, sourceField) {
+  if (String(sourceField).indexOf('players[].') !== 0) return false;
+  const parts = String(sourceField).slice('players[].'.length).split('.');
+  let cursor = fileRow;
+  for (let i = 0; i < parts.length; i += 1) {
+    if (!cursor || typeof cursor !== 'object') return false;
+    if (!Object.prototype.hasOwnProperty.call(cursor, parts[i])) return false;
+    cursor = cursor[parts[i]];
+  }
+  return Number.isFinite(cursor);
+}
+
+test('every sourceField in the ledger resolves to a real numeric key in the shipped file', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const byId = {};
+  wc.players.forEach((row) => { byId[playerKey(row)] = row; });
+
+  assert.equal(store.players.length, 605);
+  assert.equal(LEDGER_FIELDS.length, 10);
+  assert.ok(LEDGER_FIELDS.every(col => col.usedInScore));
+
+  let checked = 0;
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    assert.ok(ledger, player.id);
+    assert.equal(ledger.components.length, 10);
+    ledger.components.forEach((item) => {
+      assert.ok(
+        resolveSourceField(byId[player.id], item.sourceField),
+        item.sourceField + ' does not resolve for ' + player.name
+      );
+      assert.ok(
+        resolveSourceField(byId[player.id], item.countField),
+        item.countField + ' does not resolve for ' + player.name
+      );
+      checked += 1;
+    });
+    // the pipeline prefers the file's own per90 block, and the ledger says so
+    assert.equal(ledger.components[0].sourceField, 'players[].per90.pressuresPer90');
+  });
+  assert.equal(checked, 6050);
+  // the minutes denominator is named too
+  assert.equal(explainScore(store.players[0].id, DEFAULT_METRIC, store).minutesField,
+    'players[].totalMinutesProxy');
+});
+
+test('the ledger impact is the number on screen, and its rounding residual is reported not hidden', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const ranked = applyMetric(wc, DEFAULT_METRIC);
+  const scoreById = {};
+  ranked.forEach((row) => { scoreById[row.id] = row.score; });
+
+  let maxTotal = 0;
+  let maxPillar = 0;
+  let maxDisplay = 0;
+  let exactWithin1e9 = 0;
+
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    const recon = ledger.reconciliation;
+
+    // impact IS the table score for anyone the table shows
+    if (scoreById[player.id] != null) {
+      assert.equal(ledger.impact, scoreById[player.id], player.name);
+      assert.equal(ledger.displayed, true);
+      assert.ok(ledger.rank >= 1);
+    } else {
+      assert.equal(ledger.displayed, false);
+      assert.equal(ledger.rank, null);
+      assert.equal(ledger.impact, compositeScore(player.components, DEFAULT_METRIC));
+    }
+
+    // the ledger closes: contributions + the two roundings == the number shown
+    let sum = 0;
+    ledger.components.forEach((item) => { sum += item.contribution; });
+    assert.ok(Math.abs(sum - recon.componentsSum) < 1e-9);
+    assert.ok(Math.abs(recon.componentsSum + recon.total - ledger.impact) < 1e-9, player.name);
+    assert.ok(Math.abs(
+      recon.normalisationShift + recon.pillarRounding + recon.displayRounding - recon.total
+    ) < 1e-9);
+
+    // round1 on each of the three pillars can shift the composite by at most
+    // 0.05 (0.4*0.05 + 0.3*0.05 + 0.3*0.05); round2 on the composite by 0.005
+    assert.ok(Math.abs(recon.pillarRounding) <= 0.05 + 1e-9, player.name);
+    assert.ok(Math.abs(recon.displayRounding) <= 0.005 + 1e-9, player.name);
+
+    maxTotal = Math.max(maxTotal, Math.abs(recon.total));
+    maxPillar = Math.max(maxPillar, Math.abs(recon.pillarRounding));
+    maxDisplay = Math.max(maxDisplay, Math.abs(recon.displayRounding));
+    if (Math.abs(recon.total) <= 1e-9) exactWithin1e9 += 1;
+  });
+
+  // THE BACKLOG IS WRONG HERE. It asks for sum(contributions) == the displayed
+  // impact to 1e-9 for every player. That cannot hold while the pipeline
+  // round1-s each pillar before weighting it: measured over all 605 players
+  // the residual reaches 0.0467 (Seung-Woo Lee) and only 8 players land inside
+  // 1e-9 by luck. The ledger reports the residual instead of pretending.
+  assert.ok(Math.abs(maxTotal - 0.0467390422077969) < 1e-12, 'maxTotal ' + maxTotal);
+  assert.equal(exactWithin1e9, 8);
+  assert.ok(maxPillar > 0.046 && maxPillar < 0.05);
+  // with the default 40/30/30 the composite of one-decimal pillars is already
+  // exact to two decimals, so round2 costs nothing here
+  assert.ok(maxDisplay < 1e-12, 'maxDisplay ' + maxDisplay);
+
+  // pick weights that do not divide cleanly and round2 starts to bite
+  const odd = { grit: 7, involvement: 5, clutch: 3, minMinutes: 270 };
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const oddLedger = explainScore(kante.id, odd, store);
+  assert.equal(oddLedger.impact, 62.99);
+  assert.ok(Math.abs(oddLedger.reconciliation.displayRounding - 0.0033333333333303017) < 1e-12);
+  assert.ok(Math.abs(
+    oddLedger.reconciliation.componentsSum + oddLedger.reconciliation.total - oddLedger.impact
+  ) < 1e-9);
+});
+
+test('the ledger is a stable, JSON-serialisable derivation tree for one player', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const ledger = explainScore(kante.id, DEFAULT_METRIC, store);
+
+  assert.equal(ledger.impact, 54.92);
+  assert.equal(ledger.rank, 54);
+  assert.equal(ledger.minutes, 621);
+  assert.equal(ledger.normalized, false);
+  assert.equal(ledger.dataset, 'data/wc2018_event_aggregates.json');
+  assert.equal(ledger.provenance, OPEN_DATA_PROVENANCE);
+  assert.deepEqual(ledger.weights, { grit: 40, involvement: 30, clutch: 30, total: 100 });
+
+  assert.deepEqual(ledger.components.map(item => item.name), [
+    'pressures', 'tackles', 'interceptions', 'defensiveActions',
+    'progressiveActions', 'keyPasses', 'passesCompleted',
+    'shotXgSum', 'boxTouches', 'shotsOnTarget'
+  ]);
+  assert.deepEqual(ledger.components.map(item => item.feeds), [
+    'grit', 'grit', 'grit', 'grit',
+    'involvement', 'involvement', 'involvement',
+    'clutch', 'clutch', 'clutch'
+  ]);
+
+  const press = ledger.components[0];
+  assert.equal(press.raw, 183);
+  assert.equal(press.per90, 26.5217);
+  assert.equal(press.cap, 18);
+  assert.equal(press.capped, 18);            // 26.52/90 is over the cap
+  assert.equal(press.scaled, 100);
+  assert.equal(press.recipeWeight, 0.45);
+  assert.ok(Math.abs(press.weight - 0.45 * 40 / 100) < 1e-12);
+  assert.ok(Math.abs(press.contribution - 18) < 1e-9);
+  assert.equal(press.sourceField, 'players[].per90.pressuresPer90');
+  assert.equal(press.countField, 'players[].pressures');
+  assert.equal(press.sharesCapWith, null);
+
+  // tackles and interceptions share one cap of 6/90; the capped pair is split
+  // in proportion to each field's own per-90, so the two scaled values still
+  // add up to exactly what componentsFromEvents caps the pair to.
+  const tackles = ledger.components[1];
+  const intercepts = ledger.components[2];
+  assert.equal(tackles.sharesCapWith, 'players[].interceptions');
+  assert.equal(intercepts.sharesCapWith, 'players[].tackles');
+  assert.equal(tackles.pairedPer90, intercepts.pairedPer90);
+  assert.ok(Math.abs(tackles.pairedPer90 - (tackles.per90 + intercepts.per90)) < 1e-12);
+  const pairScaled = Math.min(tackles.pairedPer90, 6) / 6 * 100;
+  assert.ok(Math.abs(tackles.scaled + intercepts.scaled - pairScaled) < 1e-9);
+  assert.ok(tackles.scaled < intercepts.scaled, 'he intercepts more than he tackles');
+
+  assert.deepEqual(ledger.pillars.map(item => [item.name, item.value, item.weight]), [
+    ['grit', 94.4, 40], ['involvement', 56.2, 30], ['clutch', 1, 30]
+  ]);
+  assert.equal(ledger.pillars[0].transform, 'round1');
+
+  // stable and serialisable
+  const json = JSON.stringify(ledger);
+  assert.equal(JSON.stringify(explainScore(kante.id, DEFAULT_METRIC, store)), json);
+  assert.deepEqual(JSON.parse(json), ledger);
+  assert.doesNotMatch(json, /NaN|Infinity/);
+
+  // unknown player or missing store is reported, never invented
+  assert.equal(explainScore('no-such-player', DEFAULT_METRIC, store), null);
+  assert.equal(explainScore(kante.id, DEFAULT_METRIC, null), null);
+  assert.equal(explainScore(null, DEFAULT_METRIC, store), null);
+
+  // under normalisation the pillars are no longer a plain round1 of the
+  // components, and the ledger names the transform instead of hiding it
+  const normalised = explainScore(kante.id,
+    Object.assign({}, DEFAULT_METRIC, { normalizePosition: true }), store);
+  assert.equal(normalised.normalized, true);
+  assert.equal(normalised.pillars[0].transform,
+    'shrinkByPosition(k=450) on each per-90 rate, then caps, scale, round1, then within-position percentile (average rank for ties)');
+  // and the ledger shows the rate the caps really saw next to the raw one
+  assert.ok(normalised.components.every(item => typeof item.shrunkPer90 === 'number'));
+  assert.ok(ledger.components.every(item => item.shrunkPer90 === null));
+  assert.ok(Math.abs(
+    normalised.reconciliation.componentsSum + normalised.reconciliation.total - normalised.impact
+  ) < 1e-9);
+});
+
+test('the lesson table and the counts explorer are drawn from the ledger', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const view = store.derive(Object.assign({}, DEFAULT_METRIC, { selectedId: kante.id }));
+
+  assert.ok(view.ledger);
+  assert.equal(view.ledger.playerId, view.selected.id);
+  assert.equal(view.ledger.impact, view.selected.score);
+  assert.equal(view.ledger.rank, view.selected.rank);
+
+  // the explorer row now says which path the pipeline really read
+  const press = view.explorer.rows.find(row => row.key === 'pressures');
+  assert.equal(press.filePath, 'players[].pressures');
+  assert.equal(press.sourceField, 'players[].per90.pressuresPer90');
+
+  // and the screen reads its numbers off the ledger, not off a parallel table
+  assert.match(html, /ledger: current\.ledger/);
+  assert.match(html, /ledger\.components/);
+  assert.match(html, /data-source-field=/);
+  assert.match(html, /row\.sourceField/);
+  assert.match(html, /reconciliation\.componentsSum/);
+  assert.match(html, /reconciliation\.total/);
+  assert.match(html, /ledger\.impact/);
+});
+
+// --- verification round: findings 1-5 --------------------------------------
+
+test('the ledger reconciliation binds to numbers the test recomputes itself', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const ranked = applyMetric(wc, DEFAULT_METRIC);
+  const byId = {};
+  ranked.forEach((row) => { byId[row.id] = row; });
+  const total = DEFAULT_METRIC.grit + DEFAULT_METRIC.involvement + DEFAULT_METRIC.clutch;
+  const round1 = v => Math.round(v * 10) / 10;
+  const round2 = v => Math.round(v * 100) / 100;
+
+  let checked = 0;
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    const recon = ledger.reconciliation;
+
+    // pillar.fromComponents recomputed from the components array
+    const fromComponents = { grit: 0, involvement: 0, clutch: 0 };
+    ledger.components.forEach((item) => {
+      // scaled recomputed from per90 and cap (the pair split for tackles/
+      // interceptions is checked separately below)
+      if (!item.sharesCapWith) {
+        const scaled = Math.min(item.cap, Math.max(0, item.per90)) / item.cap * 100;
+        assert.ok(Math.abs(scaled - item.scaled) < 1e-9, item.name);
+      }
+      fromComponents[item.feeds] += item.scaled * item.recipeWeight;
+    });
+    const pair = ledger.components.filter(item => item.sharesCapWith);
+    const pairScaled = Math.min(6, pair[0].per90 + pair[1].per90) / 6 * 100;
+    assert.ok(Math.abs(pair[0].scaled + pair[1].scaled - pairScaled) < 1e-9);
+
+    // pillar value = round1(fromComponents) - the component the table shows
+    let pillarSum = 0;
+    ledger.pillars.forEach((pillar) => {
+      assert.ok(Math.abs(pillar.fromComponents - fromComponents[pillar.name]) < 1e-9, player.name + ' ' + pillar.name);
+      assert.equal(pillar.value, round1(fromComponents[pillar.name]), player.name + ' ' + pillar.name);
+      assert.equal(pillar.value, player.components[pillar.name]);
+      pillarSum += pillar.value * DEFAULT_METRIC[pillar.name] / total;
+    });
+    // componentsSum recomputed from scaled x recipeWeight x pillar share
+    let componentsSum = 0;
+    ['grit', 'involvement', 'clutch'].forEach((key) => {
+      componentsSum += fromComponents[key] * DEFAULT_METRIC[key] / total;
+    });
+    assert.ok(Math.abs(recon.componentsSum - componentsSum) < 1e-9, player.name);
+    // pillarSum is the weighted sum of the ROUNDED pillars, never the same
+    // number as componentsSum unless the roundings happen to cancel
+    assert.ok(Math.abs(recon.pillarSum - pillarSum) < 1e-9, player.name);
+    assert.ok(Math.abs(recon.pillarRounding - (pillarSum - componentsSum)) < 1e-9, player.name);
+    // impact = round2(pillarSum) = the table
+    assert.equal(ledger.impact, round2(pillarSum), player.name);
+    assert.ok(Math.abs(recon.displayRounding - (ledger.impact - pillarSum)) < 1e-9, player.name);
+    if (byId[player.id]) assert.equal(ledger.impact, byId[player.id].score);
+    checked += 1;
+  });
+  assert.equal(checked, 605);
+
+  // among DISPLAYED players (>= 270 minutes) the largest residual is
+  // Hector Moreno's 0.04117375; Seung-Woo Lee's 0.0467 is below minMinutes
+  let worst = null;
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    if (ledger.displayed && (!worst || Math.abs(ledger.reconciliation.total) > Math.abs(worst.reconciliation.total))) worst = ledger;
+  });
+  assert.match(worst.name, /Moreno/);
+  assert.equal(worst.rank, 194);
+  assert.ok(Math.abs(worst.reconciliation.total - 0.04117375) < 1e-9, String(worst.reconciliation.total));
+  const lee = store.players.find(row => /Seung-Woo Lee/.test(row.name));
+  assert.ok(lee.minutes < DEFAULT_METRIC.minMinutes);
+  assert.equal(explainScore(lee.id, DEFAULT_METRIC, store).displayed, false);
+});
+
+// --- verification round 2: finding 1 ---------------------------------------
+
+test('the ledger names the position-normalisation transform instead of calling it rounding', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const round1 = v => Math.round(v * 10) / 10;
+
+  const read = (spec) => {
+    const rows = [];
+    store.players.forEach((player) => {
+      const ledger = explainScore(player.id, spec, store);
+      if (ledger.displayed) rows.push(ledger);
+    });
+    rows.sort((a, b) => a.rank - b.rank);
+    return rows;
+  };
+  const off = read(DEFAULT_METRIC);
+  const on = read(Object.assign({}, DEFAULT_METRIC, { normalizePosition: true }));
+  assert.equal(off.length, 240);
+  assert.equal(on.length, 240);
+  assert.ok(off.every(l => l.normalized === false));
+  assert.ok(on.every(l => l.normalized === true));
+
+  // the four parts close, in BOTH modes:
+  //   componentsSum + normalisationShift + pillarRounding + displayRounding == impact
+  [off, on].forEach((rows) => {
+    rows.forEach((ledger) => {
+      const r = ledger.reconciliation;
+      assert.ok(Math.abs(
+        r.componentsSum + r.normalisationShift + r.pillarRounding + r.displayRounding - ledger.impact
+      ) < 1e-9, ledger.name);
+      assert.ok(Math.abs(
+        r.normalisationShift + r.pillarRounding + r.displayRounding - r.total
+      ) < 1e-9, ledger.name);
+      // every pillar names the number round1 was applied to, and round1 of it
+      // really is the pillar the table shows
+      ledger.pillars.forEach((pillar) => {
+        assert.equal(pillar.value, round1(pillar.beforeRound1), ledger.name + ' ' + pillar.name);
+      });
+      // round1 on three pillars moves the composite by at most 0.05 and round2
+      // by at most 0.005 - WITH normalisation exactly as without it. That is
+      // what makes the word "rounding" on screen true in both modes.
+      assert.ok(Math.abs(r.pillarRounding) <= 0.05 + 1e-9, ledger.name);
+      assert.ok(Math.abs(r.displayRounding) <= 0.005 + 1e-9, ledger.name);
+    });
+  });
+
+  const maxOf = (rows, key) =>
+    rows.reduce((m, l) => Math.max(m, Math.abs(l.reconciliation[key])), 0);
+
+  // checkbox OFF: no transform ran, so the shift is zero and the residual the
+  // footer calls rounding really is rounding (Hector Moreno, 0.04117375)
+  assert.ok(maxOf(off, 'normalisationShift') < 1e-9, String(maxOf(off, 'normalisationShift')));
+  assert.ok(Math.abs(maxOf(off, 'total') - 0.04117375) < 1e-9);
+  assert.ok(Math.abs(maxOf(off, 'pillarRounding') - 0.04117375) < 1e-9);
+
+  // checkbox ON: the same cell carries the shrink + percentile transform. Hand
+  // -derived from the recipe alone (caps 18/6/14/22/4/80/0.6/8/2, recipe
+  // weights, k = 450, average-rank percentile inside the position group):
+  // 12.4262 points on average across the 240 displayed rows and 59.7091 at
+  // worst (Keylor Navas). A footer that called THAT "round1 + round2" was the
+  // one dishonest number left on a page about honest numbers.
+  const meanAbsTotal = on.reduce((s, l) => s + Math.abs(l.reconciliation.total), 0) / on.length;
+  assert.ok(Math.abs(maxOf(on, 'total') - 59.70909321428571) < 1e-9, String(maxOf(on, 'total')));
+  assert.ok(Math.abs(meanAbsTotal - 12.426229364583333) < 1e-9, String(meanAbsTotal));
+  assert.ok(Math.abs(maxOf(on, 'normalisationShift') - 59.720204325396814) < 1e-9);
+  const navas = on.find(l => /Navas/.test(l.name));
+  assert.ok(Math.abs(navas.reconciliation.total - 59.70909321428571) < 1e-9);
+  // and pillarRounding still means rounding: it never leaves the 0.05 band
+  assert.ok(maxOf(on, 'pillarRounding') > 0.049);
+  assert.ok(maxOf(on, 'pillarRounding') <= 0.05 + 1e-9, String(maxOf(on, 'pillarRounding')));
+
+  // the top row of the normalised table, number by number
+  const top = on[0];
+  assert.equal(top.rank, 1);
+  assert.match(top.name, /Marcelo/);
+  assert.equal(top.impact, 93.93);
+  assert.ok(Math.abs(top.reconciliation.componentsSum - 65.91248374999999) < 1e-9);
+  assert.ok(Math.abs(top.reconciliation.total - 28.017516250000014) < 1e-9);
+  assert.ok(Math.abs(top.reconciliation.normalisationShift - 28.012247432795704) < 1e-9);
+  assert.ok(Math.abs(top.reconciliation.pillarRounding - 0.005268817204310494) < 1e-12);
+  assert.ok(Math.abs(top.reconciliation.displayRounding) < 1e-9);
+
+  // the screen no longer files that 28.0175 under "rounding": the transform
+  // gets its own labelled row, and the rounding row holds only the roundings
+  assert.match(html, /reconciliation\.normalisationShift/);
+  assert.match(html, /reconciliation\.pillarRounding \+ ledger\.reconciliation\.displayRounding/);
+  assert.match(html, /זה לא עיגול/);
+});
+
+// --- verification round 2: finding 3 ---------------------------------------
+
+test('the interval cache is keyed by minMinutes, so a 5-player fold never borrows the 120-player interval', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const at = m => Object.assign({}, DEFAULT_METRIC, { minMinutes: m });
+
+  // 270 minutes: 240 eligible players split 120 train / 120 held out by World
+  // Cup group (A-D train, E-H test). 120 >= BOOTSTRAP_MIN_N, so there is a
+  // real bootstrap interval.
+  const wide = store.validationInterval(at(270));
+  assert.equal(wide.test.n, 120);
+  assert.equal(wide.train.n, 120);
+  assert.equal(wide.test.ci.n, 120);
+  assert.ok(wide.test.ci.lo != null && wide.test.ci.hi != null);
+  assert.equal(wide.test.ci.reason, null);
+  const afterWide = store.bootstrapRuns;
+  assert.ok(afterWide > 0);
+
+  // 600 minutes on the SAME store: 16 eligible, 11 train, and FIVE held out -
+  // Harry Maguire, John Stones, Jordan Pickford, Kieran Trippier and Thibaut
+  // Courtois. Five is below BOOTSTRAP_MIN_N, so there is no interval at all,
+  // and rho has to stand there bare and say so. Every one of these numbers is
+  // hand-counted off the file (minutes >= 600, team in groups E-H), and
+  // rho = 0.866 is Spearman on those five score/assist pairs with the same
+  // mid-rank convention rankValues uses.
+  const narrow = store.validationInterval(at(600));
+  assert.equal(narrow.train.n, 11);
+  assert.equal(narrow.test.n, 5);
+  assert.equal(narrow.test.ci.n, 5, 'the 5-player fold is showing the ' + narrow.test.ci.n + '-player interval');
+  assert.equal(narrow.test.ci.lo, null);
+  assert.equal(narrow.test.ci.hi, null);
+  assert.equal(narrow.test.ci.reason, 'n<10');
+  assert.equal(narrow.test.ci.rho, 0.866);
+  assert.match(narrow.test.rhoLabel, /0\.87/);
+  assert.match(narrow.test.rhoLabel, /n=5/);
+  assert.notEqual(narrow.test.rhoLabel, wide.test.rhoLabel);
+  assert.match(narrow.verdict, /n=5/);
+  // a different minMinutes is a different key, so it really did recompute
+  assert.ok(store.bootstrapRuns > afterWide, 'the 600-minute fold reused a cached interval');
+
+  // and the other way round, on a fresh store: computing the 5-player fold
+  // first must not hand its "no interval" to the 120-player fold
+  const other = createStore(wc);
+  const narrowFirst = other.validationInterval(at(600));
+  assert.equal(narrowFirst.test.ci.n, 5);
+  const wideSecond = other.validationInterval(at(270));
+  assert.equal(wideSecond.test.ci.n, 120);
+  assert.ok(wideSecond.test.ci.lo != null && wideSecond.test.ci.hi != null);
+  assert.equal(wideSecond.test.rhoLabel, wide.test.rhoLabel);
+
+  // asking twice for the same spec is a cache HIT, not a recompute
+  const runsBefore = other.bootstrapRuns;
+  assert.deepEqual(other.validationInterval(at(270)).test.ci, wideSecond.test.ci);
+  assert.equal(other.bootstrapRuns, runsBefore);
+});
+
+test('derive never runs the bootstrap; validationInterval does, once per spec, and the lab wires it debounced', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  assert.equal(store.bootstrapRuns, 0);
+
+  const first = store.derive(DEFAULT_METRIC);
+  store.derive(Object.assign({}, DEFAULT_METRIC, { grit: 41 }));
+  store.derive(Object.assign({}, DEFAULT_METRIC, { minMinutes: 300 }));
+  assert.equal(store.bootstrapRuns, 0, 'derive ran the bootstrap');
+  // before the interval exists the label says so instead of showing a bare rho
+  assert.equal(first.validation.intervalReady, false);
+  assert.equal(first.validation.test.ci.reason, 'pending');
+  assert.equal(first.validation.test.rhoLabel, RHO + ' = 0.30 [רווח בטחון בחישוב…]');
+  assert.equal(first.validation.test.rho, 0.3);
+
+  const report = store.validationInterval(DEFAULT_METRIC);
+  assert.equal(store.bootstrapRuns, 2, 'one bootstrap per fold');
+  assert.equal(report.intervalReady, true);
+  assert.deepEqual(report.test.ci, bootstrapSpearman(
+    applyMetric(wc, DEFAULT_METRIC)
+      .filter(row => assignFold(row, 'groups') === 'test')
+      .map(row => [row.score, outcomeValue(row, 'assists')]),
+    { iterations: 1000, seed: 42 }
+  ));
+  assert.equal(report.test.rhoLabel, RHO + ' = 0.30 [0.14, 0.45]');
+  // memoised: the same spec never pays twice, and derive now sees it for free
+  store.validationInterval(Object.assign({}, DEFAULT_METRIC, { selectedId: 'x' }));
+  assert.equal(store.bootstrapRuns, 2);
+  const again = store.derive(DEFAULT_METRIC);
+  assert.equal(store.bootstrapRuns, 2);
+  assert.equal(again.validation.intervalReady, true);
+  assert.deepEqual(again.validation.test.ci, report.test.ci);
+  assert.equal(again.validation.verdict, report.verdict);
+  // A moved weight changes the fold pairs, so memoising cannot spare a drag
+  // the cost: 232 of the 240 displayed scores move for grit 40 -> 41 alone.
+  // That is why the interval is debounced out of derive() rather than cached
+  // inside it.
+  const base = applyMetric(wc, DEFAULT_METRIC);
+  const nudged = {};
+  applyMetric(wc, Object.assign({}, DEFAULT_METRIC, { grit: 41 }))
+    .forEach((row) => { nudged[row.id] = row.score; });
+  assert.equal(base.length, 240);
+  assert.equal(base.filter(row => nudged[row.id] !== row.score).length, 232);
+  store.validationInterval(Object.assign({}, DEFAULT_METRIC, { grit: 41 }));
+  assert.equal(store.bootstrapRuns, 4);
+
+  // the page: interval is scheduled after derive, debounced, and on change
+  assert.match(html, /store\.validationInterval\(/);
+  assert.match(html, /INTERVAL_DEBOUNCE_MS = 300/);
+  assert.match(html, /addEventListener\('change', function \(\) \{ scheduleInterval\(0\); \}\)/);
+  assert.match(html, /intervalReady/);
+  assert.match(html, /ci\.reason === 'pending'/);
+  assert.match(html, /קטן מדי לרווח/);
+  assert.match(html, /percentile bootstrap/);
+
+  // the bootstrap options are validated at the edge: a bad iterations option
+  // falls back with a note instead of throwing out of validateMetric
+  const bad = validateMetric(store.players, DEFAULT_METRIC, { iterations: 10, bootstrap: false });
+  assert.equal(bad.bootstrap.iterations, 1000);
+  assert.equal(bad.bootstrap.notes.length, 1);
+  assert.match(bad.bootstrap.notes[0], /iterations 10/);
+  assert.doesNotThrow(() => createStore(wc, { bootstrap: { iterations: 10 } }).derive(DEFAULT_METRIC));
+  const badStore = createStore(wc, { bootstrap: { iterations: 10 } });
+  assert.equal(badStore.validationInterval(DEFAULT_METRIC).bootstrap.iterations, 1000);
+});
+
+test('bootstrapSpearman refuses non-integer or oversized iterations, applies one seed rule, floors n, and counts degenerate replicates', () => {
+  const perfect = [];
+  for (let i = 1; i <= 40; i += 1) perfect.push([i, i * 3]);
+
+  // iterations: integer in [50, 20000]
+  assert.equal(BOOTSTRAP_MIN_ITERATIONS, 50);
+  assert.equal(BOOTSTRAP_MAX_ITERATIONS, 20000);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 50.9 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 49.9 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 20001 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 1e7 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: Infinity }), RangeError);
+  assert.equal(bootstrapSpearman(perfect, { iterations: 20000 }).iterations, 20000);
+  assert.equal(bootstrapSpearman(perfect, { iterations: '100' }).iterations, 100);
+
+  // seed: null / undefined / false / '' are all the default 42; a number and
+  // its string are the same stream; other types are refused
+  const byDefault = bootstrapSpearman(perfect, { iterations: 100 });
+  assert.equal(byDefault.seed, 42);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: null }), byDefault);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: undefined }), byDefault);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: false }), byDefault);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: '' }), byDefault);
+  assert.deepEqual(
+    Object.assign({}, bootstrapSpearman(perfect, { iterations: 100, seed: '42' }), { seed: 42 }),
+    byDefault
+  );
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 100, seed: true }), TypeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 100, seed: {} }), TypeError);
+
+  // n floor: at minMinutes = 600 the shipped held-out fold is 5 players
+  assert.equal(BOOTSTRAP_MIN_N, 10);
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const thin = validateMetric(store.players, Object.assign({}, DEFAULT_METRIC, { minMinutes: 600 }), {});
+  assert.equal(thin.test.n, 5);
+  assert.equal(thin.test.ci.n, 5);
+  assert.equal(thin.test.ci.rho, 0.866);
+  assert.equal(thin.test.ci.lo, null);
+  assert.equal(thin.test.ci.hi, null);
+  assert.equal(thin.test.ci.reason, 'n<10');
+  assert.equal(thin.test.rhoLabel, RHO + ' = 0.87 [n=5 קטן מדי לרווח]');
+  assert.match(thin.verdict, /n=5 קטן מ-10/);
+  assert.equal(thin.intervalReady, true);
+  // the pending state is a different reason and never claims the floor
+  assert.notEqual(validateMetric(store.players, DEFAULT_METRIC, { bootstrap: false }).test.ci.reason, 'n<10');
+
+  // degenerate replicates are counted and dropped, not mapped to rho = 0:
+  // n = 10 real pairs with 7 zero-assist players give 8 one-sided resamples
+  const ten = validateMetric(store.players, Object.assign({}, DEFAULT_METRIC, { minMinutes: 550 }), {});
+  assert.equal(ten.test.n, 10);
+  assert.equal(ten.test.ci.degenerateCount, 8);
+  assert.equal(ten.test.ci.effectiveIterations, 992);
+  assert.equal(ten.test.ci.lo, -0.265);
+  assert.equal(ten.test.ci.hi, 0.905);
+  // the pinned n = 120 interval had no degenerate replicate to begin with
+  const full = validateMetric(store.players, DEFAULT_METRIC, {});
+  assert.equal(full.test.ci.degenerateCount, 0);
+  assert.equal(full.test.ci.effectiveIterations, 1000);
+  assert.deepEqual([full.test.ci.lo, full.test.ci.hi], [0.137, 0.45]);
+  // all-constant targets: every replicate is degenerate and the result says so
+  const flat = bootstrapSpearman(perfect.map(pair => [pair[0], 1]), { iterations: 100 });
+  assert.equal(flat.degenerateCount, 100);
+  assert.equal(flat.effectiveIterations, 0);
+  assert.equal(flat.lo, null);
+  assert.equal(flat.reason, 'all replicates degenerate');
+});
+
+test('a BYOD file without the per90 block reports null for fields it does not contain', () => {
+  const players = [
+    { name: 'Only Two', team: 'Home', position: 'Center Back', minutes: 400, pressures: 40, passesCompleted: 100 },
+    { name: 'Full Row', team: 'Away', position: 'Center Forward', minutes: 400, pressures: 10, tackles: 1, interceptions: 0, defensiveActions: 4, progressiveActions: 20, keyPasses: 6, passesCompleted: 50, shotXgSum: 2, boxTouches: 20, shotsOnTarget: 4 }
+  ];
+  const store = createStore({ players: players }, { provenance: USER_DATA_PROVENANCE });
+  const thin = explainScore(playerKey(players[0]), { grit: 40, involvement: 30, clutch: 30, minMinutes: 90 }, store);
+  const named = thin.components.filter(item => item.sourceField != null);
+  assert.deepEqual(named.map(item => item.sourceField), ['players[].pressures', 'players[].passesCompleted']);
+  assert.deepEqual(named.map(item => item.raw), [40, 100]);
+  thin.components.filter(item => item.sourceField == null).forEach((item) => {
+    assert.equal(item.raw, null, item.name);
+    assert.equal(item.inFile, false);
+    assert.equal(item.countField, null);
+    assert.equal(item.per90, 0, 'the pipeline used 0 for ' + item.name);
+    assert.equal(item.contribution, 0);
+  });
+  assert.equal(thin.components.filter(item => item.sourceField == null).length, 8);
+  assert.equal(thin.minutesField, 'players[].minutes');
+  // the ledger still closes on the score the table shows
+  const view = store.derive({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90, selectedId: playerKey(players[0]) });
+  assert.equal(view.ledger.impact, view.selected.score);
+  assert.ok(Math.abs(view.ledger.reconciliation.componentsSum + view.ledger.reconciliation.total - view.ledger.impact) < 1e-9);
+  // the counts explorer says the same
+  const explorerRow = view.explorer.rows.find(row => row.key === 'shotXgSum');
+  assert.equal(explorerRow.sourceField, null);
+  assert.equal(explorerRow.inFile, false);
+  assert.equal(view.explorer.rows.find(row => row.key === 'pressures').inFile, true);
+  // the full row resolves every field through the count path (no per90 block)
+  const full = explainScore(playerKey(players[1]), { grit: 40, involvement: 30, clutch: 30, minMinutes: 90 }, store);
+  assert.ok(full.components.every(item => item.sourceField === 'players[].' + item.name));
+  // a CSV upload with a subset of columns takes the same path
+  const csv = parseUserDataset('name,team,position,minutes,pressures,passesCompleted\nCsv,Home,Left Back,300,20,80', { attested: true });
+  const csvStore = createStore({ players: csv.players }, { provenance: USER_DATA_PROVENANCE });
+  const csvLedger = explainScore(csvStore.players[0].id, DEFAULT_METRIC, csvStore);
+  assert.equal(csvLedger.components.filter(item => item.sourceField == null).length, 8);
+  assert.equal(csvLedger.minutesField, 'players[].totalMinutesProxy');
+  // and the page prints "not in the file" rather than a <code> path
+  assert.match(html, /row\.sourceField == null/);
+  assert.match(html, /לא בקובץ/);
+  assert.match(html, /row\.inFile === false/);
+  // the shipped file resolves everything, so nothing there is null
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const wcStore = createStore(wc);
+  wcStore.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, wcStore);
+    assert.ok(ledger.components.every(item => item.sourceField != null && item.raw != null && item.inFile), player.name);
+  });
 });

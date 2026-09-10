@@ -132,7 +132,7 @@
         <strong id="minMinutesVal" aria-hidden="true">270</strong>
       </div>
     </div>
-    <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון בתוך GK/DF/MF/FW)</label>
+    <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (כיווץ לפי דקות, ואז אחוזון בתוך GK/DF/MF/FW)</label>
     <p id="formulaLine" class="formula"></p>
     <p class="muted">Δ מול מדד הבסיס 40/30/30 בלי נרמול עמדה. שיתוף: המצב נשמר ב־hash של הכתובת — העתיקו מהדפדפן או בלחיצה.</p>
     <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
@@ -406,10 +406,51 @@
     }).join('');
     let extra = '';
     if (lessonIndex === 1 || lessonIndex === 2) {
-      extra = '<table><caption>גורמים גולמיים ל-90 דקות</caption><thead><tr><th scope="col">גורם גולמי</th><th scope="col">ל-90 דקות</th><th scope="col">נכנס ל</th></tr></thead><tbody>' +
-        (current.mapping || []).map(function (row) {
-          return '<tr><td>' + escapeHtml(row.factor) + '</td><td>' + escapeHtml(row.value) + '</td><td>' + escapeHtml(row.feeds) + '</td></tr>';
-        }).join('') + '</tbody></table>';
+      const ledger = current.ledger;
+      const num = function (value, digits) {
+        return value != null && Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
+      };
+      const normalised = !!(ledger && ledger.normalized);
+      extra = '<table><caption>פנקס גזירה — כל מספר בטבלה הזאת מגיע משדה אמיתי בקובץ, או אומר שאין כזה</caption><thead><tr>' +
+        '<th scope="col">שדה בקובץ</th><th scope="col">ספירה</th><th scope="col">ל-90' + (normalised ? ' → אחרי כיווץ' : '') + '</th>' +
+        '<th scope="col">אחרי תקרה</th><th scope="col">סקייל 0–100</th><th scope="col">משקל</th>' +
+        '<th scope="col">תרומה</th><th scope="col">נכנס ל</th></tr></thead><tbody>' +
+        ((ledger && ledger.components) || []).map(function (row) {
+          // sourceField null = the uploaded file has no such key; the pipeline
+          // used 0 and the ledger says so instead of naming a path that is not there
+          const field = row.sourceField == null
+            ? '<span class="down">לא בקובץ</span>'
+            : '<code>' + escapeHtml(row.sourceField) + '</code>';
+          return '<tr data-source-field="' + escapeHtml(row.sourceField == null ? '' : row.sourceField) + '">' +
+            '<th scope="row">' + field +
+            '<div class="muted">' + escapeHtml(row.label) + '</div></th>' +
+            '<td>' + escapeHtml(num(row.raw, 2)) + '</td>' +
+            '<td>' + escapeHtml(num(row.per90, 2)) +
+              (row.shrunkPer90 == null ? '' : ' → ' + escapeHtml(num(row.shrunkPer90, 2))) + '</td>' +
+            '<td>' + escapeHtml(num(row.capped, 2)) + ' / ' + escapeHtml(row.cap) + '</td>' +
+            '<td>' + escapeHtml(num(row.scaled, 1)) + '</td>' +
+            '<td>' + escapeHtml(num(row.weight, 4)) + '</td>' +
+            '<td>' + escapeHtml(num(row.contribution, 4)) + '</td>' +
+            '<td>' + escapeHtml(row.feeds) + '</td></tr>';
+        }).join('') + '</tbody><tfoot>' +
+        '<tr><th scope="row" colspan="6">סכום התרומות</th><td>' +
+          escapeHtml(ledger ? num(ledger.reconciliation.componentsSum, 4) : '—') + '</td><td></td></tr>' +
+        // Under normalisation the gap between the contributions and the score
+        // is NOT rounding - it is the shrink + percentile transform, and on
+        // this file it reaches 59.7 points. It gets its own row, named.
+        (normalised
+          ? '<tr><th scope="row" colspan="6">נירמול עמדה (כיווץ k=450 לכל קצב ל-90, ואחוזון בתוך קבוצת העמדה) — זה לא עיגול</th><td>' +
+            escapeHtml(ledger ? num(ledger.reconciliation.normalisationShift, 4) : '—') + '</td><td></td></tr>'
+          : '') +
+        '<tr><th scope="row" colspan="6">עיגול הרכיבים והציון (round1 לכל רכיב, round2 לציון)</th><td>' +
+          escapeHtml(ledger
+            ? num(normalised
+                ? ledger.reconciliation.pillarRounding + ledger.reconciliation.displayRounding
+                : ledger.reconciliation.total, 4)
+            : '—') + '</td><td></td></tr>' +
+        '<tr><th scope="row" colspan="6">הציון שמוצג בטבלה</th><td>' +
+          escapeHtml(ledger ? num(ledger.impact, 2) : '—') + '</td><td></td></tr>' +
+        '</tfoot></table>';
     }
     if (lessonIndex === 3) extra = '<div class="bars">' + bars + '</div>';
     lessonRoot.innerHTML = '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' + escapeHtml(step.body) + '</p>' + extra + '</article>';
@@ -539,7 +580,10 @@
         (explorer.rows || []).map(function (row) {
           return '<tr id="field-' + escapeHtml(row.key) + '" data-field="' + escapeHtml(row.key) + '"' +
             (row.usedInScore ? '' : ' class="unused"') + '>' +
-            '<th scope="row"><code>' + escapeHtml(row.filePath) + '</code><div class="muted">' + escapeHtml(row.label) + '</div></th>' +
+            '<th scope="row">' + (row.inFile === false
+              ? '<span class="down">לא בקובץ</span> <code>' + escapeHtml(row.filePath) + '</code>'
+              : '<code>' + escapeHtml(row.filePath) + '</code>') +
+              '<div class="muted">' + escapeHtml(row.label) + '</div></th>' +
             '<td>' + escapeHtml(row.type) + '</td>' +
             '<td>' + escapeHtml(row.total) + '</td>' +
             '<td>' + escapeHtml(row.per90) + '</td>' +
@@ -555,14 +599,29 @@
     if (!report) return;
     document.getElementById('validateStatus').textContent =
       (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
-      ' · אימון n=' + report.train.n + ' ρ=' + report.train.rho +
-      ' · מבחן n=' + report.test.n + ' ρ=' + report.test.rho +
+      ' · אימון n=' + report.train.n + ' ' + report.train.rhoLabel +
+      ' · מבחן n=' + report.test.n + ' ' + report.test.rhoLabel +
       (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop);
     document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
     function rhoLine(label, stats) {
       const cr = stats.componentRho || {};
+      const ci = stats.ci || {};
+      let ciNote;
+      if (ci.reason === 'pending') {
+        ciNote = 'רווח הבטחון מחושב ברקע אחרי שהמחוונים נחים (percentile bootstrap, ' +
+          escapeHtml(ci.iterations) + ' דגימות, seed ' + escapeHtml(ci.seed) + ').';
+      } else if (ci.lo == null) {
+        ciNote = 'אין רווח בטחון: n=' + escapeHtml(ci.n) + ' קטן מ-' + escapeHtml(ci.minN) +
+          ' — n קטן מדי לרווח. ρ לבדו על מדגם כזה אינו ראיה.';
+      } else {
+        ciNote = 'הסוגריים הם רווח בטחון 95% (percentile bootstrap, ' +
+          escapeHtml(ci.effectiveIterations) + ' דגימות תקפות מתוך ' + escapeHtml(ci.iterations) +
+          (ci.degenerateCount ? ', ' + escapeHtml(ci.degenerateCount) + ' דגימות בלי שונות הושמטו' : '') +
+          ', seed ' + escapeHtml(ci.seed) + ') — לא טווח של עונה חדשה.';
+      }
       return '<article class="lesson-step"><h3>' + label + '</h3>' +
-        '<p>n=' + escapeHtml(stats.n) + ' · Spearman ρ=' + escapeHtml(stats.rho) + '</p>' +
+        '<p>n=' + escapeHtml(stats.n) + ' · Spearman ' + escapeHtml(stats.rhoLabel) + '</p>' +
+        '<p class="muted">' + ciNote + '</p>' +
         '<p class="muted">ρ רכיבים מול היעד: Grit ' + escapeHtml(cr.grit) +
         ' · Involvement ' + escapeHtml(cr.involvement) +
         ' · Clutch ' + escapeHtml(cr.clutch) + '</p></article>';
@@ -703,6 +762,7 @@
       spec: current.spec,
       selected: current.selected,
       explorer: current.explorer,
+      ledger: current.ledger,
       validation: current.validation,
       exercise: current.exercise,
       answers: answers
@@ -785,10 +845,33 @@
     persistHash(current.spec);
   }
 
+  // The bootstrap interval (~100 ms on the shipped file) never runs inside
+  // derive(). recompute() draws the lab at once with the interval marked
+  // "computing", and validationInterval() fills it in 300 ms after the last
+  // slider input (or right away on 'change'). Once computed for a spec it is
+  // memoised in the store, so later derive() calls show it immediately.
+  let intervalTimer = null;
+  const INTERVAL_DEBOUNCE_MS = 300;
+  function refreshInterval() {
+    intervalTimer = null;
+    if (!store || !view || !store.validationInterval) return;
+    const report = store.validationInterval(view.spec);
+    view.validation = report;
+    renderValidation(view);
+    // renderCurriculum reads current.validation as well: without this the
+    // course panel keeps the "computing" label until the next slider move.
+    renderCurriculum(view);
+  }
+  function scheduleInterval(delay) {
+    if (intervalTimer) clearTimeout(intervalTimer);
+    intervalTimer = setTimeout(refreshInterval, delay == null ? INTERVAL_DEBOUNCE_MS : delay);
+  }
+
   function recompute() {
     if (!store) return;
     view = store.derive(readSpecFromControls(), ScoutAIDemo.DEFAULT_METRIC);
     renderAll(view);
+    if (view.validation && !view.validation.intervalReady) scheduleInterval();
   }
 
   ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
@@ -802,6 +885,7 @@
 
   ['wGrit', 'wInv', 'wClutch', 'minMinutes'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', recompute);
+    document.getElementById(id).addEventListener('change', function () { scheduleInterval(0); });
   });
   document.getElementById('normPos').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);

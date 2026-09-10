@@ -111,6 +111,10 @@
     return Math.round(Number(value) * 100) / 100;
   }
 
+  function round3(value) {
+    return Math.round(Number(value) * 1000) / 1000;
+  }
+
   function playerKey(row) {
     if (row && row.id != null && String(row.id)) return String(row.id);
     return String(row && row.name || '') + '|' + String(row && row.team || '');
@@ -144,21 +148,48 @@
     return per90(player[totalKey], minutes);
   }
 
-  function componentsFromEvents(player) {
-    const press = rawPer90(player, 'pressures', 'pressuresPer90');
-    const tackles = rawPer90(player, 'tackles', 'tacklesPer90');
-    const intercepts = rawPer90(player, 'interceptions', 'interceptionsPer90');
-    const defense = rawPer90(player, 'defensiveActions', 'defensiveActionsPer90');
+  // The ten per-90 rates that reach the score, keyed by their count field.
+  // This is the ONLY place the file is read for the score; every later stage
+  // (shrinkage, caps, scaling, round1, percentile) works on these numbers.
+  const RATE_FIELDS = Object.freeze([
+    ['pressures', 'pressuresPer90'],
+    ['tackles', 'tacklesPer90'],
+    ['interceptions', 'interceptionsPer90'],
+    ['defensiveActions', 'defensiveActionsPer90'],
+    ['progressiveActions', 'progressiveActionsPer90'],
+    ['keyPasses', 'keyPassesPer90'],
+    ['passesCompleted', 'passesCompletedPer90'],
+    ['shotXgSum', 'shotXgSumPer90'],
+    ['boxTouches', 'boxTouchesPer90'],
+    ['shotsOnTarget', 'shotsOnTargetPer90']
+  ]);
+  const RATE_KEYS = Object.freeze(RATE_FIELDS.map(function (pair) { return pair[0]; }));
+
+  function ratesFromEvents(player) {
+    const rates = {};
+    RATE_FIELDS.forEach(function (pair) {
+      rates[pair[0]] = rawPer90(player, pair[0], pair[1]);
+    });
+    return rates;
+  }
+
+  // caps -> 0-100 scale -> recipe weights -> round1, from per-90 rates.
+  function componentsFromRates(rates) {
+    const r = rates || {};
+    const press = Number(r.pressures) || 0;
+    const tackles = Number(r.tackles) || 0;
+    const intercepts = Number(r.interceptions) || 0;
+    const defense = Number(r.defensiveActions) || 0;
     const grit = round1(scaleCap(press, 18) * 0.45 + scaleCap(tackles + intercepts, 6) * 0.3 + scaleCap(defense, 14) * 0.25);
 
-    const prog = rawPer90(player, 'progressiveActions', 'progressiveActionsPer90');
-    const keyPasses = rawPer90(player, 'keyPasses', 'keyPassesPer90');
-    const passes = rawPer90(player, 'passesCompleted', 'passesCompletedPer90');
+    const prog = Number(r.progressiveActions) || 0;
+    const keyPasses = Number(r.keyPasses) || 0;
+    const passes = Number(r.passesCompleted) || 0;
     const involvement = round1(scaleCap(prog, 22) * 0.5 + scaleCap(keyPasses, 4) * 0.3 + scaleCap(passes, 80) * 0.2);
 
-    const xg = rawPer90(player, 'shotXgSum', 'shotXgSumPer90');
-    const box = rawPer90(player, 'boxTouches', 'boxTouchesPer90');
-    const onTarget = rawPer90(player, 'shotsOnTarget', 'shotsOnTargetPer90');
+    const xg = Number(r.shotXgSum) || 0;
+    const box = Number(r.boxTouches) || 0;
+    const onTarget = Number(r.shotsOnTarget) || 0;
     const clutch = round1(scaleCap(xg, 0.6) * 0.4 + scaleCap(box, 8) * 0.35 + scaleCap(onTarget, 2) * 0.25);
 
     return {
@@ -179,25 +210,209 @@
     };
   }
 
-  function percentile(value, peers) {
-    if (!peers.length) return 50;
-    let below = 0;
-    for (let i = 0; i < peers.length; i += 1) {
-      if (peers[i] <= value) below += 1;
-    }
-    return round1(below / peers.length * 100);
+  function componentsFromEvents(player) {
+    return componentsFromRates(ratesFromEvents(player));
   }
 
-  function normalizeByPosition(rows) {
+  // Percentile inside a position group, average-rank convention for ties.
+  //
+  // A player's percentile is the mean ascending rank of his value among the
+  // peers (himself included), divided by n. An untied value therefore sits
+  // exactly where "count of peers <= value" put it before; a block of t tied
+  // values shares the CENTRE of the block, (below + (t+1)/2) / n, instead of
+  // its top. This is the same mid-rank convention rankValues() already uses
+  // for Spearman. It matters because 25 of the 27 eligible keepers have
+  // exactly 0 Clutch events: with the old rule the tie-block at the bottom of
+  // the GK group was awarded 25/27 = 92.6 - for having nothing - and rode
+  // that into the top of the table; with the average rank the same block
+  // shares 13/27 = 48.1. Identical evidence inside a group gets one shared
+  // value; minutes never separate two players with the same numbers.
+  // percentileRaw is that number BEFORE round1. The ledger needs it: under
+  // normalisation the pillar on screen is round1(percentileRaw(...)), so this
+  // is the only way to keep the round1 residue (<= 0.05) separable from the
+  // shrink + percentile transform, which is not a rounding at all.
+  function percentileRaw(value, peers) {
+    if (!peers.length) return 50;
+    let below = 0;
+    let tied = 0;
+    for (let i = 0; i < peers.length; i += 1) {
+      if (peers[i] < value) below += 1;
+      else if (peers[i] === value) tied += 1;
+    }
+    return (below + (tied + 1) / 2) / peers.length * 100;
+  }
+
+  function percentile(value, peers) {
+    return round1(percentileRaw(value, peers));
+  }
+
+  function readPath(row, path) {
+    const parts = String(path).split('.');
+    let cursor = row;
+    for (let i = 0; i < parts.length; i += 1) {
+      if (cursor == null) return undefined;
+      cursor = cursor[parts[i]];
+    }
+    return cursor;
+  }
+
+  // Shallow-clones down the path so the caller's rows are never mutated.
+  function writePath(row, path, value) {
+    const parts = String(path).split('.');
+    const head = parts[0];
+    const copy = Object.assign({}, row);
+    if (parts.length === 1) {
+      copy[head] = value;
+      return copy;
+    }
+    copy[head] = writePath(row && row[head] ? row[head] : {}, parts.slice(1).join('.'), value);
+    return copy;
+  }
+
+  const SHRINK_DEFAULT_K = 450;
+  const COMPONENT_KEYS = Object.freeze(['grit', 'involvement', 'clutch']);
+
+  // Empirical-Bayes shrinkage toward the position mean.
+  //
+  //   adj = (m * v + k * mu_pos) / (m + k)
+  //
+  // m is the player's minutes, v his per-90 value, mu_pos the MINUTES-WEIGHTED
+  // mean of his position group, and k a prior strength expressed in minutes:
+  // at m = k a player is exactly half his own number and half his position's.
+  // A 90-minute cameo therefore keeps 90/(90+450) = 1/6 of its own extreme
+  // value and gives up 5/6 of the distance to the group; a 2700-minute regular
+  // keeps 2700/3150 = 6/7 and gives up only 450/3150 = 1/7.
+  //
+  // key accepts a dotted path, so it shrinks a bare per-90 field
+  // ("pressuresPer90") or a nested one ("components.grit") alike.
+  function shrinkByPosition(rows, options) {
+    const opts = options || {};
+    const key = opts.key;
+    if (!key) throw new TypeError('shrinkByPosition needs a key to shrink');
+    const minutesKey = opts.minutesKey || 'minutes';
+    const positionKey = opts.positionKey || 'positionGroup';
+    const k = opts.k == null ? SHRINK_DEFAULT_K : Number(opts.k);
+    if (!Number.isFinite(k) || k < 0) {
+      throw new RangeError('shrinkByPosition needs a finite k >= 0, got ' + String(opts.k));
+    }
+    const list = rows || [];
+
+    const buckets = {};
+    list.forEach(function (row) {
+      const group = String(readPath(row, positionKey) || 'OT');
+      const minutes = Math.max(0, Number(readPath(row, minutesKey)) || 0);
+      const value = Number(readPath(row, key)) || 0;
+      if (!buckets[group]) buckets[group] = { weighted: 0, minutes: 0, plain: 0, n: 0 };
+      buckets[group].weighted += minutes * value;
+      buckets[group].minutes += minutes;
+      buckets[group].plain += value;
+      buckets[group].n += 1;
+    });
+    const means = {};
+    Object.keys(buckets).forEach(function (group) {
+      const bucket = buckets[group];
+      // A group with no minutes at all has no minutes-weighted mean; fall back
+      // to the plain mean instead of producing NaN.
+      means[group] = bucket.minutes > 0
+        ? bucket.weighted / bucket.minutes
+        : (bucket.n ? bucket.plain / bucket.n : 0);
+    });
+
+    return list.map(function (row) {
+      const group = String(readPath(row, positionKey) || 'OT');
+      const minutes = Math.max(0, Number(readPath(row, minutesKey)) || 0);
+      const value = Number(readPath(row, key)) || 0;
+      const mu = means[group] == null ? value : means[group];
+      const denom = minutes + k;
+      const adjusted = denom > 0 ? (minutes * value + k * mu) / denom : mu;
+      const next = writePath(row, key, adjusted);
+      next.shrinkage = Object.assign({}, row.shrinkage);
+      next.shrinkage[key] = {
+        key: key,
+        group: group,
+        minutes: minutes,
+        k: k,
+        raw: value,
+        positionMean: mu,
+        adjusted: adjusted,
+        ownWeight: denom > 0 ? minutes / denom : 0,
+        priorWeight: denom > 0 ? k / denom : 1
+      };
+      return next;
+    });
+  }
+
+  // Per-90 rates of a prepared player (per90File preferred, else count*90/min),
+  // the same numbers componentsFromEvents read when the player was prepared.
+  function preparedRates(row) {
+    if (row && row.per90Rates) return row.per90Rates;
+    return ratesFromEvents({
+      per90: row && row.per90File,
+      totalMinutesProxy: row && row.minutes,
+      pressures: row && row.counts && row.counts.pressures,
+      tackles: row && row.counts && row.counts.tackles,
+      interceptions: row && row.counts && row.counts.interceptions,
+      defensiveActions: row && row.counts && row.counts.defensiveActions,
+      progressiveActions: row && row.counts && row.counts.progressiveActions,
+      keyPasses: row && row.counts && row.counts.keyPasses,
+      passesCompleted: row && row.counts && row.counts.passesCompleted,
+      shotXgSum: row && row.counts && row.counts.shotXgSum,
+      boxTouches: row && row.counts && row.counts.boxTouches,
+      shotsOnTarget: row && row.counts && row.counts.shotsOnTarget
+    });
+  }
+
+  // Position normalisation, in the order the backlog (S2) specifies:
+  //
+  //   per-90 rate  ->  shrinkByPosition (per rate, k minutes)
+  //                ->  caps, 0-100 scale, recipe weights, round1
+  //                ->  percentile inside the position group
+  //
+  // The shrinkage is applied to each of the ten PER-90 RATES, before any cap.
+  // Applying it after the caps (as an earlier revision did) turned the
+  // estimator into a minutes ranking: for a capped or zero-evidence value
+  // adj = k*mu/(m+k) is strictly monotone in minutes, so 25 keepers with the
+  // same 0 Clutch events came out in 21 distinct percentiles ordered by how
+  // little they had played. Shrinking the rate first means two players who
+  // both clear a cap after shrinkage are equal at 100, and players with
+  // identical evidence stay identical through round1 - tiny k*mu/(m+k)
+  // differences among zero-evidence players (of the order 0.0004 xG/90) are
+  // absorbed by round1 on the 0-100 component and percentiled as one tie.
+  function normalizeByPosition(rows, options) {
+    const opts = options || {};
+    const k = opts.k == null ? SHRINK_DEFAULT_K : opts.k;
+    const withRates = (rows || []).map(function (row) {
+      return Object.assign({}, row, { per90Rates: preparedRates(row) });
+    });
+    const shrunk = RATE_KEYS.reduce(function (acc, rateKey) {
+      return shrinkByPosition(acc, {
+        key: 'per90Rates.' + rateKey,
+        minutesKey: 'minutes',
+        k: k
+      });
+    }, withRates).map(function (row, i) {
+      // shrinkByPosition maps the list in place, so index i is still the same
+      // player. Joining on row.id instead would be O(n^2) and would pick the
+      // wrong original whenever two rows share a name+team key.
+      const original = withRates[i] || row;
+      const components = componentsFromRates(row.per90Rates);
+      return Object.assign({}, row, {
+        shrunkRates: row.per90Rates,
+        per90Rates: original.per90Rates,
+        components: Object.assign(components, {
+          raw: original.components ? original.components.raw : components.raw
+        })
+      });
+    });
     const groups = {};
-    rows.forEach(function (row) {
+    shrunk.forEach(function (row) {
       const key = row.positionGroup || 'OT';
       if (!groups[key]) groups[key] = { grit: [], involvement: [], clutch: [] };
       groups[key].grit.push(row.components.grit);
       groups[key].involvement.push(row.components.involvement);
       groups[key].clutch.push(row.components.clutch);
     });
-    return rows.map(function (row) {
+    return shrunk.map(function (row) {
       const peers = groups[row.positionGroup || 'OT'];
       return Object.assign({}, row, {
         components: {
@@ -205,7 +420,15 @@
           involvement: percentile(row.components.involvement, peers.involvement),
           clutch: percentile(row.components.clutch, peers.clutch),
           raw: row.components.raw,
-          normalized: true
+          // the 0-100 components computed from the SHRUNK rates, i.e. the
+          // values the percentile above ranked
+          shrunk: {
+            grit: row.components.grit,
+            involvement: row.components.involvement,
+            clutch: row.components.clutch
+          },
+          normalized: true,
+          shrinkK: k
         }
       });
     });
@@ -264,10 +487,25 @@
     return counts;
   }
 
+  // Which count fields the file row really carries (a finite number under
+  // that key). countsFromRow turns a missing key into 0 so the score can run;
+  // the ledger must not then claim the 0 was read from the file.
+  function countsPresentInRow(row) {
+    const present = {};
+    COUNT_FIELDS.forEach(function (key) {
+      present[key] = !!row && typeof row === 'object' &&
+        Object.prototype.hasOwnProperty.call(row, key) &&
+        Number.isFinite(Number(row[key]));
+    });
+    return present;
+  }
+
   function preparePlayer(row, options) {
     const opts = options || {};
     const provenance = opts.provenance || row.provenance || OPEN_DATA_PROVENANCE;
     const minutes = row.totalMinutesProxy || row.minutes || 0;
+    // the file is read for the score exactly once, here
+    const rates = ratesFromEvents(row);
     const defaultComp = provenance === OPEN_DATA_PROVENANCE ? 'WorldCup2018' : 'USER_DATASET';
     return {
       id: playerKey(row),
@@ -281,8 +519,11 @@
       matchesPlayed: row.matchesPlayed,
       group: WC2018_TEAM_GROUP[row.team] || null,
       counts: countsFromRow(row),
+      countsInFile: countsPresentInRow(row),
+      minutesField: row.totalMinutesProxy != null ? 'totalMinutesProxy' : (row.minutes != null ? 'minutes' : null),
       per90File: row.per90 || null,
-      components: componentsFromEvents(row),
+      per90Rates: rates,
+      components: componentsFromRates(rates),
       provenance: provenance
     };
   }
@@ -348,9 +589,9 @@
     ];
   }
 
-  function fragilityFromPrepared(prepared, spec, delta) {
+  function fragilityFromPrepared(prepared, spec, delta, ranked) {
     const step = delta == null ? 10 : delta;
-    const baseRows = scorePrepared(prepared, spec);
+    const baseRows = ranked || scorePrepared(prepared, spec);
     const byId = {};
     baseRows.forEach(function (row) { byId[row.id] = row; });
     const labels = { grit: 'Grit', involvement: 'Involvement', clutch: 'Clutch' };
@@ -401,20 +642,86 @@
     const players = flagImpossibleMinutes(eventPlayers(rawPlayers).map(function (row) {
       return preparePlayer(row, { provenance: provenance });
     }));
+
+    // --- bootstrap interval, kept OUT of derive() -------------------------
+    //
+    // derive() runs on every 'input' event of four sliders. A 1000-replicate
+    // bootstrap on both folds costs ~85 ms per call on the shipped file (the
+    // rest of derive is ~4 ms), so it must never sit on that path. The fold
+    // pairs are a pure function of the ranking spec (weights, minMinutes,
+    // normalisation) and of outcome/split - and they DO change whenever a
+    // weight moves, because every score moves - so memoising cannot hide the
+    // cost from a slider drag. Instead:
+    //   * derive() only LOOKS UP an interval already computed for the exact
+    //     same key; a miss leaves ci null and the label says "computing".
+    //   * validationInterval(spec) computes (and memoises) it; index.html
+    //     calls it debounced after the last input and on 'change'.
+    // bootstrapRuns counts real bootstrap executions so a test can pin the
+    // invariant "derive never runs the bootstrap".
+    const intervalCache = {};
+    const intervalOrder = [];
+    const INTERVAL_CACHE_SIZE = 16;
+    const bootstrapOptions = {
+      iterations: opts.bootstrap && opts.bootstrap.iterations != null
+        ? opts.bootstrap.iterations : BOOTSTRAP_DEFAULTS.iterations,
+      seed: opts.bootstrap && opts.bootstrap.seed != null
+        ? opts.bootstrap.seed : BOOTSTRAP_DEFAULTS.seed
+    };
+    function intervalKey(metric, outcomeId, splitId, fold) {
+      return [
+        metric.grit, metric.involvement, metric.clutch, metric.minMinutes,
+        metric.normalizePosition ? 1 : 0, outcomeId, splitId, fold,
+        bootstrapOptions.iterations, String(bootstrapOptions.seed)
+      ].join('|');
+    }
+    function lookupInterval(pairs, options, context) {
+      const key = intervalKey(context.metric, context.outcomeId, context.splitId, context.fold);
+      return Object.prototype.hasOwnProperty.call(intervalCache, key) ? intervalCache[key] : null;
+    }
+    function computeInterval(pairs, options, context) {
+      const key = intervalKey(context.metric, context.outcomeId, context.splitId, context.fold);
+      if (Object.prototype.hasOwnProperty.call(intervalCache, key)) return intervalCache[key];
+      const ci = bootstrapSpearman(pairs, options);
+      api.bootstrapRuns += 1;
+      intervalCache[key] = ci;
+      intervalOrder.push(key);
+      while (intervalOrder.length > INTERVAL_CACHE_SIZE) delete intervalCache[intervalOrder.shift()];
+      return ci;
+    }
+    function validationInterval(spec) {
+      const metric = normalizeMetricSpec(spec);
+      return validateMetric(players, metric, {
+        outcomeId: metric.outcomeId,
+        splitId: metric.splitId,
+        iterations: bootstrapOptions.iterations,
+        seed: bootstrapOptions.seed,
+        bootstrap: computeInterval
+      });
+    }
+
     function derive(spec, baselineSpec) {
       const metric = normalizeMetricSpec(spec);
-      let rows = scorePrepared(players, metric);
+      // one ranking of the file per derive(); fragility, validation and the
+      // ledger all reuse it instead of ranking again
+      const ranked = scorePrepared(players, metric);
+      primeRankedRows(api, metric, ranked);
+      let rows = ranked;
       if (baselineSpec) rows = attachDeltas(rows, scorePrepared(players, baselineSpec));
       const selected = rows.find(function (row) { return row.id === metric.selectedId; }) || rows[0] || null;
       if (selected && !metric.selectedId) metric.selectedId = selected.id;
       const compared = findPrepared(rows, players, metric.compareId);
-      const fragility = fragilityFromPrepared(players, metric, 10);
+      const fragility = fragilityFromPrepared(players, metric, 10, ranked);
       const layer = { provenance: provenance, source: source };
       const explorer = buildEventExplorer(selected, layer);
       const validation = validateMetric(players, metric, {
         outcomeId: metric.outcomeId,
-        splitId: metric.splitId
+        splitId: metric.splitId,
+        iterations: bootstrapOptions.iterations,
+        seed: bootstrapOptions.seed,
+        bootstrap: lookupInterval,
+        ranked: ranked
       });
+      const exercise = evaluateExercise(players, metric);
       return {
         spec: metric,
         rows: rows,
@@ -425,7 +732,7 @@
         mapping: lessonMapping(selected),
         fragility: fragility,
         formula: formatFormula(metric),
-        exercise: evaluateExercise(players, metric),
+        exercise: exercise,
         radar: buildCompareRadar(selected, compared),
         explorer: explorer,
         validation: validation,
@@ -435,7 +742,7 @@
           selected: selected,
           explorer: explorer,
           validation: validation,
-          exercise: evaluateExercise(players, metric),
+          exercise: exercise,
           answers: {}
         }),
         exportBundle: exportMetricBundle(metric, selected, {
@@ -445,10 +752,20 @@
         }),
         provenance: provenance,
         source: source,
-        commercialAllowed: provenance === USER_DATA_PROVENANCE
+        commercialAllowed: provenance === USER_DATA_PROVENANCE,
+        ledger: selected ? explainScore(selected.id, metric, api) : null
       };
     }
-    return { players: players, derive: derive, provenance: provenance, source: source };
+    const api = {
+      players: players,
+      derive: derive,
+      validationInterval: validationInterval,
+      bootstrapRuns: 0,
+      bootstrap: bootstrapOptions,
+      provenance: provenance,
+      source: source
+    };
+    return api;
   }
 
   function applyMetric(dataset, spec, baselineSpec) {
@@ -877,7 +1194,9 @@
       'Involvement = 0.50×התקדמות + 0.30×מסירות מפתח + 0.20×מסירות שהושלמו. ' +
       'Clutch = 0.40×xG + 0.35×נגיעות ברחבה + 0.25×בעיטות למסגרת — התווית לימודית, לא מודל רגעים מכריעים. ' +
       'סף הדקות הוא ' + metric.minMinutes +
-      (metric.normalizePosition ? '; הרכיבים הם אחוזון בתוך קבוצת עמדה.' : '; בלי נרמול עמדה.') +
+      (metric.normalizePosition
+        ? '; כל קצב ל-90 כווץ לפי דקות אל ממוצע העמדה (k=' + SHRINK_DEFAULT_K + ' דקות) לפני התקרות, והרכיבים הם אחוזון בתוך קבוצת עמדה (דירוג ממוצע לתיקו).'
+        : '; בלי נרמול עמדה.') +
       ' המשקלות ידניות ושרירותיות, בלי כיול מדעי.' + playerBit;
     if (provenance === USER_DATA_PROVENANCE) {
       return 'המדד חושב במעבדת ScoutAI ככלי לימוד, לא כהמלצת סקאוטינג ולא כחוות דעת רפואית או חוזית. ' +
@@ -1106,6 +1425,8 @@
         feeds: col.feeds,
         usedInScore: col.usedInScore,
         filePath: 'players[].' + col.key,
+        sourceField: ledgerSourceField(player, col.key, col.per90Field),
+        inFile: col.key === 'totalMinutesProxy' ? true : countInFile(player, col.key),
         total: col.key === 'shotXgSum' ? round2(total) : total,
         minutes: minutes,
         per90: computed90,
@@ -1136,6 +1457,284 @@
       unused: rows.filter(function (row) { return !row.usedInScore; }),
       capped: rows.filter(function (row) { return row.capped; }),
       receipt: receipt
+    };
+  }
+
+  // --- S3: provenance ledger ------------------------------------------------
+  //
+  // Every number the lab puts on screen has to be traceable to a key that
+  // really exists in the shipped JSON. LEDGER_FIELDS is not a second copy of
+  // the recipe - it is the same EVENT_COLUMNS table the Counts explorer draws,
+  // filtered to the ten fields that actually reach the score.
+  const LEDGER_FIELDS = Object.freeze(EVENT_COLUMNS.filter(function (col) {
+    return col.usedInScore;
+  }));
+
+  const LEDGER_PILLAR_BY_FEEDS = Object.freeze({
+    Grit: 'grit', Involvement: 'involvement', Clutch: 'clutch'
+  });
+
+  function finiteOr(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  // rawPer90 reads the file's own per90 block when it has a finite number for
+  // the field and only then falls back to count*90/minutes. The ledger reports
+  // whichever path was actually taken, never a plausible-looking guess - and
+  // when NEITHER key exists in the file (a BYOD upload with a subset of the
+  // columns) it reports null: the pipeline used 0 for that field, but it did
+  // not read that 0 from anywhere.
+  function countInFile(player, countKey) {
+    const present = player && player.countsInFile;
+    if (present && Object.prototype.hasOwnProperty.call(present, countKey)) return !!present[countKey];
+    // rows prepared elsewhere (no countsInFile receipt): trust the counts map
+    return !!(player && player.counts && Object.prototype.hasOwnProperty.call(player.counts, countKey));
+  }
+
+  function ledgerSourceField(player, countKey, per90Key) {
+    const fromFile = player && player.per90File;
+    if (per90Key && fromFile && Number.isFinite(Number(fromFile[per90Key]))) {
+      return 'players[].per90.' + per90Key;
+    }
+    if (countInFile(player, countKey)) return 'players[].' + countKey;
+    return null;
+  }
+
+  function ledgerPer90(player, countKey, per90Key) {
+    const fromFile = player && player.per90File;
+    if (per90Key && fromFile && Number.isFinite(Number(fromFile[per90Key]))) {
+      return Number(fromFile[per90Key]);
+    }
+    const counts = (player && player.counts) || {};
+    return per90(counts[countKey], Number(player && player.minutes) || 0);
+  }
+
+  // scorePrepared over 605 players is cheap but not free, and the ledger is
+  // asked for one player at a time. Memoise the ranking per (store, spec).
+  const LEDGER_ROW_CACHE = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+  function rankedRowsKey(metric) {
+    return [
+      metric.grit, metric.involvement, metric.clutch,
+      metric.minMinutes, metric.normalizePosition ? 1 : 0
+    ].join('|');
+  }
+
+  // derive() already holds the ranking for its spec; it hands it over so the
+  // ledger does not rank the file a second time on the slider path.
+  function primeRankedRows(store, metric, rows) {
+    if (!LEDGER_ROW_CACHE || !store || !rows) return;
+    LEDGER_ROW_CACHE.set(store, { key: rankedRowsKey(metric), rows: rows });
+  }
+
+  function rankedRowsFor(store, metric) {
+    const players = (store && store.players) || [];
+    const key = rankedRowsKey(metric);
+    if (!LEDGER_ROW_CACHE || !store) return scorePrepared(players, metric);
+    const hit = LEDGER_ROW_CACHE.get(store);
+    if (hit && hit.key === key) return hit.rows;
+    const rows = scorePrepared(players, metric);
+    LEDGER_ROW_CACHE.set(store, { key: key, rows: rows });
+    return rows;
+  }
+
+  // The un-rounded within-position percentile of one row, recomputed from the
+  // very peer values normalizeByPosition ranked: components.shrunk of every
+  // ranked row in the same position group. Returns null (and the ledger then
+  // reports no rounding residue rather than a made-up one) if any ranked row
+  // is missing its shrunk components.
+  function percentileBaseFor(ranked, row, parts) {
+    const shrunk = parts && parts.shrunk;
+    if (!shrunk) return null;
+    const group = String((row && row.positionGroup) || 'OT');
+    const peers = { grit: [], involvement: [], clutch: [] };
+    for (let i = 0; i < ranked.length; i += 1) {
+      const peer = ranked[i];
+      if (String(peer.positionGroup || 'OT') !== group) continue;
+      const peerShrunk = peer.components && peer.components.shrunk;
+      if (!peerShrunk) return null;
+      COMPONENT_KEYS.forEach(function (key) {
+        peers[key].push(finiteOr(peerShrunk[key], 0));
+      });
+    }
+    const base = {};
+    COMPONENT_KEYS.forEach(function (key) {
+      base[key] = percentileRaw(finiteOr(shrunk[key], 0), peers[key]);
+    });
+    return base;
+  }
+
+  // explainScore(playerId, weights, store) -> the full derivation tree behind
+  // one displayed impact. Pure: same arguments, same JSON, every time.
+  //
+  // What the pipeline really does to the contributions is reported, not hidden,
+  // and each step is named for what it IS:
+  //   normalisationShift - shrinkByPosition(k) on every per-90 rate plus the
+  //                        within-position percentile. Zero when the
+  //                        normalisation checkbox is off; up to 59.72 points on
+  //                        the shipped file when it is on. NOT a rounding.
+  //   pillarRounding     - round1 on each pillar before it is weighted. At most
+  //                        0.05, in BOTH modes.
+  //   displayRounding    - round2 on the composite. At most 0.005.
+  // sum(contributions) is the EXACT pre-transform, pre-rounding arithmetic and
+  // reconciliation.total is what the three together added to it. impact is
+  // always the number on screen.
+  function explainScore(playerId, weights, store) {
+    const metric = normalizeMetricSpec(weights);
+    const players = (store && store.players) || [];
+    const id = String(playerId == null ? '' : playerId);
+    let prepared = null;
+    for (let i = 0; i < players.length; i += 1) {
+      if (players[i].id === id) { prepared = players[i]; break; }
+    }
+    if (!prepared) return null;
+
+    const ranked = rankedRowsFor(store, metric);
+    let displayed = null;
+    for (let i = 0; i < ranked.length; i += 1) {
+      if (ranked[i].id === prepared.id) { displayed = ranked[i]; break; }
+    }
+    // Below the minutes threshold a player is not in the table at all; the
+    // ledger still explains the score he would carry, from his own counts.
+    const shown = displayed || prepared;
+    const parts = shown.components || {};
+    const totalWeight = metric.grit + metric.involvement + metric.clutch;
+    const denom = totalWeight || 1;
+
+    const per90ByKey = {};
+    LEDGER_FIELDS.forEach(function (col) {
+      per90ByKey[col.key] = ledgerPer90(prepared, col.key, col.per90Field);
+    });
+
+    const counts = prepared.counts || {};
+    const shrunkRates = (displayed && displayed.shrunkRates) || null;
+    const components = LEDGER_FIELDS.map(function (col) {
+      const value = per90ByKey[col.key];
+      const sourceField = ledgerSourceField(prepared, col.key, col.per90Field);
+      const inFile = countInFile(prepared, col.key);
+      const cap = Number(col.cap) || 0;
+      let capped;
+      let pairedPer90 = null;
+      if (col.pairWith) {
+        // tackles and interceptions share one cap of 6/90. The pair is capped
+        // together, exactly as componentsFromEvents does it, and the capped
+        // total is then split between the two fields in proportion to their
+        // own per-90 - so the two contributions still add up to the pair's.
+        const mate = finiteOr(per90ByKey[col.pairWith], 0);
+        pairedPer90 = value + mate;
+        const cappedPair = clamp(pairedPer90, 0, cap);
+        capped = pairedPer90 > 0 ? cappedPair * (value / pairedPer90) : 0;
+      } else {
+        capped = clamp(value, 0, cap);
+      }
+      const scaled = cap ? capped / cap * 100 : 0;
+      const pillar = LEDGER_PILLAR_BY_FEEDS[col.feeds] || 'grit';
+      const weight = Number(col.weight) * metric[pillar] / denom;
+      return {
+        name: col.key,
+        label: col.label,
+        feeds: pillar,
+        eventType: col.type,
+        // raw is the count READ FROM THE FILE; null when the file has no such
+        // key (the pipeline then used 0, and per90 says so)
+        raw: inFile ? finiteOr(counts[col.key], 0) : null,
+        inFile: inFile,
+        per90: finiteOr(value, 0),
+        // under position normalisation the rate the caps really saw is the
+        // shrunk one; null whenever no shrinkage ran
+        shrunkPer90: shrunkRates ? finiteOr(shrunkRates[col.key], 0) : null,
+        cap: cap,
+        capped: finiteOr(capped, 0),
+        scaled: finiteOr(scaled, 0),
+        recipeWeight: Number(col.weight),
+        weight: finiteOr(weight, 0),
+        contribution: finiteOr(scaled * weight, 0),
+        sourceField: sourceField,
+        countField: inFile ? 'players[].' + col.key : null,
+        sharesCapWith: col.pairWith ? 'players[].' + col.pairWith : null,
+        pairedPer90: pairedPer90 == null ? null : finiteOr(pairedPer90, 0)
+      };
+    });
+
+    const normalized = !!parts.normalized;
+    const percentileBase = normalized ? percentileBaseFor(ranked, shown, parts) : null;
+    const pillars = COMPONENT_KEYS.map(function (key) {
+      let fromComponents = 0;
+      components.forEach(function (item) {
+        if (item.feeds === key) fromComponents += item.scaled * item.recipeWeight;
+      });
+      const value = finiteOr(parts[key], 0);
+      const share = metric[key] / denom;
+      // the number round1 turned into `value`: the un-weighted contributions
+      // without normalisation, the un-rounded within-position percentile with
+      // it. Everything between fromComponents and beforeRound1 is transform,
+      // everything between beforeRound1 and value is rounding.
+      const beforeRound1 = normalized
+        ? (percentileBase ? percentileBase[key] : value)
+        : fromComponents;
+      return {
+        name: key,
+        fromComponents: fromComponents,
+        beforeRound1: beforeRound1,
+        value: value,
+        weight: metric[key],
+        share: share,
+        contribution: value * share,
+        transform: normalized
+          ? 'shrinkByPosition(k=' + finiteOr(parts.shrinkK, SHRINK_DEFAULT_K) +
+            ') on each per-90 rate, then caps, scale, round1, then within-position percentile (average rank for ties)'
+          : 'round1'
+      };
+    });
+
+    let componentsSum = 0;
+    components.forEach(function (item) { componentsSum += item.contribution; });
+    let pillarSum = 0;
+    pillars.forEach(function (item) { pillarSum += item.contribution; });
+    let pillarPreRoundingSum = 0;
+    pillars.forEach(function (item) { pillarPreRoundingSum += item.beforeRound1 * item.share; });
+    const impact = displayed ? displayed.score : compositeScore(parts, metric);
+
+    return {
+      playerId: prepared.id,
+      name: prepared.name,
+      team: prepared.team || null,
+      position: prepared.position || '',
+      positionGroup: prepared.positionGroup || 'OT',
+      minutes: finiteOr(prepared.minutes, 0),
+      dataset: (store && store.source && store.source.dataset) || null,
+      provenance: (store && store.provenance) || prepared.provenance || null,
+      minutesField: prepared.minutesField ? 'players[].' + prepared.minutesField : null,
+      weights: {
+        grit: metric.grit,
+        involvement: metric.involvement,
+        clutch: metric.clutch,
+        total: totalWeight
+      },
+      normalized: normalized,
+      displayed: !!displayed,
+      rank: displayed ? displayed.rank : null,
+      impact: impact,
+      components: components,
+      pillars: pillars,
+      reconciliation: {
+        componentsSum: componentsSum,
+        pillarSum: pillarSum,
+        // the weighted pillars as they were BEFORE round1 touched them
+        pillarPreRoundingSum: pillarPreRoundingSum,
+        // what POSITION NORMALISATION moved the score by: shrinkByPosition on
+        // every per-90 rate, then the within-position percentile. This is a
+        // transform, not a rounding - on the shipped file it reaches 59.72
+        // points - and it is 0 whenever the normalisation checkbox is off.
+        normalisationShift: pillarPreRoundingSum - componentsSum,
+        // what round1 on each pillar added: <= 0.05 in BOTH modes
+        pillarRounding: pillarSum - pillarPreRoundingSum,
+        // what round2 on the composite added: <= 0.005
+        displayRounding: impact - pillarSum,
+        // the three of them together
+        total: impact - componentsSum
+      }
     };
   }
 
@@ -1172,7 +1771,9 @@
     return ranks;
   }
 
-  function pearson(xs, ys) {
+  // pearsonRaw keeps full double precision. pearson() stays the rounded
+  // display value the lab has always shown, so nothing on screen moves.
+  function pearsonRaw(xs, ys) {
     const n = xs.length;
     if (n < 2) return null;
     let sx = 0;
@@ -1192,12 +1793,192 @@
     const num = n * sxy - sx * sy;
     const den = Math.sqrt((n * sxx - sx * sx) * (n * syy - sy * sy));
     if (!den) return 0;
-    return round2(num / den);
+    return num / den;
+  }
+
+  function pearson(xs, ys) {
+    const raw = pearsonRaw(xs, ys);
+    return raw == null ? null : round2(raw);
+  }
+
+  function spearmanRaw(xs, ys) {
+    if (!xs || !ys || xs.length !== ys.length || xs.length < 2) return null;
+    return pearsonRaw(rankValues(xs), rankValues(ys));
   }
 
   function spearman(xs, ys) {
-    if (!xs || !ys || xs.length !== ys.length || xs.length < 2) return null;
-    return pearson(rankValues(xs), rankValues(ys));
+    const raw = spearmanRaw(xs, ys);
+    return raw == null ? null : round2(raw);
+  }
+
+  // Inline mulberry32. No ambient randomness, no clock, no dependency: the
+  // whole bootstrap is a pure function of (pairs, iterations, seed), so two
+  // runs on two machines return bit-identical doubles.
+  function mulberry32(seed) {
+    let a = Number(seed) >>> 0;
+    return function next() {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function toScoreTargetPair(entry) {
+    if (Array.isArray(entry)) return [Number(entry[0]) || 0, Number(entry[1]) || 0];
+    if (entry && typeof entry === 'object') {
+      const x = entry.score != null ? entry.score : entry.x;
+      const y = entry.target != null
+        ? entry.target
+        : (entry.outcome != null ? entry.outcome : entry.y);
+      return [Number(x) || 0, Number(y) || 0];
+    }
+    return [0, 0];
+  }
+
+  // Linear-interpolation percentile on an ascending array (R type 7 / the
+  // numpy default). This is the textbook percentile bootstrap interval.
+  function percentileOfSorted(sorted, p) {
+    const n = sorted.length;
+    if (!n) return null;
+    if (n === 1) return sorted[0];
+    const pos = (n - 1) * p;
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+  }
+
+  // iterations: an INTEGER in [50, 20000]. 50 is the backlog's floor; 20000
+  // is a ceiling so a caller cannot block the page for seconds (1000
+  // replicates on n=120 cost ~40 ms per fold; 20000 ~0.8 s). 50.9 is not an
+  // iteration count and is refused, not truncated.
+  const BOOTSTRAP_MIN_ITERATIONS = 50;
+  const BOOTSTRAP_MAX_ITERATIONS = 20000;
+  // n: below 10 pairs the percentile bootstrap of a rank correlation is not
+  // an interval. With n=5 on the shipped file 87 of 1000 resamples have zero
+  // variance on one side (no rho at all) and the 2.5/97.5 percentiles are the
+  // hard bounds -1/1 or 0/1, which read like certainty. Under the floor the
+  // point estimate is still returned; lo/hi are null and reason says why.
+  const BOOTSTRAP_MIN_N = 10;
+  const BOOTSTRAP_DEFAULTS = Object.freeze({ iterations: 1000, seed: 42 });
+
+  // seed rule: null, undefined, false and '' all mean "the default seed 42".
+  // Any other number or string is hashed as its String() form (so 42 and
+  // '42' are the same stream). Other types are refused.
+  function resolveSeed(seed) {
+    if (seed == null || seed === false || seed === '') return BOOTSTRAP_DEFAULTS.seed;
+    if (typeof seed === 'number' && Number.isFinite(seed)) return seed;
+    if (typeof seed === 'string') return seed;
+    throw new TypeError('bootstrapSpearman seed must be a finite number or a string, got ' + typeof seed);
+  }
+
+  function resolveIterations(iterations) {
+    if (iterations == null) return BOOTSTRAP_DEFAULTS.iterations;
+    const n = typeof iterations === 'number' ? iterations : Number(iterations);
+    if (!Number.isInteger(n) || n < BOOTSTRAP_MIN_ITERATIONS || n > BOOTSTRAP_MAX_ITERATIONS) {
+      throw new RangeError(
+        'bootstrapSpearman needs an integer iterations in [' + BOOTSTRAP_MIN_ITERATIONS +
+        ', ' + BOOTSTRAP_MAX_ITERATIONS + '], got ' + String(iterations)
+      );
+    }
+    return n;
+  }
+
+  function allEqual(values) {
+    for (let i = 1; i < values.length; i += 1) {
+      if (values[i] !== values[0]) return false;
+    }
+    return true;
+  }
+
+  // Percentile bootstrap for Spearman rho: resample the (score, target) pairs
+  // with replacement, recompute rho on every resample, then read the 2.5 and
+  // 97.5 percentiles off the sorted replicate distribution. rho itself stays
+  // the point estimate on the real sample - the interval never moves it.
+  //
+  // A resample whose scores or targets are all one value has no rho. Such
+  // degenerate replicates are COUNTED (degenerateCount) and left out of the
+  // percentile distribution - they are not mapped to 0, which would pull the
+  // interval toward 0 silently. effectiveIterations is what the percentiles
+  // were read from.
+  function bootstrapSpearman(pairs, options) {
+    const opts = options || {};
+    const iterations = resolveIterations(opts.iterations);
+    const seed = resolveSeed(opts.seed);
+    const rows = (pairs || []).map(toScoreTargetPair);
+    const n = rows.length;
+    const base = {
+      rho: null, lo: null, hi: null,
+      iterations: iterations, effectiveIterations: 0, degenerateCount: 0,
+      seed: seed, n: n, minN: BOOTSTRAP_MIN_N, reason: null
+    };
+    if (n < 2) return Object.assign(base, { reason: 'n<2' });
+    const xs = new Array(n);
+    const ys = new Array(n);
+    for (let i = 0; i < n; i += 1) {
+      xs[i] = rows[i][0];
+      ys[i] = rows[i][1];
+    }
+    const point = spearmanRaw(xs, ys);
+    if (n < BOOTSTRAP_MIN_N) return Object.assign(base, { rho: round3(point), reason: 'n<' + BOOTSTRAP_MIN_N });
+    const random = mulberry32(hashSeed(String(seed)));
+    const replicates = [];
+    let degenerate = 0;
+    const rx = new Array(n);
+    const ry = new Array(n);
+    for (let b = 0; b < iterations; b += 1) {
+      for (let i = 0; i < n; i += 1) {
+        const pick = Math.min(n - 1, Math.floor(random() * n));
+        rx[i] = xs[pick];
+        ry[i] = ys[pick];
+      }
+      if (allEqual(rx) || allEqual(ry)) {
+        degenerate += 1;
+        continue;
+      }
+      replicates.push(spearmanRaw(rx, ry));
+    }
+    replicates.sort(function (a, b) { return a - b; });
+    if (!replicates.length) {
+      return Object.assign(base, {
+        rho: round3(point), degenerateCount: degenerate, reason: 'all replicates degenerate'
+      });
+    }
+    return Object.assign(base, {
+      rho: round3(point),
+      lo: round3(percentileOfSorted(replicates, 0.025)),
+      hi: round3(percentileOfSorted(replicates, 0.975)),
+      effectiveIterations: replicates.length,
+      degenerateCount: degenerate
+    });
+  }
+
+  function formatRhoValue(value) {
+    const num = Number(value);
+    if (value == null || !Number.isFinite(num)) return '\u2014';
+    const fixed = Math.abs(num).toFixed(2);
+    return (num < 0 && Number(fixed) !== 0) ? '\u2212' + fixed : fixed;
+  }
+
+  // "rho = 0.30 [-0.05, 0.58]" - the lab never shows a bare rho again. When
+  // there is no interval the brackets say why instead of showing a number:
+  //   pending      -> "rho = 0.30 [\u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df \u05d1\u05d7\u05d9\u05e9\u05d5\u05d1\u2026]"  (derive() before the
+  //                   debounced validationInterval() has run)
+  //   n too small  -> "rho = 0.87 [n=5 \u05e7\u05d8\u05df \u05de\u05d3\u05d9 \u05dc\u05e8\u05d5\u05d5\u05d7]"
+  function formatRhoWithCi(ci) {
+    if (!ci || ci.rho == null) return '\u03c1 = \u2014';
+    if (ci.lo == null || ci.hi == null) {
+      const why = ci.reason === 'pending'
+        ? '\u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df \u05d1\u05d7\u05d9\u05e9\u05d5\u05d1\u2026'
+        : ci.reason && ci.reason.indexOf('n<') === 0
+          ? 'n=' + ci.n + ' \u05e7\u05d8\u05df \u05de\u05d3\u05d9 \u05dc\u05e8\u05d5\u05d5\u05d7'
+          : (ci.reason || '\u05d0\u05d9\u05df \u05e8\u05d5\u05d5\u05d7');
+      return '\u03c1 = ' + formatRhoValue(ci.rho) + ' [' + why + ']';
+    }
+    return '\u03c1 = ' + formatRhoValue(ci.rho) +
+      ' [' + formatRhoValue(ci.lo) + ', ' + formatRhoValue(ci.hi) + ']';
   }
 
   function worldCupGroup(team) {
@@ -1213,16 +1994,34 @@
     return 'ABCD'.indexOf(group) >= 0 ? 'train' : 'test';
   }
 
-  function foldStats(rows, outcomeId) {
+  // bootstrap.run is the function that produces the interval for one fold:
+  // bootstrapSpearman itself by default, a store's memoised/lookup variant
+  // from derive(), or false to skip. A null result means "no interval yet",
+  // and the label says so rather than showing a bare rho.
+  function foldStats(rows, outcomeId, bootstrap, context) {
     const scores = rows.map(function (row) { return row.score; });
     const outcomes = rows.map(function (row) { return outcomeValue(row, outcomeId); });
     const rho = spearman(scores, outcomes);
+    const rhoRaw = spearmanRaw(scores, outcomes);
+    const boot = bootstrap || BOOTSTRAP_DEFAULTS;
+    const run = boot.run === false ? null : (typeof boot.run === 'function' ? boot.run : bootstrapSpearman);
+    const pairs = scores.map(function (score, i) { return [score, outcomes[i]]; });
+    let ci = run ? run(pairs, { iterations: boot.iterations, seed: boot.seed }, Object.assign({}, context, { pairs: pairs })) : null;
+    if (!ci) {
+      ci = {
+        rho: rhoRaw == null ? null : round3(rhoRaw), lo: null, hi: null,
+        iterations: boot.iterations, effectiveIterations: 0, degenerateCount: 0,
+        seed: boot.seed, n: rows.length, minN: BOOTSTRAP_MIN_N, reason: 'pending'
+      };
+    }
     const byOutcome = rows.slice().sort(function (a, b) {
       return outcomeValue(b, outcomeId) - outcomeValue(a, outcomeId);
     });
     return {
       n: rows.length,
       rho: rho,
+      ci: ci,
+      rhoLabel: formatRhoWithCi(ci),
       topMetric: rows.slice(0, 5).map(function (row) {
         return { id: row.id, name: row.name, team: row.team, score: row.score, outcome: outcomeValue(row, outcomeId) };
       }),
@@ -1244,7 +2043,9 @@
     const splitId = opts.splitId || metric.splitId;
     const meta = outcomeMeta(outcomeId);
     const players = asPrepared(prepared);
-    const ranked = scorePrepared(players, metric);
+    // opts.ranked: the caller's own scorePrepared(players, metric) - derive()
+    // passes it so the slider path ranks the file once, not twice
+    const ranked = opts.ranked || scorePrepared(players, metric);
     const train = [];
     const test = [];
     const unassigned = [];
@@ -1254,8 +2055,31 @@
       else if (fold === 'test') test.push(row);
       else unassigned.push(row);
     });
-    const trainStats = foldStats(train, outcomeId);
-    const testStats = foldStats(test, outcomeId);
+    // Options are validated HERE, at the edge, and a bad value falls back to
+    // the default with a note - validateMetric is called from derive() on
+    // every slider input and must never throw for an option.
+    const notes = [];
+    let iterations = BOOTSTRAP_DEFAULTS.iterations;
+    try {
+      iterations = resolveIterations(opts.iterations);
+    } catch (err) {
+      notes.push('iterations ' + String(opts.iterations) + ' נדחה (' + err.message + '); נעשה שימוש בברירת המחדל ' + BOOTSTRAP_DEFAULTS.iterations + '.');
+    }
+    let seed = BOOTSTRAP_DEFAULTS.seed;
+    try {
+      seed = resolveSeed(opts.seed);
+    } catch (err) {
+      notes.push('seed נדחה (' + err.message + '); נעשה שימוש ב-seed ' + BOOTSTRAP_DEFAULTS.seed + '.');
+    }
+    const bootstrap = {
+      iterations: iterations,
+      seed: seed,
+      run: opts.bootstrap === false ? false : (typeof opts.bootstrap === 'function' ? opts.bootstrap : undefined),
+      notes: notes
+    };
+    const context = { metric: metric, outcomeId: outcomeId, splitId: splitId };
+    const trainStats = foldStats(train, outcomeId, bootstrap, Object.assign({ fold: 'train' }, context));
+    const testStats = foldStats(test, outcomeId, bootstrap, Object.assign({ fold: 'test' }, context));
     const drop = (trainStats.rho != null && testStats.rho != null)
       ? round2(trainStats.rho - testStats.rho)
       : null;
@@ -1274,6 +2098,9 @@
       train: trainStats,
       test: testStats,
       rhoDrop: drop,
+      bootstrap: { iterations: iterations, seed: seed, notes: notes },
+      intervalReady: testStats.ci.reason !== 'pending' && trainStats.ci.reason !== 'pending',
+      heldOutRhoLabel: testStats.rhoLabel,
       verdict: validationVerdict(trainStats, testStats, meta)
     };
   }
@@ -1288,7 +2115,9 @@
     }
     if (testStats.rho == null) notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
     else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
-    else notes.push('ρ במבחן ' + testStats.rho + ' הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג.');
+    else if (testStats.ci && testStats.ci.lo == null && testStats.ci.reason !== 'pending') {
+      notes.push(testStats.rhoLabel + ' במבחן: n=' + testStats.n + ' קטן מ-' + BOOTSTRAP_MIN_N + ', אין רווח בטחון — המספר הזה לבדו אינו ראיה.');
+    } else notes.push(testStats.rhoLabel + ' במבחן הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג. הסוגריים הם רווח בטחון 95% מ-bootstrap עם seed קבוע.');
     return notes.join(' ');
   }
 
@@ -1654,6 +2483,8 @@
     DEFAULT_METRIC: DEFAULT_METRIC,
     positionGroup: positionGroup,
     componentsFromEvents: componentsFromEvents,
+    shrinkByPosition: shrinkByPosition,
+    SHRINK_DEFAULT_K: SHRINK_DEFAULT_K,
     compositeScore: compositeScore,
     applyMetric: applyMetric,
     createStore: createStore,
@@ -1682,9 +2513,21 @@
     worldCupGroup: worldCupGroup,
     assignFold: assignFold,
     spearman: spearman,
+    spearmanRaw: spearmanRaw,
     pearson: pearson,
+    bootstrapSpearman: bootstrapSpearman,
+    formatRhoWithCi: formatRhoWithCi,
+    BOOTSTRAP_MIN_ITERATIONS: BOOTSTRAP_MIN_ITERATIONS,
+    BOOTSTRAP_MAX_ITERATIONS: BOOTSTRAP_MAX_ITERATIONS,
+    BOOTSTRAP_MIN_N: BOOTSTRAP_MIN_N,
+    BOOTSTRAP_DEFAULTS: BOOTSTRAP_DEFAULTS,
+    percentile: percentile,
+    componentsFromRates: componentsFromRates,
+    RATE_KEYS: RATE_KEYS,
     outcomeValue: outcomeValue,
     buildEventExplorer: buildEventExplorer,
+    explainScore: explainScore,
+    LEDGER_FIELDS: LEDGER_FIELDS,
     glossaryForPlayer: glossaryForPlayer,
     validateMetric: validateMetric,
     evaluateCurriculum: evaluateCurriculum,
