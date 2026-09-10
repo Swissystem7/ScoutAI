@@ -192,16 +192,124 @@
     return round1(below / peers.length * 100);
   }
 
-  function normalizeByPosition(rows) {
+  function readPath(row, path) {
+    const parts = String(path).split('.');
+    let cursor = row;
+    for (let i = 0; i < parts.length; i += 1) {
+      if (cursor == null) return undefined;
+      cursor = cursor[parts[i]];
+    }
+    return cursor;
+  }
+
+  // Shallow-clones down the path so the caller's rows are never mutated.
+  function writePath(row, path, value) {
+    const parts = String(path).split('.');
+    const head = parts[0];
+    const copy = Object.assign({}, row);
+    if (parts.length === 1) {
+      copy[head] = value;
+      return copy;
+    }
+    copy[head] = writePath(row && row[head] ? row[head] : {}, parts.slice(1).join('.'), value);
+    return copy;
+  }
+
+  const SHRINK_DEFAULT_K = 450;
+  const COMPONENT_KEYS = Object.freeze(['grit', 'involvement', 'clutch']);
+
+  // Empirical-Bayes shrinkage toward the position mean.
+  //
+  //   adj = (m * v + k * mu_pos) / (m + k)
+  //
+  // m is the player's minutes, v his per-90 value, mu_pos the MINUTES-WEIGHTED
+  // mean of his position group, and k a prior strength expressed in minutes:
+  // at m = k a player is exactly half his own number and half his position's.
+  // A 90-minute cameo therefore keeps 90/(90+450) = 1/6 of its own extreme
+  // value and gives up 5/6 of the distance to the group; a 2700-minute regular
+  // keeps 2700/3150 = 6/7 and gives up only 450/3150 = 1/7.
+  //
+  // key accepts a dotted path, so it shrinks a bare per-90 field
+  // ("pressuresPer90") or a nested one ("components.grit") alike.
+  function shrinkByPosition(rows, options) {
+    const opts = options || {};
+    const key = opts.key;
+    if (!key) throw new TypeError('shrinkByPosition needs a key to shrink');
+    const minutesKey = opts.minutesKey || 'minutes';
+    const positionKey = opts.positionKey || 'positionGroup';
+    const k = opts.k == null ? SHRINK_DEFAULT_K : Number(opts.k);
+    if (!Number.isFinite(k) || k < 0) {
+      throw new RangeError('shrinkByPosition needs a finite k >= 0, got ' + String(opts.k));
+    }
+    const list = rows || [];
+
+    const buckets = {};
+    list.forEach(function (row) {
+      const group = String(readPath(row, positionKey) || 'OT');
+      const minutes = Math.max(0, Number(readPath(row, minutesKey)) || 0);
+      const value = Number(readPath(row, key)) || 0;
+      if (!buckets[group]) buckets[group] = { weighted: 0, minutes: 0, plain: 0, n: 0 };
+      buckets[group].weighted += minutes * value;
+      buckets[group].minutes += minutes;
+      buckets[group].plain += value;
+      buckets[group].n += 1;
+    });
+    const means = {};
+    Object.keys(buckets).forEach(function (group) {
+      const bucket = buckets[group];
+      // A group with no minutes at all has no minutes-weighted mean; fall back
+      // to the plain mean instead of producing NaN.
+      means[group] = bucket.minutes > 0
+        ? bucket.weighted / bucket.minutes
+        : (bucket.n ? bucket.plain / bucket.n : 0);
+    });
+
+    return list.map(function (row) {
+      const group = String(readPath(row, positionKey) || 'OT');
+      const minutes = Math.max(0, Number(readPath(row, minutesKey)) || 0);
+      const value = Number(readPath(row, key)) || 0;
+      const mu = means[group] == null ? value : means[group];
+      const denom = minutes + k;
+      const adjusted = denom > 0 ? (minutes * value + k * mu) / denom : mu;
+      const next = writePath(row, key, adjusted);
+      next.shrinkage = Object.assign({}, row.shrinkage);
+      next.shrinkage[key] = {
+        key: key,
+        group: group,
+        minutes: minutes,
+        k: k,
+        raw: value,
+        positionMean: mu,
+        adjusted: adjusted,
+        ownWeight: denom > 0 ? minutes / denom : 0,
+        priorWeight: denom > 0 ? k / denom : 1
+      };
+      return next;
+    });
+  }
+
+  function normalizeByPosition(rows, options) {
+    const opts = options || {};
+    const k = opts.k == null ? SHRINK_DEFAULT_K : opts.k;
+    // Shrink before ranking. Without this a 282-minute keeper with one lucky
+    // number out-percentiles a 700-minute regular inside his own group, and
+    // the whole point of normalisation is undone by small samples.
+    const shrunk = COMPONENT_KEYS.reduce(function (acc, componentKey) {
+      return shrinkByPosition(acc, {
+        key: 'components.' + componentKey,
+        minutesKey: 'minutes',
+        k: k
+      });
+    }, rows);
     const groups = {};
-    rows.forEach(function (row) {
+    shrunk.forEach(function (row) {
       const key = row.positionGroup || 'OT';
       if (!groups[key]) groups[key] = { grit: [], involvement: [], clutch: [] };
       groups[key].grit.push(row.components.grit);
       groups[key].involvement.push(row.components.involvement);
       groups[key].clutch.push(row.components.clutch);
     });
-    return rows.map(function (row) {
+    return shrunk.map(function (row) {
       const peers = groups[row.positionGroup || 'OT'];
       return Object.assign({}, row, {
         components: {
@@ -209,7 +317,13 @@
           involvement: percentile(row.components.involvement, peers.involvement),
           clutch: percentile(row.components.clutch, peers.clutch),
           raw: row.components.raw,
-          normalized: true
+          shrunk: {
+            grit: round2(row.components.grit),
+            involvement: round2(row.components.involvement),
+            clutch: round2(row.components.clutch)
+          },
+          normalized: true,
+          shrinkK: k
         }
       });
     });
@@ -1791,6 +1905,8 @@
     DEFAULT_METRIC: DEFAULT_METRIC,
     positionGroup: positionGroup,
     componentsFromEvents: componentsFromEvents,
+    shrinkByPosition: shrinkByPosition,
+    SHRINK_DEFAULT_K: SHRINK_DEFAULT_K,
     compositeScore: compositeScore,
     applyMetric: applyMetric,
     createStore: createStore,

@@ -21,6 +21,8 @@ const {
   WORLD_CUP_MAX_MINUTES,
   normalizeMetricSpec,
   positionGroup,
+  shrinkByPosition,
+  SHRINK_DEFAULT_K,
   evaluateExercise,
   buildCompareRadar,
   radarValues,
@@ -796,4 +798,153 @@ test('the lab never displays a bare held-out rho again', () => {
   // the PRNG is inline and seeded - no ambient randomness in the runtime
   assert.match(runtime, /function mulberry32/);
   assert.doesNotMatch(runtime + html, /Math\.random/);
+});
+
+// --- S2: minutes-weighted shrinkage toward the position mean ---------------
+
+test('shrinkByPosition moves a 90-minute cameo 5/6 of the way to the position mean and a 2700-minute regular only 1/7', () => {
+  const rows = [
+    { name: 'cameo', positionGroup: 'MF', minutes: 90, pressuresPer90: 40 },
+    { name: 'regular', positionGroup: 'MF', minutes: 2700, pressuresPer90: 40 },
+    { name: 'anchorA', positionGroup: 'MF', minutes: 2700, pressuresPer90: 10 },
+    { name: 'anchorB', positionGroup: 'MF', minutes: 2700, pressuresPer90: 10 }
+  ];
+  const out = shrinkByPosition(rows, { key: 'pressuresPer90', minutesKey: 'minutes', k: 450 });
+  const byName = name => out.find(row => row.name === name);
+
+  // mu_pos is MINUTES-weighted, not a plain average of the four numbers:
+  // (90*40 + 2700*40 + 2700*10 + 2700*10) / 8190 = 165600 / 8190
+  const mu = byName('cameo').shrinkage.pressuresPer90.positionMean;
+  assert.ok(Math.abs(mu - 165600 / 8190) < 1e-12, 'mu ' + mu);
+  assert.ok(Math.abs(mu - 20.21978021978022) < 1e-9, 'mu ' + mu);
+  assert.notEqual(mu, 25, 'a plain mean would be 25 - this one is minutes-weighted');
+
+  const movedFraction = (row) => {
+    const detail = row.shrinkage.pressuresPer90;
+    return Math.abs(detail.adjusted - detail.raw) / Math.abs(detail.positionMean - detail.raw);
+  };
+
+  // adj = (m*v + k*mu) / (m + k), so the distance travelled toward mu is
+  // exactly k/(m+k): 450/540 = 83.33% at 90 minutes, 450/3150 = 14.29% at 2700.
+  const cameo = byName('cameo');
+  const regular = byName('regular');
+  assert.ok(Math.abs(movedFraction(cameo) - 450 / 540) < 1e-12);
+  assert.ok(Math.abs(movedFraction(regular) - 450 / 3150) < 1e-12);
+  assert.ok(movedFraction(cameo) >= 0.6, 'cameo moved ' + movedFraction(cameo));
+  assert.ok(movedFraction(regular) < 0.15, 'regular moved ' + movedFraction(regular));
+  assert.equal(cameo.shrinkage.pressuresPer90.priorWeight, 450 / 540);
+  assert.equal(regular.shrinkage.pressuresPer90.priorWeight, 450 / 3150);
+  assert.equal(cameo.shrinkage.pressuresPer90.ownWeight, 90 / 540);
+
+  // the formula itself, spelled out
+  assert.ok(Math.abs(cameo.pressuresPer90 - (90 * 40 + 450 * mu) / (90 + 450)) < 1e-12);
+  assert.ok(Math.abs(regular.pressuresPer90 - (2700 * 40 + 450 * mu) / (2700 + 450)) < 1e-12);
+
+  // and the cameo, despite the identical raw 40, now sits below the regular
+  assert.ok(cameo.pressuresPer90 < regular.pressuresPer90);
+});
+
+test('shrinkByPosition is pure, deterministic, group-local, and refuses nonsense options', () => {
+  const rows = [
+    { name: 'mf', positionGroup: 'MF', minutes: 900, pressuresPer90: 30 },
+    { name: 'gk', positionGroup: 'GK', minutes: 900, pressuresPer90: 2 }
+  ];
+  const once = shrinkByPosition(rows, { key: 'pressuresPer90' });
+  const twice = shrinkByPosition(rows, { key: 'pressuresPer90' });
+  assert.deepEqual(twice, once);
+  assert.equal(JSON.stringify(twice), JSON.stringify(once));
+
+  // the caller's rows are never touched
+  assert.equal(rows[0].pressuresPer90, 30);
+  assert.equal(rows[0].shrinkage, undefined);
+
+  // a group of one has itself as its own mean, so nothing moves
+  assert.equal(once.find(row => row.name === 'gk').pressuresPer90, 2);
+  assert.equal(once.find(row => row.name === 'mf').pressuresPer90, 30);
+
+  assert.equal(SHRINK_DEFAULT_K, 450);
+  assert.equal(once[0].shrinkage.pressuresPer90.k, 450);
+
+  // k = 0 means "trust the player completely" and is an exact no-op
+  const wider = [
+    { positionGroup: 'MF', minutes: 90, pressuresPer90: 40 },
+    { positionGroup: 'MF', minutes: 900, pressuresPer90: 4 }
+  ];
+  assert.deepEqual(
+    shrinkByPosition(wider, { key: 'pressuresPer90', k: 0 }).map(row => row.pressuresPer90),
+    [40, 4]
+  );
+
+  assert.throws(() => shrinkByPosition(wider, {}), TypeError);
+  assert.throws(() => shrinkByPosition(wider, { key: 'pressuresPer90', k: -1 }), RangeError);
+  assert.throws(() => shrinkByPosition(wider, { key: 'pressuresPer90', k: 'lots' }), RangeError);
+  assert.deepEqual(shrinkByPosition([], { key: 'pressuresPer90' }), []);
+
+  // dotted paths reach into nested per-90 blocks without mutating the source
+  const nested = [
+    { positionGroup: 'MF', minutes: 90, per90: { pressuresPer90: 40 } },
+    { positionGroup: 'MF', minutes: 900, per90: { pressuresPer90: 4 } }
+  ];
+  const deep = shrinkByPosition(nested, { key: 'per90.pressuresPer90', k: 450 });
+  assert.ok(deep[0].per90.pressuresPer90 < 40);
+  assert.equal(nested[0].per90.pressuresPer90, 40);
+});
+
+test('position normalisation shrinks before ranking, so the shipped top-12 keeps at most 2 goalkeepers', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const spec = Object.assign({}, DEFAULT_METRIC, { normalizePosition: true });
+  const ranked = applyMetric(wc, spec);
+
+  // Pinned from what the pipeline actually produces with k = 450, not from a
+  // hand-written table. If the separate percentile self-exclusion PR lands,
+  // these ranks move and this pin has to be recomputed on purpose.
+  assert.deepEqual(
+    ranked.slice(0, 12).map(row => [row.rank, row.name, row.positionGroup, row.score]),
+    [
+      [1, 'Marcelo Vieira da Silva Júnior', 'DF', 93.75],
+      [2, 'Mathew Ryan', 'GK', 92.6],
+      [3, 'Thomas Meunier', 'DF', 89.36],
+      [4, 'Gylfi Þór Sigurðsson', 'FW', 88.25],
+      [5, 'Mário Figueira Fernandes', 'DF', 87.21],
+      [6, 'Joshua Kimmich', 'DF', 83.34],
+      [7, 'Antoine Griezmann', 'FW', 83.25],
+      [8, 'Keylor Navas Gamboa', 'GK', 82.24],
+      [9, 'Salman Mohammed Al Faraj', 'MF', 81.05],
+      [10, 'Rodrigo Bentancur Colmán', 'MF', 75.75],
+      [11, 'Toni Kroos', 'MF', 75.64],
+      [12, 'Carlos Henrique Casimiro', 'MF', 75.3]
+    ]
+  );
+  const keepers = ranked.slice(0, 12).filter(row => row.positionGroup === 'GK');
+  assert.ok(keepers.length <= 2, keepers.length + ' goalkeepers in the top 12');
+
+  // the same run twice gives the same order
+  assert.deepEqual(applyMetric(wc, spec).map(row => row.id), ranked.map(row => row.id));
+
+  // 25 of the 27 eligible keepers have exactly 0 Clutch events. Before
+  // shrinkage they all shared one percentile and rode it into the top of the
+  // table; minutes-weighted shrinkage toward the (small, non-zero) keeper mean
+  // breaks that block tie.
+  const keeperRows = ranked.filter(row => row.positionGroup === 'GK');
+  assert.equal(keeperRows.length, 27);
+  const distinctClutch = new Set(keeperRows.map(row => row.components.clutch));
+  assert.ok(distinctClutch.size >= 20, 'only ' + distinctClutch.size + ' distinct keeper Clutch percentiles');
+
+  // the ledger keeps the shrunk value next to the raw one, and it is not a
+  // percentile - it is still on the 0-100 component scale
+  const top = ranked[0];
+  assert.equal(top.components.normalized, true);
+  assert.equal(top.components.shrinkK, 450);
+  assert.ok(top.components.shrunk.grit > 0 && top.components.shrunk.grit < top.components.grit);
+  assert.deepEqual(Object.keys(top.shrinkage).sort(), [
+    'components.clutch', 'components.grit', 'components.involvement'
+  ]);
+  assert.equal(typeof JSON.parse(JSON.stringify(top)).components.shrunk.grit, 'number');
+
+  // shrinkage stays off when normalisation is off: the plain ranking is
+  // untouched by S2 and no keeper is anywhere near the top.
+  const plain = applyMetric(wc, DEFAULT_METRIC);
+  assert.equal(plain[0].components.normalized, undefined);
+  assert.equal(plain[0].components.shrunk, undefined);
+  assert.equal(plain.slice(0, 12).filter(row => row.positionGroup === 'GK').length, 0);
 });
