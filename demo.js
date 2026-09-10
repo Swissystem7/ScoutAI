@@ -563,10 +563,12 @@
         }),
         provenance: provenance,
         source: source,
-        commercialAllowed: provenance === USER_DATA_PROVENANCE
+        commercialAllowed: provenance === USER_DATA_PROVENANCE,
+        ledger: selected ? explainScore(selected.id, metric, api) : null
       };
     }
-    return { players: players, derive: derive, provenance: provenance, source: source };
+    const api = { players: players, derive: derive, provenance: provenance, source: source };
+    return api;
   }
 
   function applyMetric(dataset, spec, baselineSpec) {
@@ -1224,6 +1226,7 @@
         feeds: col.feeds,
         usedInScore: col.usedInScore,
         filePath: 'players[].' + col.key,
+        sourceField: ledgerSourceField(player, col.key, col.per90Field),
         total: col.key === 'shotXgSum' ? round2(total) : total,
         minutes: minutes,
         per90: computed90,
@@ -1254,6 +1257,201 @@
       unused: rows.filter(function (row) { return !row.usedInScore; }),
       capped: rows.filter(function (row) { return row.capped; }),
       receipt: receipt
+    };
+  }
+
+  // --- S3: provenance ledger ------------------------------------------------
+  //
+  // Every number the lab puts on screen has to be traceable to a key that
+  // really exists in the shipped JSON. LEDGER_FIELDS is not a second copy of
+  // the recipe - it is the same EVENT_COLUMNS table the Counts explorer draws,
+  // filtered to the ten fields that actually reach the score.
+  const LEDGER_FIELDS = Object.freeze(EVENT_COLUMNS.filter(function (col) {
+    return col.usedInScore;
+  }));
+
+  const LEDGER_PILLAR_BY_FEEDS = Object.freeze({
+    Grit: 'grit', Involvement: 'involvement', Clutch: 'clutch'
+  });
+
+  function finiteOr(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  // rawPer90 reads the file's own per90 block when it has a finite number for
+  // the field and only then falls back to count*90/minutes. The ledger reports
+  // whichever path was actually taken, never a plausible-looking guess.
+  function ledgerSourceField(player, countKey, per90Key) {
+    const fromFile = player && player.per90File;
+    if (per90Key && fromFile && Number.isFinite(Number(fromFile[per90Key]))) {
+      return 'players[].per90.' + per90Key;
+    }
+    return 'players[].' + countKey;
+  }
+
+  function ledgerPer90(player, countKey, per90Key) {
+    const fromFile = player && player.per90File;
+    if (per90Key && fromFile && Number.isFinite(Number(fromFile[per90Key]))) {
+      return Number(fromFile[per90Key]);
+    }
+    const counts = (player && player.counts) || {};
+    return per90(counts[countKey], Number(player && player.minutes) || 0);
+  }
+
+  // scorePrepared over 605 players is cheap but not free, and the ledger is
+  // asked for one player at a time. Memoise the ranking per (store, spec).
+  const LEDGER_ROW_CACHE = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+  function rankedRowsFor(store, metric) {
+    const players = (store && store.players) || [];
+    const key = [
+      metric.grit, metric.involvement, metric.clutch,
+      metric.minMinutes, metric.normalizePosition ? 1 : 0
+    ].join('|');
+    if (!LEDGER_ROW_CACHE || !store) return scorePrepared(players, metric);
+    const hit = LEDGER_ROW_CACHE.get(store);
+    if (hit && hit.key === key) return hit.rows;
+    const rows = scorePrepared(players, metric);
+    LEDGER_ROW_CACHE.set(store, { key: key, rows: rows });
+    return rows;
+  }
+
+  // explainScore(playerId, weights, store) -> the full derivation tree behind
+  // one displayed impact. Pure: same arguments, same JSON, every time.
+  //
+  // The three roundings the pipeline really performs are reported, not hidden:
+  // each pillar is round1-ed before it is weighted, and the composite is
+  // round2-ed for display. sum(contributions) is therefore the EXACT
+  // pre-rounding arithmetic, and reconciliation.total is what the two
+  // roundings added to it. impact is always the number on screen.
+  function explainScore(playerId, weights, store) {
+    const metric = normalizeMetricSpec(weights);
+    const players = (store && store.players) || [];
+    const id = String(playerId == null ? '' : playerId);
+    let prepared = null;
+    for (let i = 0; i < players.length; i += 1) {
+      if (players[i].id === id) { prepared = players[i]; break; }
+    }
+    if (!prepared) return null;
+
+    const ranked = rankedRowsFor(store, metric);
+    let displayed = null;
+    for (let i = 0; i < ranked.length; i += 1) {
+      if (ranked[i].id === prepared.id) { displayed = ranked[i]; break; }
+    }
+    // Below the minutes threshold a player is not in the table at all; the
+    // ledger still explains the score he would carry, from his own counts.
+    const shown = displayed || prepared;
+    const parts = shown.components || {};
+    const totalWeight = metric.grit + metric.involvement + metric.clutch;
+    const denom = totalWeight || 1;
+
+    const per90ByKey = {};
+    LEDGER_FIELDS.forEach(function (col) {
+      per90ByKey[col.key] = ledgerPer90(prepared, col.key, col.per90Field);
+    });
+
+    const counts = prepared.counts || {};
+    const components = LEDGER_FIELDS.map(function (col) {
+      const value = per90ByKey[col.key];
+      const cap = Number(col.cap) || 0;
+      let capped;
+      let pairedPer90 = null;
+      if (col.pairWith) {
+        // tackles and interceptions share one cap of 6/90. The pair is capped
+        // together, exactly as componentsFromEvents does it, and the capped
+        // total is then split between the two fields in proportion to their
+        // own per-90 - so the two contributions still add up to the pair's.
+        const mate = finiteOr(per90ByKey[col.pairWith], 0);
+        pairedPer90 = value + mate;
+        const cappedPair = clamp(pairedPer90, 0, cap);
+        capped = pairedPer90 > 0 ? cappedPair * (value / pairedPer90) : 0;
+      } else {
+        capped = clamp(value, 0, cap);
+      }
+      const scaled = cap ? capped / cap * 100 : 0;
+      const pillar = LEDGER_PILLAR_BY_FEEDS[col.feeds] || 'grit';
+      const weight = Number(col.weight) * metric[pillar] / denom;
+      return {
+        name: col.key,
+        label: col.label,
+        feeds: pillar,
+        eventType: col.type,
+        raw: finiteOr(counts[col.key], 0),
+        per90: finiteOr(value, 0),
+        cap: cap,
+        capped: finiteOr(capped, 0),
+        scaled: finiteOr(scaled, 0),
+        recipeWeight: Number(col.weight),
+        weight: finiteOr(weight, 0),
+        contribution: finiteOr(scaled * weight, 0),
+        sourceField: ledgerSourceField(prepared, col.key, col.per90Field),
+        countField: 'players[].' + col.key,
+        sharesCapWith: col.pairWith ? 'players[].' + col.pairWith : null,
+        pairedPer90: pairedPer90 == null ? null : finiteOr(pairedPer90, 0)
+      };
+    });
+
+    const normalized = !!parts.normalized;
+    const pillars = COMPONENT_KEYS.map(function (key) {
+      let fromComponents = 0;
+      components.forEach(function (item) {
+        if (item.feeds === key) fromComponents += item.scaled * item.recipeWeight;
+      });
+      const value = finiteOr(parts[key], 0);
+      const share = metric[key] / denom;
+      return {
+        name: key,
+        fromComponents: fromComponents,
+        value: value,
+        weight: metric[key],
+        share: share,
+        contribution: value * share,
+        transform: normalized
+          ? 'shrinkByPosition(k=' + finiteOr(parts.shrinkK, SHRINK_DEFAULT_K) + ') then within-position percentile'
+          : 'round1'
+      };
+    });
+
+    let componentsSum = 0;
+    components.forEach(function (item) { componentsSum += item.contribution; });
+    let pillarSum = 0;
+    pillars.forEach(function (item) { pillarSum += item.contribution; });
+    const impact = displayed ? displayed.score : compositeScore(parts, metric);
+
+    return {
+      playerId: prepared.id,
+      name: prepared.name,
+      team: prepared.team || null,
+      position: prepared.position || '',
+      positionGroup: prepared.positionGroup || 'OT',
+      minutes: finiteOr(prepared.minutes, 0),
+      dataset: (store && store.source && store.source.dataset) || null,
+      provenance: (store && store.provenance) || prepared.provenance || null,
+      minutesField: 'players[].totalMinutesProxy',
+      weights: {
+        grit: metric.grit,
+        involvement: metric.involvement,
+        clutch: metric.clutch,
+        total: totalWeight
+      },
+      normalized: normalized,
+      displayed: !!displayed,
+      rank: displayed ? displayed.rank : null,
+      impact: impact,
+      components: components,
+      pillars: pillars,
+      reconciliation: {
+        componentsSum: componentsSum,
+        pillarSum: pillarSum,
+        // what round1 on each pillar added (under normalisation this also
+        // carries the shrink + percentile transform, which is not a rounding)
+        pillarRounding: pillarSum - componentsSum,
+        // what round2 on the composite added
+        displayRounding: impact - pillarSum,
+        total: impact - componentsSum
+      }
     };
   }
 
@@ -1942,6 +2140,8 @@
     BOOTSTRAP_MIN_ITERATIONS: BOOTSTRAP_MIN_ITERATIONS,
     outcomeValue: outcomeValue,
     buildEventExplorer: buildEventExplorer,
+    explainScore: explainScore,
+    LEDGER_FIELDS: LEDGER_FIELDS,
     glossaryForPlayer: glossaryForPlayer,
     validateMetric: validateMetric,
     evaluateCurriculum: evaluateCurriculum,

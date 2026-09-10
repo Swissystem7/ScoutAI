@@ -31,6 +31,9 @@ const {
   EVENT_GLOSSARY,
   DEFENDER_EXERCISE,
   buildEventExplorer,
+  explainScore,
+  LEDGER_FIELDS,
+  playerKey,
   validateMetric,
   evaluateCurriculum,
   spearman,
@@ -947,4 +950,229 @@ test('position normalisation shrinks before ranking, so the shipped top-12 keeps
   assert.equal(plain[0].components.normalized, undefined);
   assert.equal(plain[0].components.shrunk, undefined);
   assert.equal(plain.slice(0, 12).filter(row => row.positionGroup === 'GK').length, 0);
+});
+
+// --- S3: provenance ledger for every displayed number ----------------------
+
+// Walks data/wc2018_event_aggregates.json for a path such as
+// "players[].per90.pressuresPer90" and reports whether it is a real numeric
+// key on that player's record.
+function resolveSourceField(fileRow, sourceField) {
+  if (String(sourceField).indexOf('players[].') !== 0) return false;
+  const parts = String(sourceField).slice('players[].'.length).split('.');
+  let cursor = fileRow;
+  for (let i = 0; i < parts.length; i += 1) {
+    if (!cursor || typeof cursor !== 'object') return false;
+    if (!Object.prototype.hasOwnProperty.call(cursor, parts[i])) return false;
+    cursor = cursor[parts[i]];
+  }
+  return Number.isFinite(cursor);
+}
+
+test('every sourceField in the ledger resolves to a real numeric key in the shipped file', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const byId = {};
+  wc.players.forEach((row) => { byId[playerKey(row)] = row; });
+
+  assert.equal(store.players.length, 605);
+  assert.equal(LEDGER_FIELDS.length, 10);
+  assert.ok(LEDGER_FIELDS.every(col => col.usedInScore));
+
+  let checked = 0;
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    assert.ok(ledger, player.id);
+    assert.equal(ledger.components.length, 10);
+    ledger.components.forEach((item) => {
+      assert.ok(
+        resolveSourceField(byId[player.id], item.sourceField),
+        item.sourceField + ' does not resolve for ' + player.name
+      );
+      assert.ok(
+        resolveSourceField(byId[player.id], item.countField),
+        item.countField + ' does not resolve for ' + player.name
+      );
+      checked += 1;
+    });
+    // the pipeline prefers the file's own per90 block, and the ledger says so
+    assert.equal(ledger.components[0].sourceField, 'players[].per90.pressuresPer90');
+  });
+  assert.equal(checked, 6050);
+  // the minutes denominator is named too
+  assert.equal(explainScore(store.players[0].id, DEFAULT_METRIC, store).minutesField,
+    'players[].totalMinutesProxy');
+});
+
+test('the ledger impact is the number on screen, and its rounding residual is reported not hidden', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const ranked = applyMetric(wc, DEFAULT_METRIC);
+  const scoreById = {};
+  ranked.forEach((row) => { scoreById[row.id] = row.score; });
+
+  let maxTotal = 0;
+  let maxPillar = 0;
+  let maxDisplay = 0;
+  let exactWithin1e9 = 0;
+
+  store.players.forEach((player) => {
+    const ledger = explainScore(player.id, DEFAULT_METRIC, store);
+    const recon = ledger.reconciliation;
+
+    // impact IS the table score for anyone the table shows
+    if (scoreById[player.id] != null) {
+      assert.equal(ledger.impact, scoreById[player.id], player.name);
+      assert.equal(ledger.displayed, true);
+      assert.ok(ledger.rank >= 1);
+    } else {
+      assert.equal(ledger.displayed, false);
+      assert.equal(ledger.rank, null);
+      assert.equal(ledger.impact, compositeScore(player.components, DEFAULT_METRIC));
+    }
+
+    // the ledger closes: contributions + the two roundings == the number shown
+    let sum = 0;
+    ledger.components.forEach((item) => { sum += item.contribution; });
+    assert.ok(Math.abs(sum - recon.componentsSum) < 1e-9);
+    assert.ok(Math.abs(recon.componentsSum + recon.total - ledger.impact) < 1e-9, player.name);
+    assert.ok(Math.abs(recon.pillarRounding + recon.displayRounding - recon.total) < 1e-9);
+
+    // round1 on each of the three pillars can shift the composite by at most
+    // 0.05 (0.4*0.05 + 0.3*0.05 + 0.3*0.05); round2 on the composite by 0.005
+    assert.ok(Math.abs(recon.pillarRounding) <= 0.05 + 1e-9, player.name);
+    assert.ok(Math.abs(recon.displayRounding) <= 0.005 + 1e-9, player.name);
+
+    maxTotal = Math.max(maxTotal, Math.abs(recon.total));
+    maxPillar = Math.max(maxPillar, Math.abs(recon.pillarRounding));
+    maxDisplay = Math.max(maxDisplay, Math.abs(recon.displayRounding));
+    if (Math.abs(recon.total) <= 1e-9) exactWithin1e9 += 1;
+  });
+
+  // THE BACKLOG IS WRONG HERE. It asks for sum(contributions) == the displayed
+  // impact to 1e-9 for every player. That cannot hold while the pipeline
+  // round1-s each pillar before weighting it: measured over all 605 players
+  // the residual reaches 0.0467 (Seung-Woo Lee) and only 8 players land inside
+  // 1e-9 by luck. The ledger reports the residual instead of pretending.
+  assert.ok(Math.abs(maxTotal - 0.0467390422077969) < 1e-12, 'maxTotal ' + maxTotal);
+  assert.equal(exactWithin1e9, 8);
+  assert.ok(maxPillar > 0.046 && maxPillar < 0.05);
+  // with the default 40/30/30 the composite of one-decimal pillars is already
+  // exact to two decimals, so round2 costs nothing here
+  assert.ok(maxDisplay < 1e-12, 'maxDisplay ' + maxDisplay);
+
+  // pick weights that do not divide cleanly and round2 starts to bite
+  const odd = { grit: 7, involvement: 5, clutch: 3, minMinutes: 270 };
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const oddLedger = explainScore(kante.id, odd, store);
+  assert.equal(oddLedger.impact, 62.99);
+  assert.ok(Math.abs(oddLedger.reconciliation.displayRounding - 0.0033333333333303017) < 1e-12);
+  assert.ok(Math.abs(
+    oddLedger.reconciliation.componentsSum + oddLedger.reconciliation.total - oddLedger.impact
+  ) < 1e-9);
+});
+
+test('the ledger is a stable, JSON-serialisable derivation tree for one player', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const ledger = explainScore(kante.id, DEFAULT_METRIC, store);
+
+  assert.equal(ledger.impact, 54.92);
+  assert.equal(ledger.rank, 54);
+  assert.equal(ledger.minutes, 621);
+  assert.equal(ledger.normalized, false);
+  assert.equal(ledger.dataset, 'data/wc2018_event_aggregates.json');
+  assert.equal(ledger.provenance, OPEN_DATA_PROVENANCE);
+  assert.deepEqual(ledger.weights, { grit: 40, involvement: 30, clutch: 30, total: 100 });
+
+  assert.deepEqual(ledger.components.map(item => item.name), [
+    'pressures', 'tackles', 'interceptions', 'defensiveActions',
+    'progressiveActions', 'keyPasses', 'passesCompleted',
+    'shotXgSum', 'boxTouches', 'shotsOnTarget'
+  ]);
+  assert.deepEqual(ledger.components.map(item => item.feeds), [
+    'grit', 'grit', 'grit', 'grit',
+    'involvement', 'involvement', 'involvement',
+    'clutch', 'clutch', 'clutch'
+  ]);
+
+  const press = ledger.components[0];
+  assert.equal(press.raw, 183);
+  assert.equal(press.per90, 26.5217);
+  assert.equal(press.cap, 18);
+  assert.equal(press.capped, 18);            // 26.52/90 is over the cap
+  assert.equal(press.scaled, 100);
+  assert.equal(press.recipeWeight, 0.45);
+  assert.ok(Math.abs(press.weight - 0.45 * 40 / 100) < 1e-12);
+  assert.ok(Math.abs(press.contribution - 18) < 1e-9);
+  assert.equal(press.sourceField, 'players[].per90.pressuresPer90');
+  assert.equal(press.countField, 'players[].pressures');
+  assert.equal(press.sharesCapWith, null);
+
+  // tackles and interceptions share one cap of 6/90; the capped pair is split
+  // in proportion to each field's own per-90, so the two scaled values still
+  // add up to exactly what componentsFromEvents caps the pair to.
+  const tackles = ledger.components[1];
+  const intercepts = ledger.components[2];
+  assert.equal(tackles.sharesCapWith, 'players[].interceptions');
+  assert.equal(intercepts.sharesCapWith, 'players[].tackles');
+  assert.equal(tackles.pairedPer90, intercepts.pairedPer90);
+  assert.ok(Math.abs(tackles.pairedPer90 - (tackles.per90 + intercepts.per90)) < 1e-12);
+  const pairScaled = Math.min(tackles.pairedPer90, 6) / 6 * 100;
+  assert.ok(Math.abs(tackles.scaled + intercepts.scaled - pairScaled) < 1e-9);
+  assert.ok(tackles.scaled < intercepts.scaled, 'he intercepts more than he tackles');
+
+  assert.deepEqual(ledger.pillars.map(item => [item.name, item.value, item.weight]), [
+    ['grit', 94.4, 40], ['involvement', 56.2, 30], ['clutch', 1, 30]
+  ]);
+  assert.equal(ledger.pillars[0].transform, 'round1');
+
+  // stable and serialisable
+  const json = JSON.stringify(ledger);
+  assert.equal(JSON.stringify(explainScore(kante.id, DEFAULT_METRIC, store)), json);
+  assert.deepEqual(JSON.parse(json), ledger);
+  assert.doesNotMatch(json, /NaN|Infinity/);
+
+  // unknown player or missing store is reported, never invented
+  assert.equal(explainScore('no-such-player', DEFAULT_METRIC, store), null);
+  assert.equal(explainScore(kante.id, DEFAULT_METRIC, null), null);
+  assert.equal(explainScore(null, DEFAULT_METRIC, store), null);
+
+  // under normalisation the pillars are no longer a plain round1 of the
+  // components, and the ledger names the transform instead of hiding it
+  const normalised = explainScore(kante.id,
+    Object.assign({}, DEFAULT_METRIC, { normalizePosition: true }), store);
+  assert.equal(normalised.normalized, true);
+  assert.equal(normalised.pillars[0].transform,
+    'shrinkByPosition(k=450) then within-position percentile');
+  assert.ok(Math.abs(
+    normalised.reconciliation.componentsSum + normalised.reconciliation.total - normalised.impact
+  ) < 1e-9);
+});
+
+test('the lesson table and the counts explorer are drawn from the ledger', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const view = store.derive(Object.assign({}, DEFAULT_METRIC, { selectedId: kante.id }));
+
+  assert.ok(view.ledger);
+  assert.equal(view.ledger.playerId, view.selected.id);
+  assert.equal(view.ledger.impact, view.selected.score);
+  assert.equal(view.ledger.rank, view.selected.rank);
+
+  // the explorer row now says which path the pipeline really read
+  const press = view.explorer.rows.find(row => row.key === 'pressures');
+  assert.equal(press.filePath, 'players[].pressures');
+  assert.equal(press.sourceField, 'players[].per90.pressuresPer90');
+
+  // and the screen reads its numbers off the ledger, not off a parallel table
+  assert.match(html, /ledger: current\.ledger/);
+  assert.match(html, /ledger\.components/);
+  assert.match(html, /data-source-field=/);
+  assert.match(html, /row\.sourceField/);
+  assert.match(html, /reconciliation\.componentsSum/);
+  assert.match(html, /reconciliation\.total/);
+  assert.match(html, /ledger\.impact/);
 });
