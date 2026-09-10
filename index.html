@@ -594,11 +594,23 @@
     document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
     function rhoLine(label, stats) {
       const cr = stats.componentRho || {};
+      const ci = stats.ci || {};
+      let ciNote;
+      if (ci.reason === 'pending') {
+        ciNote = 'רווח הבטחון מחושב ברקע אחרי שהמחוונים נחים (percentile bootstrap, ' +
+          escapeHtml(ci.iterations) + ' דגימות, seed ' + escapeHtml(ci.seed) + ').';
+      } else if (ci.lo == null) {
+        ciNote = 'אין רווח בטחון: n=' + escapeHtml(ci.n) + ' קטן מ-' + escapeHtml(ci.minN) +
+          ' — n קטן מדי לרווח. ρ לבדו על מדגם כזה אינו ראיה.';
+      } else {
+        ciNote = 'הסוגריים הם רווח בטחון 95% (percentile bootstrap, ' +
+          escapeHtml(ci.effectiveIterations) + ' דגימות תקפות מתוך ' + escapeHtml(ci.iterations) +
+          (ci.degenerateCount ? ', ' + escapeHtml(ci.degenerateCount) + ' דגימות בלי שונות הושמטו' : '') +
+          ', seed ' + escapeHtml(ci.seed) + ') — לא טווח של עונה חדשה.';
+      }
       return '<article class="lesson-step"><h3>' + label + '</h3>' +
         '<p>n=' + escapeHtml(stats.n) + ' · Spearman ' + escapeHtml(stats.rhoLabel) + '</p>' +
-        '<p class="muted">הסוגריים הם רווח בטחון 95% (percentile bootstrap, ' +
-        escapeHtml(stats.ci ? stats.ci.iterations : 0) + ' דגימות, seed ' +
-        escapeHtml(stats.ci ? stats.ci.seed : 0) + ') — לא טווח של עונה חדשה.</p>' +
+        '<p class="muted">' + ciNote + '</p>' +
         '<p class="muted">ρ רכיבים מול היעד: Grit ' + escapeHtml(cr.grit) +
         ' · Involvement ' + escapeHtml(cr.involvement) +
         ' · Clutch ' + escapeHtml(cr.clutch) + '</p></article>';

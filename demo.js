@@ -1706,29 +1706,71 @@
     return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
   }
 
+  // iterations: an INTEGER in [50, 20000]. 50 is the backlog's floor; 20000
+  // is a ceiling so a caller cannot block the page for seconds (1000
+  // replicates on n=120 cost ~40 ms per fold; 20000 ~0.8 s). 50.9 is not an
+  // iteration count and is refused, not truncated.
   const BOOTSTRAP_MIN_ITERATIONS = 50;
+  const BOOTSTRAP_MAX_ITERATIONS = 20000;
+  // n: below 10 pairs the percentile bootstrap of a rank correlation is not
+  // an interval. With n=5 on the shipped file 87 of 1000 resamples have zero
+  // variance on one side (no rho at all) and the 2.5/97.5 percentiles are the
+  // hard bounds -1/1 or 0/1, which read like certainty. Under the floor the
+  // point estimate is still returned; lo/hi are null and reason says why.
+  const BOOTSTRAP_MIN_N = 10;
   const BOOTSTRAP_DEFAULTS = Object.freeze({ iterations: 1000, seed: 42 });
+
+  // seed rule: null, undefined, false and '' all mean "the default seed 42".
+  // Any other number or string is hashed as its String() form (so 42 and
+  // '42' are the same stream). Other types are refused.
+  function resolveSeed(seed) {
+    if (seed == null || seed === false || seed === '') return BOOTSTRAP_DEFAULTS.seed;
+    if (typeof seed === 'number' && Number.isFinite(seed)) return seed;
+    if (typeof seed === 'string') return seed;
+    throw new TypeError('bootstrapSpearman seed must be a finite number or a string, got ' + typeof seed);
+  }
+
+  function resolveIterations(iterations) {
+    if (iterations == null) return BOOTSTRAP_DEFAULTS.iterations;
+    const n = typeof iterations === 'number' ? iterations : Number(iterations);
+    if (!Number.isInteger(n) || n < BOOTSTRAP_MIN_ITERATIONS || n > BOOTSTRAP_MAX_ITERATIONS) {
+      throw new RangeError(
+        'bootstrapSpearman needs an integer iterations in [' + BOOTSTRAP_MIN_ITERATIONS +
+        ', ' + BOOTSTRAP_MAX_ITERATIONS + '], got ' + String(iterations)
+      );
+    }
+    return n;
+  }
+
+  function allEqual(values) {
+    for (let i = 1; i < values.length; i += 1) {
+      if (values[i] !== values[0]) return false;
+    }
+    return true;
+  }
 
   // Percentile bootstrap for Spearman rho: resample the (score, target) pairs
   // with replacement, recompute rho on every resample, then read the 2.5 and
   // 97.5 percentiles off the sorted replicate distribution. rho itself stays
   // the point estimate on the real sample - the interval never moves it.
+  //
+  // A resample whose scores or targets are all one value has no rho. Such
+  // degenerate replicates are COUNTED (degenerateCount) and left out of the
+  // percentile distribution - they are not mapped to 0, which would pull the
+  // interval toward 0 silently. effectiveIterations is what the percentiles
+  // were read from.
   function bootstrapSpearman(pairs, options) {
     const opts = options || {};
-    const asked = opts.iterations == null ? BOOTSTRAP_DEFAULTS.iterations : Number(opts.iterations);
-    const iterations = Number.isFinite(asked) ? Math.trunc(asked) : NaN;
-    const seed = opts.seed == null ? BOOTSTRAP_DEFAULTS.seed : opts.seed;
-    if (!Number.isFinite(iterations) || iterations < BOOTSTRAP_MIN_ITERATIONS) {
-      throw new RangeError(
-        'bootstrapSpearman needs at least ' + BOOTSTRAP_MIN_ITERATIONS +
-        ' iterations, got ' + String(opts.iterations)
-      );
-    }
+    const iterations = resolveIterations(opts.iterations);
+    const seed = resolveSeed(opts.seed);
     const rows = (pairs || []).map(toScoreTargetPair);
     const n = rows.length;
-    if (n < 2) {
-      return { rho: null, lo: null, hi: null, iterations: iterations, seed: seed, n: n };
-    }
+    const base = {
+      rho: null, lo: null, hi: null,
+      iterations: iterations, effectiveIterations: 0, degenerateCount: 0,
+      seed: seed, n: n, minN: BOOTSTRAP_MIN_N, reason: null
+    };
+    if (n < 2) return Object.assign(base, { reason: 'n<2' });
     const xs = new Array(n);
     const ys = new Array(n);
     for (let i = 0; i < n; i += 1) {
@@ -1736,8 +1778,10 @@
       ys[i] = rows[i][1];
     }
     const point = spearmanRaw(xs, ys);
+    if (n < BOOTSTRAP_MIN_N) return Object.assign(base, { rho: round3(point), reason: 'n<' + BOOTSTRAP_MIN_N });
     const random = mulberry32(hashSeed(String(seed)));
-    const replicates = new Array(iterations);
+    const replicates = [];
+    let degenerate = 0;
     const rx = new Array(n);
     const ry = new Array(n);
     for (let b = 0; b < iterations; b += 1) {
@@ -1746,20 +1790,25 @@
         rx[i] = xs[pick];
         ry[i] = ys[pick];
       }
-      // A resample with zero variance on one side has no defined rho;
-      // pearsonRaw already reports 0 for that degenerate case.
-      const value = spearmanRaw(rx, ry);
-      replicates[b] = value == null ? 0 : value;
+      if (allEqual(rx) || allEqual(ry)) {
+        degenerate += 1;
+        continue;
+      }
+      replicates.push(spearmanRaw(rx, ry));
     }
     replicates.sort(function (a, b) { return a - b; });
-    return {
+    if (!replicates.length) {
+      return Object.assign(base, {
+        rho: round3(point), degenerateCount: degenerate, reason: 'all replicates degenerate'
+      });
+    }
+    return Object.assign(base, {
       rho: round3(point),
       lo: round3(percentileOfSorted(replicates, 0.025)),
       hi: round3(percentileOfSorted(replicates, 0.975)),
-      iterations: iterations,
-      seed: seed,
-      n: n
-    };
+      effectiveIterations: replicates.length,
+      degenerateCount: degenerate
+    });
   }
 
   function formatRhoValue(value) {
@@ -1769,9 +1818,21 @@
     return (num < 0 && Number(fixed) !== 0) ? '\u2212' + fixed : fixed;
   }
 
-  // "rho = 0.30 [-0.05, 0.58]" - the lab never shows a bare rho again.
+  // "rho = 0.30 [-0.05, 0.58]" - the lab never shows a bare rho again. When
+  // there is no interval the brackets say why instead of showing a number:
+  //   pending      -> "rho = 0.30 [\u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df \u05d1\u05d7\u05d9\u05e9\u05d5\u05d1\u2026]"  (derive() before the
+  //                   debounced validationInterval() has run)
+  //   n too small  -> "rho = 0.87 [n=5 \u05e7\u05d8\u05df \u05de\u05d3\u05d9 \u05dc\u05e8\u05d5\u05d5\u05d7]"
   function formatRhoWithCi(ci) {
     if (!ci || ci.rho == null) return '\u03c1 = \u2014';
+    if (ci.lo == null || ci.hi == null) {
+      const why = ci.reason === 'pending'
+        ? '\u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df \u05d1\u05d7\u05d9\u05e9\u05d5\u05d1\u2026'
+        : ci.reason && ci.reason.indexOf('n<') === 0
+          ? 'n=' + ci.n + ' \u05e7\u05d8\u05df \u05de\u05d3\u05d9 \u05dc\u05e8\u05d5\u05d5\u05d7'
+          : (ci.reason || '\u05d0\u05d9\u05df \u05e8\u05d5\u05d5\u05d7');
+      return '\u03c1 = ' + formatRhoValue(ci.rho) + ' [' + why + ']';
+    }
     return '\u03c1 = ' + formatRhoValue(ci.rho) +
       ' [' + formatRhoValue(ci.lo) + ', ' + formatRhoValue(ci.hi) + ']';
   }
@@ -1836,9 +1897,26 @@
       else if (fold === 'test') test.push(row);
       else unassigned.push(row);
     });
+    // Options are validated HERE, at the edge, and a bad value falls back to
+    // the default with a note - validateMetric is called from derive() on
+    // every slider input and must never throw for an option.
+    const notes = [];
+    let iterations = BOOTSTRAP_DEFAULTS.iterations;
+    try {
+      iterations = resolveIterations(opts.iterations);
+    } catch (err) {
+      notes.push('iterations ' + String(opts.iterations) + ' נדחה (' + err.message + '); נעשה שימוש בברירת המחדל ' + BOOTSTRAP_DEFAULTS.iterations + '.');
+    }
+    let seed = BOOTSTRAP_DEFAULTS.seed;
+    try {
+      seed = resolveSeed(opts.seed);
+    } catch (err) {
+      notes.push('seed נדחה (' + err.message + '); נעשה שימוש ב-seed ' + BOOTSTRAP_DEFAULTS.seed + '.');
+    }
     const bootstrap = {
-      iterations: opts.iterations == null ? BOOTSTRAP_DEFAULTS.iterations : opts.iterations,
-      seed: opts.seed == null ? BOOTSTRAP_DEFAULTS.seed : opts.seed
+      iterations: iterations,
+      seed: seed,
+      notes: notes
     };
     const trainStats = foldStats(train, outcomeId, bootstrap);
     const testStats = foldStats(test, outcomeId, bootstrap);
@@ -1860,7 +1938,7 @@
       train: trainStats,
       test: testStats,
       rhoDrop: drop,
-      bootstrap: bootstrap,
+      bootstrap: { iterations: iterations, seed: seed, notes: notes },
       heldOutRhoLabel: testStats.rhoLabel,
       verdict: validationVerdict(trainStats, testStats, meta)
     };
@@ -1876,7 +1954,9 @@
     }
     if (testStats.rho == null) notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
     else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
-    else notes.push(testStats.rhoLabel + ' במבחן הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג. הסוגריים הם רווח בטחון 95% מ-bootstrap עם seed קבוע.');
+    else if (testStats.ci && testStats.ci.lo == null && testStats.ci.reason !== 'pending') {
+      notes.push(testStats.rhoLabel + ' במבחן: n=' + testStats.n + ' קטן מ-' + BOOTSTRAP_MIN_N + ', אין רווח בטחון — המספר הזה לבדו אינו ראיה.');
+    } else notes.push(testStats.rhoLabel + ' במבחן הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג. הסוגריים הם רווח בטחון 95% מ-bootstrap עם seed קבוע.');
     return notes.join(' ');
   }
 
@@ -2277,6 +2357,9 @@
     bootstrapSpearman: bootstrapSpearman,
     formatRhoWithCi: formatRhoWithCi,
     BOOTSTRAP_MIN_ITERATIONS: BOOTSTRAP_MIN_ITERATIONS,
+    BOOTSTRAP_MAX_ITERATIONS: BOOTSTRAP_MAX_ITERATIONS,
+    BOOTSTRAP_MIN_N: BOOTSTRAP_MIN_N,
+    BOOTSTRAP_DEFAULTS: BOOTSTRAP_DEFAULTS,
     percentile: percentile,
     componentsFromRates: componentsFromRates,
     RATE_KEYS: RATE_KEYS,

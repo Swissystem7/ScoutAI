@@ -44,6 +44,8 @@ const {
   bootstrapSpearman,
   formatRhoWithCi,
   BOOTSTRAP_MIN_ITERATIONS,
+  BOOTSTRAP_MAX_ITERATIONS,
+  BOOTSTRAP_MIN_N,
   worldCupGroup,
   assignFold,
   outcomeValue,
@@ -1266,6 +1268,71 @@ test('the lesson table and the counts explorer are drawn from the ledger', () =>
 
 // --- verification round: findings 1-5 --------------------------------------
 
+
+test('bootstrapSpearman refuses non-integer or oversized iterations, applies one seed rule, floors n, and counts degenerate replicates', () => {
+  const perfect = [];
+  for (let i = 1; i <= 40; i += 1) perfect.push([i, i * 3]);
+
+  // iterations: integer in [50, 20000]
+  assert.equal(BOOTSTRAP_MIN_ITERATIONS, 50);
+  assert.equal(BOOTSTRAP_MAX_ITERATIONS, 20000);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 50.9 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 49.9 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 20001 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 1e7 }), RangeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: Infinity }), RangeError);
+  assert.equal(bootstrapSpearman(perfect, { iterations: 20000 }).iterations, 20000);
+  assert.equal(bootstrapSpearman(perfect, { iterations: '100' }).iterations, 100);
+
+  // seed: null / undefined / false / '' are all the default 42; a number and
+  // its string are the same stream; other types are refused
+  const byDefault = bootstrapSpearman(perfect, { iterations: 100 });
+  assert.equal(byDefault.seed, 42);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: null }), byDefault);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: undefined }), byDefault);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: false }), byDefault);
+  assert.deepEqual(bootstrapSpearman(perfect, { iterations: 100, seed: '' }), byDefault);
+  assert.deepEqual(
+    Object.assign({}, bootstrapSpearman(perfect, { iterations: 100, seed: '42' }), { seed: 42 }),
+    byDefault
+  );
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 100, seed: true }), TypeError);
+  assert.throws(() => bootstrapSpearman(perfect, { iterations: 100, seed: {} }), TypeError);
+
+  // n floor: at minMinutes = 600 the shipped held-out fold is 5 players
+  assert.equal(BOOTSTRAP_MIN_N, 10);
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const thin = validateMetric(store.players, Object.assign({}, DEFAULT_METRIC, { minMinutes: 600 }), {});
+  assert.equal(thin.test.n, 5);
+  assert.equal(thin.test.ci.n, 5);
+  assert.equal(thin.test.ci.rho, 0.866);
+  assert.equal(thin.test.ci.lo, null);
+  assert.equal(thin.test.ci.hi, null);
+  assert.equal(thin.test.ci.reason, 'n<10');
+  assert.equal(thin.test.rhoLabel, RHO + ' = 0.87 [n=5 קטן מדי לרווח]');
+  assert.match(thin.verdict, /n=5 קטן מ-10/);
+
+  // degenerate replicates are counted and dropped, not mapped to rho = 0:
+  // n = 10 real pairs with 7 zero-assist players give 8 one-sided resamples
+  const ten = validateMetric(store.players, Object.assign({}, DEFAULT_METRIC, { minMinutes: 550 }), {});
+  assert.equal(ten.test.n, 10);
+  assert.equal(ten.test.ci.degenerateCount, 8);
+  assert.equal(ten.test.ci.effectiveIterations, 992);
+  assert.equal(ten.test.ci.lo, -0.265);
+  assert.equal(ten.test.ci.hi, 0.905);
+  // the pinned n = 120 interval had no degenerate replicate to begin with
+  const full = validateMetric(store.players, DEFAULT_METRIC, {});
+  assert.equal(full.test.ci.degenerateCount, 0);
+  assert.equal(full.test.ci.effectiveIterations, 1000);
+  assert.deepEqual([full.test.ci.lo, full.test.ci.hi], [0.137, 0.45]);
+  // all-constant targets: every replicate is degenerate and the result says so
+  const flat = bootstrapSpearman(perfect.map(pair => [pair[0], 1]), { iterations: 100 });
+  assert.equal(flat.degenerateCount, 100);
+  assert.equal(flat.effectiveIterations, 0);
+  assert.equal(flat.lo, null);
+  assert.equal(flat.reason, 'all replicates degenerate');
+});
 
 test('a BYOD file without the per90 block reports null for fields it does not contain', () => {
   const players = [
