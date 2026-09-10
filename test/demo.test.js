@@ -1122,7 +1122,9 @@ test('the ledger impact is the number on screen, and its rounding residual is re
     ledger.components.forEach((item) => { sum += item.contribution; });
     assert.ok(Math.abs(sum - recon.componentsSum) < 1e-9);
     assert.ok(Math.abs(recon.componentsSum + recon.total - ledger.impact) < 1e-9, player.name);
-    assert.ok(Math.abs(recon.pillarRounding + recon.displayRounding - recon.total) < 1e-9);
+    assert.ok(Math.abs(
+      recon.normalisationShift + recon.pillarRounding + recon.displayRounding - recon.total
+    ) < 1e-9);
 
     // round1 on each of the three pillars can shift the composite by at most
     // 0.05 (0.4*0.05 + 0.3*0.05 + 0.3*0.05); round2 on the composite by 0.005
@@ -1337,6 +1339,96 @@ test('the ledger reconciliation binds to numbers the test recomputes itself', ()
   const lee = store.players.find(row => /Seung-Woo Lee/.test(row.name));
   assert.ok(lee.minutes < DEFAULT_METRIC.minMinutes);
   assert.equal(explainScore(lee.id, DEFAULT_METRIC, store).displayed, false);
+});
+
+// --- verification round 2: finding 1 ---------------------------------------
+
+test('the ledger names the position-normalisation transform instead of calling it rounding', () => {
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const store = createStore(wc);
+  const round1 = v => Math.round(v * 10) / 10;
+
+  const read = (spec) => {
+    const rows = [];
+    store.players.forEach((player) => {
+      const ledger = explainScore(player.id, spec, store);
+      if (ledger.displayed) rows.push(ledger);
+    });
+    rows.sort((a, b) => a.rank - b.rank);
+    return rows;
+  };
+  const off = read(DEFAULT_METRIC);
+  const on = read(Object.assign({}, DEFAULT_METRIC, { normalizePosition: true }));
+  assert.equal(off.length, 240);
+  assert.equal(on.length, 240);
+  assert.ok(off.every(l => l.normalized === false));
+  assert.ok(on.every(l => l.normalized === true));
+
+  // the four parts close, in BOTH modes:
+  //   componentsSum + normalisationShift + pillarRounding + displayRounding == impact
+  [off, on].forEach((rows) => {
+    rows.forEach((ledger) => {
+      const r = ledger.reconciliation;
+      assert.ok(Math.abs(
+        r.componentsSum + r.normalisationShift + r.pillarRounding + r.displayRounding - ledger.impact
+      ) < 1e-9, ledger.name);
+      assert.ok(Math.abs(
+        r.normalisationShift + r.pillarRounding + r.displayRounding - r.total
+      ) < 1e-9, ledger.name);
+      // every pillar names the number round1 was applied to, and round1 of it
+      // really is the pillar the table shows
+      ledger.pillars.forEach((pillar) => {
+        assert.equal(pillar.value, round1(pillar.beforeRound1), ledger.name + ' ' + pillar.name);
+      });
+      // round1 on three pillars moves the composite by at most 0.05 and round2
+      // by at most 0.005 - WITH normalisation exactly as without it. That is
+      // what makes the word "rounding" on screen true in both modes.
+      assert.ok(Math.abs(r.pillarRounding) <= 0.05 + 1e-9, ledger.name);
+      assert.ok(Math.abs(r.displayRounding) <= 0.005 + 1e-9, ledger.name);
+    });
+  });
+
+  const maxOf = (rows, key) =>
+    rows.reduce((m, l) => Math.max(m, Math.abs(l.reconciliation[key])), 0);
+
+  // checkbox OFF: no transform ran, so the shift is zero and the residual the
+  // footer calls rounding really is rounding (Hector Moreno, 0.04117375)
+  assert.ok(maxOf(off, 'normalisationShift') < 1e-9, String(maxOf(off, 'normalisationShift')));
+  assert.ok(Math.abs(maxOf(off, 'total') - 0.04117375) < 1e-9);
+  assert.ok(Math.abs(maxOf(off, 'pillarRounding') - 0.04117375) < 1e-9);
+
+  // checkbox ON: the same cell carries the shrink + percentile transform. Hand
+  // -derived from the recipe alone (caps 18/6/14/22/4/80/0.6/8/2, recipe
+  // weights, k = 450, average-rank percentile inside the position group):
+  // 12.4262 points on average across the 240 displayed rows and 59.7091 at
+  // worst (Keylor Navas). A footer that called THAT "round1 + round2" was the
+  // one dishonest number left on a page about honest numbers.
+  const meanAbsTotal = on.reduce((s, l) => s + Math.abs(l.reconciliation.total), 0) / on.length;
+  assert.ok(Math.abs(maxOf(on, 'total') - 59.70909321428571) < 1e-9, String(maxOf(on, 'total')));
+  assert.ok(Math.abs(meanAbsTotal - 12.426229364583333) < 1e-9, String(meanAbsTotal));
+  assert.ok(Math.abs(maxOf(on, 'normalisationShift') - 59.720204325396814) < 1e-9);
+  const navas = on.find(l => /Navas/.test(l.name));
+  assert.ok(Math.abs(navas.reconciliation.total - 59.70909321428571) < 1e-9);
+  // and pillarRounding still means rounding: it never leaves the 0.05 band
+  assert.ok(maxOf(on, 'pillarRounding') > 0.049);
+  assert.ok(maxOf(on, 'pillarRounding') <= 0.05 + 1e-9, String(maxOf(on, 'pillarRounding')));
+
+  // the top row of the normalised table, number by number
+  const top = on[0];
+  assert.equal(top.rank, 1);
+  assert.match(top.name, /Marcelo/);
+  assert.equal(top.impact, 93.93);
+  assert.ok(Math.abs(top.reconciliation.componentsSum - 65.91248374999999) < 1e-9);
+  assert.ok(Math.abs(top.reconciliation.total - 28.017516250000014) < 1e-9);
+  assert.ok(Math.abs(top.reconciliation.normalisationShift - 28.012247432795704) < 1e-9);
+  assert.ok(Math.abs(top.reconciliation.pillarRounding - 0.005268817204310494) < 1e-12);
+  assert.ok(Math.abs(top.reconciliation.displayRounding) < 1e-9);
+
+  // the screen no longer files that 28.0175 under "rounding": the transform
+  // gets its own labelled row, and the rounding row holds only the roundings
+  assert.match(html, /reconciliation\.normalisationShift/);
+  assert.match(html, /reconciliation\.pillarRounding \+ ledger\.reconciliation\.displayRounding/);
+  assert.match(html, /זה לא עיגול/);
 });
 
 test('derive never runs the bootstrap; validationInterval does, once per spec, and the lab wires it debounced', () => {

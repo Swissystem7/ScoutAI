@@ -227,7 +227,11 @@
   // that into the top of the table; with the average rank the same block
   // shares 13/27 = 48.1. Identical evidence inside a group gets one shared
   // value; minutes never separate two players with the same numbers.
-  function percentile(value, peers) {
+  // percentileRaw is that number BEFORE round1. The ledger needs it: under
+  // normalisation the pillar on screen is round1(percentileRaw(...)), so this
+  // is the only way to keep the round1 residue (<= 0.05) separable from the
+  // shrink + percentile transform, which is not a rounding at all.
+  function percentileRaw(value, peers) {
     if (!peers.length) return 50;
     let below = 0;
     let tied = 0;
@@ -235,7 +239,11 @@
       if (peers[i] < value) below += 1;
       else if (peers[i] === value) tied += 1;
     }
-    return round1((below + (tied + 1) / 2) / peers.length * 100);
+    return (below + (tied + 1) / 2) / peers.length * 100;
+  }
+
+  function percentile(value, peers) {
+    return round1(percentileRaw(value, peers));
   }
 
   function readPath(row, path) {
@@ -1531,14 +1539,47 @@
     return rows;
   }
 
+  // The un-rounded within-position percentile of one row, recomputed from the
+  // very peer values normalizeByPosition ranked: components.shrunk of every
+  // ranked row in the same position group. Returns null (and the ledger then
+  // reports no rounding residue rather than a made-up one) if any ranked row
+  // is missing its shrunk components.
+  function percentileBaseFor(ranked, row, parts) {
+    const shrunk = parts && parts.shrunk;
+    if (!shrunk) return null;
+    const group = String((row && row.positionGroup) || 'OT');
+    const peers = { grit: [], involvement: [], clutch: [] };
+    for (let i = 0; i < ranked.length; i += 1) {
+      const peer = ranked[i];
+      if (String(peer.positionGroup || 'OT') !== group) continue;
+      const peerShrunk = peer.components && peer.components.shrunk;
+      if (!peerShrunk) return null;
+      COMPONENT_KEYS.forEach(function (key) {
+        peers[key].push(finiteOr(peerShrunk[key], 0));
+      });
+    }
+    const base = {};
+    COMPONENT_KEYS.forEach(function (key) {
+      base[key] = percentileRaw(finiteOr(shrunk[key], 0), peers[key]);
+    });
+    return base;
+  }
+
   // explainScore(playerId, weights, store) -> the full derivation tree behind
   // one displayed impact. Pure: same arguments, same JSON, every time.
   //
-  // The three roundings the pipeline really performs are reported, not hidden:
-  // each pillar is round1-ed before it is weighted, and the composite is
-  // round2-ed for display. sum(contributions) is therefore the EXACT
-  // pre-rounding arithmetic, and reconciliation.total is what the two
-  // roundings added to it. impact is always the number on screen.
+  // What the pipeline really does to the contributions is reported, not hidden,
+  // and each step is named for what it IS:
+  //   normalisationShift - shrinkByPosition(k) on every per-90 rate plus the
+  //                        within-position percentile. Zero when the
+  //                        normalisation checkbox is off; up to 59.72 points on
+  //                        the shipped file when it is on. NOT a rounding.
+  //   pillarRounding     - round1 on each pillar before it is weighted. At most
+  //                        0.05, in BOTH modes.
+  //   displayRounding    - round2 on the composite. At most 0.005.
+  // sum(contributions) is the EXACT pre-transform, pre-rounding arithmetic and
+  // reconciliation.total is what the three together added to it. impact is
+  // always the number on screen.
   function explainScore(playerId, weights, store) {
     const metric = normalizeMetricSpec(weights);
     const players = (store && store.players) || [];
@@ -1617,6 +1658,7 @@
     });
 
     const normalized = !!parts.normalized;
+    const percentileBase = normalized ? percentileBaseFor(ranked, shown, parts) : null;
     const pillars = COMPONENT_KEYS.map(function (key) {
       let fromComponents = 0;
       components.forEach(function (item) {
@@ -1624,9 +1666,17 @@
       });
       const value = finiteOr(parts[key], 0);
       const share = metric[key] / denom;
+      // the number round1 turned into `value`: the un-weighted contributions
+      // without normalisation, the un-rounded within-position percentile with
+      // it. Everything between fromComponents and beforeRound1 is transform,
+      // everything between beforeRound1 and value is rounding.
+      const beforeRound1 = normalized
+        ? (percentileBase ? percentileBase[key] : value)
+        : fromComponents;
       return {
         name: key,
         fromComponents: fromComponents,
+        beforeRound1: beforeRound1,
         value: value,
         weight: metric[key],
         share: share,
@@ -1642,6 +1692,8 @@
     components.forEach(function (item) { componentsSum += item.contribution; });
     let pillarSum = 0;
     pillars.forEach(function (item) { pillarSum += item.contribution; });
+    let pillarPreRoundingSum = 0;
+    pillars.forEach(function (item) { pillarPreRoundingSum += item.beforeRound1 * item.share; });
     const impact = displayed ? displayed.score : compositeScore(parts, metric);
 
     return {
@@ -1669,11 +1721,18 @@
       reconciliation: {
         componentsSum: componentsSum,
         pillarSum: pillarSum,
-        // what round1 on each pillar added (under normalisation this also
-        // carries the shrink + percentile transform, which is not a rounding)
-        pillarRounding: pillarSum - componentsSum,
-        // what round2 on the composite added
+        // the weighted pillars as they were BEFORE round1 touched them
+        pillarPreRoundingSum: pillarPreRoundingSum,
+        // what POSITION NORMALISATION moved the score by: shrinkByPosition on
+        // every per-90 rate, then the within-position percentile. This is a
+        // transform, not a rounding - on the shipped file it reaches 59.72
+        // points - and it is 0 whenever the normalisation checkbox is off.
+        normalisationShift: pillarPreRoundingSum - componentsSum,
+        // what round1 on each pillar added: <= 0.05 in BOTH modes
+        pillarRounding: pillarSum - pillarPreRoundingSum,
+        // what round2 on the composite added: <= 0.005
         displayRounding: impact - pillarSum,
+        // the three of them together
         total: impact - componentsSum
       }
     };

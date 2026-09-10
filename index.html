@@ -435,8 +435,19 @@
         }).join('') + '</tbody><tfoot>' +
         '<tr><th scope="row" colspan="6">סכום התרומות</th><td>' +
           escapeHtml(ledger ? num(ledger.reconciliation.componentsSum, 4) : '—') + '</td><td></td></tr>' +
+        // Under normalisation the gap between the contributions and the score
+        // is NOT rounding - it is the shrink + percentile transform, and on
+        // this file it reaches 59.7 points. It gets its own row, named.
+        (normalised
+          ? '<tr><th scope="row" colspan="6">נירמול עמדה (כיווץ k=450 לכל קצב ל-90, ואחוזון בתוך קבוצת העמדה) — זה לא עיגול</th><td>' +
+            escapeHtml(ledger ? num(ledger.reconciliation.normalisationShift, 4) : '—') + '</td><td></td></tr>'
+          : '') +
         '<tr><th scope="row" colspan="6">עיגול הרכיבים והציון (round1 לכל רכיב, round2 לציון)</th><td>' +
-          escapeHtml(ledger ? num(ledger.reconciliation.total, 4) : '—') + '</td><td></td></tr>' +
+          escapeHtml(ledger
+            ? num(normalised
+                ? ledger.reconciliation.pillarRounding + ledger.reconciliation.displayRounding
+                : ledger.reconciliation.total, 4)
+            : '—') + '</td><td></td></tr>' +
         '<tr><th scope="row" colspan="6">הציון שמוצג בטבלה</th><td>' +
           escapeHtml(ledger ? num(ledger.impact, 2) : '—') + '</td><td></td></tr>' +
         '</tfoot></table>';
