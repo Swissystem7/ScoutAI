@@ -2111,16 +2111,26 @@
     };
   }
 
+  // A fold whose every resample had a constant score or target (a BYOD file
+  // with no target column, or all three weights at 0) has a rho of 0 that
+  // measures nothing: it is neither "weak" nor evidence of overfitting.
+  function degenerateFold(stats) {
+    return !!(stats && stats.ci && stats.ci.reason === 'all replicates degenerate');
+  }
+
   function validationVerdict(trainStats, testStats, meta) {
     const notes = [];
     notes.push('זו אינה עונה חדשה.');
     if (meta.leaky) notes.push(meta.leakNote);
     if (testStats.n < 20) notes.push('מדגם המבחן קטן — אסור להכריז על תוקף.');
-    if (trainStats.rho != null && testStats.rho != null && trainStats.rho - testStats.rho >= 0.2) {
+    if (trainStats.rho != null && testStats.rho != null && trainStats.rho - testStats.rho >= 0.2 &&
+        !degenerateFold(trainStats) && !degenerateFold(testStats)) {
       notes.push('ρ באימון גבוה בהרבה מבמבחן — חשד להתאמת-יתר למדגם.');
     }
     if (testStats.rho == null) notes.push('אין מספיק שחקנים לחישוב Spearman במבחן.');
-    else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
+    else if (degenerateFold(testStats)) {
+      notes.push('הציון או היעד קבועים במדגם המבחן, ולכן ρ כאן אינו מדידה של קשר — אי אפשר לומר מזה אם המדד חוזה את היעד.');
+    } else if (testStats.rho < 0.2) notes.push('ρ במבחן חלש. המדד לא חוזה את היעד הזה במדגם המוחזק.');
     else if (testStats.ci && testStats.ci.lo == null && testStats.ci.reason !== 'pending') {
       notes.push(testStats.rhoLabel + ' במבחן: n=' + testStats.n + ' קטן מ-' + BOOTSTRAP_MIN_N + ', אין רווח בטחון — המספר הזה לבדו אינו ראיה.');
     } else notes.push(testStats.rhoLabel + ' במבחן הוא קשר סטטיסטי בתוך אותו טורניר, לא הוכחת סקאוטינג. הסוגריים הם רווח בטחון 95% מ-bootstrap עם seed קבוע.');

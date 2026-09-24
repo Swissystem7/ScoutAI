@@ -232,6 +232,66 @@ test('a BYOD file with no assists column says in Hebrew that the target is const
   assert.equal(ciNote(unknown), 'אין רווח בטחון.');
 });
 
+test('a constant score or target gets a degenerate verdict and note, not "rho is weak" or "overfitting"', () => {
+  const rhoLine = pageFunction('rhoLine', ['escapeHtml']);
+  const ciNote = (stats) => rhoLine('מבחן', stats).match(/<p class="muted">([^<]*)<\/p>/)[1];
+  const tail = 'בדקו שעמודת היעד קיימת ומשתנה בין שחקנים, ושלפחות משקל אחד גדול מ-0.';
+  function csvStore(assistsFor) {
+    const trainTeams = ['Russia', 'Spain', 'France', 'Croatia'];
+    const testTeams = ['Brazil', 'Germany', 'England', 'Japan'];
+    const header = 'name,team,position,minutes,pressures,tackles,interceptions,defensiveActions,progressiveActions,keyPasses,passesCompleted,shotXgSum,boxTouches,shotsOnTarget';
+    const lines = [header + (assistsFor ? ',assists' : '')];
+    for (let i = 0; i < 60; i += 1) {
+      const row = [
+        'P' + i, (i < 30 ? trainTeams : testTeams)[i % 4], 'Center Midfield', 400 + i * 7,
+        10 + (i * 13) % 40, (i * 7) % 11, (i * 5) % 9, 5 + (i * 3) % 20, (i * 11) % 25,
+        (i * 3) % 7, 50 + i * 4, ((i * 17) % 23) / 10, (i * 19) % 15, (i * 2) % 5
+      ];
+      if (assistsFor) row.push(assistsFor(i));
+      lines.push(row.join(','));
+    }
+    const parsed = parseUserDataset(lines.join('\n'), { attested: true, fileName: 'club.csv' });
+    assert.equal(parsed.ok, true);
+    return createStore({ players: parsed.players }, { provenance: parsed.provenance, source: parsed.source });
+  }
+  function assertDegenerate(report) {
+    assert.equal(report.test.ci.reason, 'all replicates degenerate');
+    // the note under the fold names both causes and ends with what to check
+    const note = ciNote(report.test);
+    assert.ok(note.endsWith(tail), note);
+    assert.doesNotMatch(note, /קטן מ-|degenerate/);
+    // the verdict does not call rho "weak" or say the metric fails to predict,
+    // right above a note that says rho is not a measurement here
+    assert.doesNotMatch(report.verdict, /ρ במבחן חלש|המדד לא חוזה/);
+    assert.match(report.verdict, /הציון או היעד קבועים במדגם המבחן/);
+    assert.doesNotMatch(report.verdict, /[A-Za-z]/);
+    assert.doesNotMatch(report.test.rhoLabel + report.train.rhoLabel, /[A-Za-z]|קטן מ/);
+  }
+
+  // 1. a BYOD CSV with no assists column: the default target is 0 for everyone
+  assertDegenerate(csvStore(null).validationInterval({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90 }));
+
+  // 2. the shipped Open Data file with all three weights at 0: every score is 0
+  const wc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'wc2018_event_aggregates.json'), 'utf8'));
+  const zero = createStore(wc).validationInterval({ grit: 0, involvement: 0, clutch: 0, minMinutes: 90 });
+  assert.equal(zero.test.n, 245);
+  assertDegenerate(zero);
+
+  // 3. only the held-out fold is constant (assists vary in groups A-D, all 0
+  // in E-H): the train rho is real, but "train much higher than test" would
+  // compare it with a test rho that measures nothing
+  const mixed = csvStore((i) => (i < 30 ? (i * 3) % 7 : 0)).validationInterval({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90 });
+  assert.notEqual(mixed.train.ci.lo, null);
+  assertDegenerate(mixed);
+  assert.doesNotMatch(mixed.verdict, /התאמת-יתר/);
+
+  // a real held-out rho that is weak (Grit only vs assists: 0.07) keeps the
+  // weak verdict
+  const gritOnly = createStore(wc).validationInterval({ grit: 100, involvement: 0, clutch: 0, minMinutes: 90 });
+  assert.equal(gritOnly.test.ci.reason, null);
+  assert.match(gritOnly.verdict, /ρ במבחן חלש\. המדד לא חוזה את היעד הזה במדגם המוחזק\./);
+});
+
 test('licence page quotes the commercial-exploitation ban', () => {
   assert.match(licence, /lang="he"/);
   assert.match(licence, /dir="rtl"/);
