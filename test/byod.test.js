@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 const {
   parseUserDataset,
   looksLikeOpenDataPayload,
@@ -22,6 +23,25 @@ const licence = fs.readFileSync(path.join(root, 'licence.html'), 'utf8');
 const offer = fs.readFileSync(path.join(root, 'offer.html'), 'utf8');
 const monetization = fs.readFileSync(path.join(root, 'MONETIZATION.md'), 'utf8');
 const example = JSON.parse(fs.readFileSync(path.join(root, 'data', 'user-dataset.example.json'), 'utf8'));
+
+// Pull one function declaration out of index.html's inline script, so a test
+// can run the page's own code. Naive brace matching: fine for functions whose
+// string literals contain no braces.
+function pageFunction(name, deps) {
+  function source(fn) {
+    const start = html.indexOf('function ' + fn + '(');
+    assert.ok(start >= 0, 'index.html has no function ' + fn);
+    let depth = 0;
+    for (let i = html.indexOf('{', start); i < html.length; i += 1) {
+      if (html[i] === '{') depth += 1;
+      else if (html[i] === '}' && --depth === 0) return html.slice(start, i + 1);
+    }
+    throw new Error('unbalanced braces in ' + fn);
+  }
+  const sandbox = {};
+  vm.runInNewContext((deps || []).concat(name).map(source).join('\n') + '\nthis.fn = ' + name + ';', sandbox);
+  return sandbox.fn;
+}
 
 test('user JSON with attestation becomes USER_LICENSED_DATA and does not claim Open Data', () => {
   const parsed = parseUserDataset(JSON.stringify({
@@ -88,6 +108,60 @@ test('parses CSV and the shipped synthetic example', () => {
   assert.equal(store.derive({ minMinutes: 90 }).rows.length, 4);
 });
 
+test('a BYOD upload with two same-named team-mates keeps every row its own per-90 rates', () => {
+  // A CSV has no id column, so playerKey() falls back to name|team and six
+  // rows of "Alex Smith / Rovers" collapse to ONE key. normalizeByPosition
+  // must therefore join the shrunk rates back to their originals BY INDEX:
+  // a find(item => item.id === row.id) join hands every one of them the FIRST
+  // row's numbers. The SCORES survive that (they are computed from the shrunk
+  // rates, which are right either way), so only the receipts betray it - which
+  // is exactly why nothing caught it before.
+  const header = [
+    'name', 'team', 'position', 'minutes', 'pressures', 'tackles', 'interceptions',
+    'defensiveActions', 'progressiveActions', 'keyPasses', 'passesCompleted',
+    'shotXgSum', 'boxTouches', 'shotsOnTarget'
+  ].join(',');
+  const minutes = [300, 500, 700, 900, 1100, 1300];
+  const pressures = [40, 100, 160, 220, 280, 340];
+  const csv = [header].concat(minutes.map((m, i) => [
+    'Alex Smith', 'Rovers', 'Center Back', m, pressures[i], 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ].join(','))).join('\n');
+
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'duplicate-names.csv' });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players.length, 6);
+
+  const store = createStore({ players: parsed.players },
+    { provenance: parsed.provenance, source: parsed.source });
+  assert.equal(new Set(store.players.map(row => row.id)).size, 1,
+    'the six rows really do share one name|team key');
+
+  const view = store.derive({
+    grit: 40, involvement: 30, clutch: 30, minMinutes: 90, normalizePosition: true
+  });
+  assert.equal(view.rows.length, 6);
+  const byMinutes = new Map(view.rows.map(row => [row.minutes, row]));
+  assert.equal(byMinutes.size, 6);
+
+  // pressures * 90 / minutes, round2 - one number per row, derived by hand:
+  // 40/300 -> 12, 100/500 -> 18, 160/700 -> 20.57, 220/900 -> 22,
+  // 280/1100 -> 22.91, 340/1300 -> 23.54
+  const expected = [12, 18, 20.57, 22, 22.91, 23.54];
+  minutes.forEach((m, i) => {
+    assert.equal(byMinutes.get(m).components.raw.pressures90, expected[i], 'minutes ' + m);
+  });
+  // the failure this pins: all six rows wearing row 0's 12 pressures/90
+  assert.equal(new Set(expected).size, 6);
+  assert.notDeepEqual(
+    minutes.map(m => byMinutes.get(m).components.raw.pressures90),
+    minutes.map(() => 12)
+  );
+  // the shrunk rate the caps really saw stays per-row too, and rises with
+  // minutes as the prior lets go: 17.63 at 300 minutes, 22.98 at 1300
+  const shrunk = minutes.map(m => Math.round(byMinutes.get(m).shrunkRates.pressures * 100) / 100);
+  assert.deepEqual(shrunk, [17.63, 19.6, 20.89, 21.79, 22.46, 22.98]);
+});
+
 test('methodology and export stay source-honest', () => {
   const open = methodologyParagraph({ grit: 40, involvement: 30, clutch: 30, minMinutes: 270 });
   assert.match(open, /אוסר שימוש מסחרי/);
@@ -108,6 +182,114 @@ test('home lab exposes BYOD without a network form', () => {
   assert.doesNotMatch(html, /<form\b/i);
   assert.doesNotMatch(html, /mailto:/i);
   assert.doesNotMatch(html, /https?:\/\//i);
+});
+
+test('a BYOD file with no assists column says in Hebrew that the target is constant, not that n is too small', () => {
+  // 60 rows, 30 in World Cup groups A-D (train) and 30 in E-H (held out), and
+  // no assists column: the default outcome (assists) is 0 for every player.
+  const trainTeams = ['Russia', 'Spain', 'France', 'Croatia'];
+  const testTeams = ['Brazil', 'Germany', 'England', 'Japan'];
+  const lines = ['name,team,position,minutes,pressures,tackles,interceptions,defensiveActions,progressiveActions,keyPasses,passesCompleted,shotXgSum,boxTouches,shotsOnTarget'];
+  for (let i = 0; i < 60; i += 1) {
+    lines.push([
+      'P' + i, (i < 30 ? trainTeams : testTeams)[i % 4], 'Center Midfield', 400 + i * 7,
+      10 + (i * 13) % 40, (i * 7) % 11, (i * 5) % 9, 5 + (i * 3) % 20, (i * 11) % 25,
+      (i * 3) % 7, 50 + i * 4, ((i * 17) % 23) / 10, (i * 19) % 15, (i * 2) % 5
+    ].join(','));
+  }
+  const parsed = parseUserDataset(lines.join('\n'), { attested: true, fileName: 'club.csv' });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players.length, 60);
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance, source: parsed.source });
+  const report = store.validationInterval({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90 });
+  assert.equal(report.outcomeId, 'assists');
+  assert.equal(report.train.n, 30);
+  assert.equal(report.test.n, 30);
+  assert.equal(report.test.ci.reason, 'all replicates degenerate');
+  assert.equal(report.test.ci.degenerateCount, 1000);
+  assert.equal(report.test.ci.lo, null);
+
+  // the validation status line is Hebrew: the English reason never leaks in
+  assert.equal(report.test.rhoLabel, 'ρ = 0.00 [אין רווח בטחון: הציון או היעד קבועים במדגם]');
+  assert.equal(report.train.rhoLabel, report.test.rhoLabel);
+  assert.doesNotMatch(report.test.rhoLabel, /[A-Za-z]/);
+
+  // the page's per-fold note says why there is no interval, and does not claim
+  // that 30 is smaller than 10
+  const rhoLine = pageFunction('rhoLine', ['escapeHtml']);
+  const ciNote = (stats) => rhoLine('מבחן', stats).match(/<p class="muted">([^<]*)<\/p>/)[1];
+  const note = ciNote(report.test);
+  assert.match(note, /^אין רווח בטחון: הציון או היעד קבועים במדגם/);
+  assert.match(note, /כל 1000 הדגימות/);
+  assert.doesNotMatch(note, /קטן מ-/);
+  assert.doesNotMatch(note, /degenerate/);
+
+  // a fold that really is under the floor still gets the n note
+  const thin = { n: 5, rhoLabel: 'ρ = 0.87 [n=5 קטן מדי לרווח]', componentRho: {}, ci: { rho: 0.866, lo: null, hi: null, n: 5, minN: 10, reason: 'n<10' } };
+  assert.match(ciNote(thin), /^אין רווח בטחון: n=5 קטן מ-10/);
+  // and a reason the page does not know claims neither
+  const unknown = { n: 30, rhoLabel: '', componentRho: {}, ci: { rho: 0.1, lo: null, hi: null, n: 30, minN: 10, reason: 'some new reason' } };
+  assert.equal(ciNote(unknown), 'אין רווח בטחון.');
+});
+
+test('a constant score or target gets a degenerate verdict and note, not "rho is weak" or "overfitting"', () => {
+  const rhoLine = pageFunction('rhoLine', ['escapeHtml']);
+  const ciNote = (stats) => rhoLine('מבחן', stats).match(/<p class="muted">([^<]*)<\/p>/)[1];
+  const tail = 'בדקו שעמודת היעד קיימת ומשתנה בין שחקנים, ושלפחות משקל אחד גדול מ-0.';
+  function csvStore(assistsFor) {
+    const trainTeams = ['Russia', 'Spain', 'France', 'Croatia'];
+    const testTeams = ['Brazil', 'Germany', 'England', 'Japan'];
+    const header = 'name,team,position,minutes,pressures,tackles,interceptions,defensiveActions,progressiveActions,keyPasses,passesCompleted,shotXgSum,boxTouches,shotsOnTarget';
+    const lines = [header + (assistsFor ? ',assists' : '')];
+    for (let i = 0; i < 60; i += 1) {
+      const row = [
+        'P' + i, (i < 30 ? trainTeams : testTeams)[i % 4], 'Center Midfield', 400 + i * 7,
+        10 + (i * 13) % 40, (i * 7) % 11, (i * 5) % 9, 5 + (i * 3) % 20, (i * 11) % 25,
+        (i * 3) % 7, 50 + i * 4, ((i * 17) % 23) / 10, (i * 19) % 15, (i * 2) % 5
+      ];
+      if (assistsFor) row.push(assistsFor(i));
+      lines.push(row.join(','));
+    }
+    const parsed = parseUserDataset(lines.join('\n'), { attested: true, fileName: 'club.csv' });
+    assert.equal(parsed.ok, true);
+    return createStore({ players: parsed.players }, { provenance: parsed.provenance, source: parsed.source });
+  }
+  function assertDegenerate(report) {
+    assert.equal(report.test.ci.reason, 'all replicates degenerate');
+    // the note under the fold names both causes and ends with what to check
+    const note = ciNote(report.test);
+    assert.ok(note.endsWith(tail), note);
+    assert.doesNotMatch(note, /קטן מ-|degenerate/);
+    // the verdict does not call rho "weak" or say the metric fails to predict,
+    // right above a note that says rho is not a measurement here
+    assert.doesNotMatch(report.verdict, /ρ במבחן חלש|המדד לא חוזה/);
+    assert.match(report.verdict, /הציון או היעד קבועים במדגם המבחן/);
+    assert.doesNotMatch(report.verdict, /[A-Za-z]/);
+    assert.doesNotMatch(report.test.rhoLabel + report.train.rhoLabel, /[A-Za-z]|קטן מ/);
+  }
+
+  // 1. a BYOD CSV with no assists column: the default target is 0 for everyone
+  assertDegenerate(csvStore(null).validationInterval({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90 }));
+
+  // 2. the shipped Open Data file with all three weights at 0: every score is 0
+  const wc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'wc2018_event_aggregates.json'), 'utf8'));
+  const zero = createStore(wc).validationInterval({ grit: 0, involvement: 0, clutch: 0, minMinutes: 90 });
+  assert.equal(zero.test.n, 245);
+  assertDegenerate(zero);
+
+  // 3. only the held-out fold is constant (assists vary in groups A-D, all 0
+  // in E-H): the train rho is real, but "train much higher than test" would
+  // compare it with a test rho that measures nothing
+  const mixed = csvStore((i) => (i < 30 ? (i * 3) % 7 : 0)).validationInterval({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90 });
+  assert.notEqual(mixed.train.ci.lo, null);
+  assertDegenerate(mixed);
+  assert.doesNotMatch(mixed.verdict, /התאמת-יתר/);
+
+  // a real held-out rho that is weak (Grit only vs assists: 0.07) keeps the
+  // weak verdict
+  const gritOnly = createStore(wc).validationInterval({ grit: 100, involvement: 0, clutch: 0, minMinutes: 90 });
+  assert.equal(gritOnly.test.ci.reason, null);
+  assert.match(gritOnly.verdict, /ρ במבחן חלש\. המדד לא חוזה את היעד הזה במדגם המוחזק\./);
 });
 
 test('licence page quotes the commercial-exploitation ban', () => {
