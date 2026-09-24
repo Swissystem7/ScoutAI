@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
 const {
   parseUserDataset,
   looksLikeOpenDataPayload,
@@ -22,6 +23,25 @@ const licence = fs.readFileSync(path.join(root, 'licence.html'), 'utf8');
 const offer = fs.readFileSync(path.join(root, 'offer.html'), 'utf8');
 const monetization = fs.readFileSync(path.join(root, 'MONETIZATION.md'), 'utf8');
 const example = JSON.parse(fs.readFileSync(path.join(root, 'data', 'user-dataset.example.json'), 'utf8'));
+
+// Pull one function declaration out of index.html's inline script, so a test
+// can run the page's own code. Naive brace matching: fine for functions whose
+// string literals contain no braces.
+function pageFunction(name, deps) {
+  function source(fn) {
+    const start = html.indexOf('function ' + fn + '(');
+    assert.ok(start >= 0, 'index.html has no function ' + fn);
+    let depth = 0;
+    for (let i = html.indexOf('{', start); i < html.length; i += 1) {
+      if (html[i] === '{') depth += 1;
+      else if (html[i] === '}' && --depth === 0) return html.slice(start, i + 1);
+    }
+    throw new Error('unbalanced braces in ' + fn);
+  }
+  const sandbox = {};
+  vm.runInNewContext((deps || []).concat(name).map(source).join('\n') + '\nthis.fn = ' + name + ';', sandbox);
+  return sandbox.fn;
+}
 
 test('user JSON with attestation becomes USER_LICENSED_DATA and does not claim Open Data', () => {
   const parsed = parseUserDataset(JSON.stringify({
@@ -162,6 +182,54 @@ test('home lab exposes BYOD without a network form', () => {
   assert.doesNotMatch(html, /<form\b/i);
   assert.doesNotMatch(html, /mailto:/i);
   assert.doesNotMatch(html, /https?:\/\//i);
+});
+
+test('a BYOD file with no assists column says in Hebrew that the target is constant, not that n is too small', () => {
+  // 60 rows, 30 in World Cup groups A-D (train) and 30 in E-H (held out), and
+  // no assists column: the default outcome (assists) is 0 for every player.
+  const trainTeams = ['Russia', 'Spain', 'France', 'Croatia'];
+  const testTeams = ['Brazil', 'Germany', 'England', 'Japan'];
+  const lines = ['name,team,position,minutes,pressures,tackles,interceptions,defensiveActions,progressiveActions,keyPasses,passesCompleted,shotXgSum,boxTouches,shotsOnTarget'];
+  for (let i = 0; i < 60; i += 1) {
+    lines.push([
+      'P' + i, (i < 30 ? trainTeams : testTeams)[i % 4], 'Center Midfield', 400 + i * 7,
+      10 + (i * 13) % 40, (i * 7) % 11, (i * 5) % 9, 5 + (i * 3) % 20, (i * 11) % 25,
+      (i * 3) % 7, 50 + i * 4, ((i * 17) % 23) / 10, (i * 19) % 15, (i * 2) % 5
+    ].join(','));
+  }
+  const parsed = parseUserDataset(lines.join('\n'), { attested: true, fileName: 'club.csv' });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players.length, 60);
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance, source: parsed.source });
+  const report = store.validationInterval({ grit: 40, involvement: 30, clutch: 30, minMinutes: 90 });
+  assert.equal(report.outcomeId, 'assists');
+  assert.equal(report.train.n, 30);
+  assert.equal(report.test.n, 30);
+  assert.equal(report.test.ci.reason, 'all replicates degenerate');
+  assert.equal(report.test.ci.degenerateCount, 1000);
+  assert.equal(report.test.ci.lo, null);
+
+  // the validation status line is Hebrew: the English reason never leaks in
+  assert.equal(report.test.rhoLabel, 'ρ = 0.00 [אין רווח בטחון: הציון או היעד קבועים במדגם]');
+  assert.equal(report.train.rhoLabel, report.test.rhoLabel);
+  assert.doesNotMatch(report.test.rhoLabel, /[A-Za-z]/);
+
+  // the page's per-fold note says why there is no interval, and does not claim
+  // that 30 is smaller than 10
+  const rhoLine = pageFunction('rhoLine', ['escapeHtml']);
+  const ciNote = (stats) => rhoLine('מבחן', stats).match(/<p class="muted">([^<]*)<\/p>/)[1];
+  const note = ciNote(report.test);
+  assert.match(note, /^אין רווח בטחון: הציון או היעד קבועים במדגם/);
+  assert.match(note, /כל 1000 הדגימות/);
+  assert.doesNotMatch(note, /קטן מ-/);
+  assert.doesNotMatch(note, /degenerate/);
+
+  // a fold that really is under the floor still gets the n note
+  const thin = { n: 5, rhoLabel: 'ρ = 0.87 [n=5 קטן מדי לרווח]', componentRho: {}, ci: { rho: 0.866, lo: null, hi: null, n: 5, minN: 10, reason: 'n<10' } };
+  assert.match(ciNote(thin), /^אין רווח בטחון: n=5 קטן מ-10/);
+  // and a reason the page does not know claims neither
+  const unknown = { n: 30, rhoLabel: '', componentRho: {}, ci: { rho: 0.1, lo: null, hi: null, n: 30, minN: 10, reason: 'some new reason' } };
+  assert.equal(ciNote(unknown), 'אין רווח בטחון.');
 });
 
 test('licence page quotes the commercial-exploitation ban', () => {

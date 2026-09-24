@@ -610,9 +610,14 @@
       if (ci.reason === 'pending') {
         ciNote = 'רווח הבטחון מחושב ברקע אחרי שהמחוונים נחים (percentile bootstrap, ' +
           escapeHtml(ci.iterations) + ' דגימות, seed ' + escapeHtml(ci.seed) + ').';
-      } else if (ci.lo == null) {
+      } else if (ci.reason === 'all replicates degenerate') {
+        ciNote = 'אין רווח בטחון: הציון או היעד קבועים במדגם, ולכן כל ' + escapeHtml(ci.degenerateCount) +
+          ' הדגימות יצאו בלי שונות ואין מהן ρ. ρ כאן אינו מדידה של קשר — בדקו בקובץ שעמודת היעד קיימת ושהיא והציון משתנים בין שחקנים.';
+      } else if (ci.lo == null && ci.reason && ci.reason.indexOf('n<') === 0) {
         ciNote = 'אין רווח בטחון: n=' + escapeHtml(ci.n) + ' קטן מ-' + escapeHtml(ci.minN) +
           ' — n קטן מדי לרווח. ρ לבדו על מדגם כזה אינו ראיה.';
+      } else if (ci.lo == null) {
+        ciNote = 'אין רווח בטחון.';
       } else {
         ciNote = 'הסוגריים הם רווח בטחון 95% (percentile bootstrap, ' +
           escapeHtml(ci.effectiveIterations) + ' דגימות תקפות מתוך ' + escapeHtml(ci.iterations) +

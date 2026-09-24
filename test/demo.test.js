@@ -800,6 +800,13 @@ test('the lab never displays a bare held-out rho again', () => {
     RHO + ' = 0.30 [' + MINUS + '0.05, 0.58]'
   );
   assert.equal(formatRhoWithCi(null), RHO + ' = ' + EMDASH);
+  // every replicate degenerate (a constant score or target, n well above the
+  // floor): the brackets say so in Hebrew, never the English reason and never
+  // "n too small"
+  const flat = { rho: 0, lo: null, hi: null, n: 30, minN: 10, reason: 'all replicates degenerate' };
+  assert.equal(formatRhoWithCi(flat), RHO + ' = 0.00 [אין רווח בטחון: הציון או היעד קבועים במדגם]');
+  // a reason the formatter does not know is not echoed into the Hebrew UI
+  assert.doesNotMatch(formatRhoWithCi(Object.assign({}, flat, { reason: 'some new reason' })), /[A-Za-z]/);
   assert.match(html, /report\.train\.rhoLabel/);
   assert.match(html, /report\.test\.rhoLabel/);
   assert.match(html, /stats\.rhoLabel/);

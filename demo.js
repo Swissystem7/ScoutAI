@@ -1967,6 +1967,10 @@
   //   pending      -> "rho = 0.30 [\u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df \u05d1\u05d7\u05d9\u05e9\u05d5\u05d1\u2026]"  (derive() before the
   //                   debounced validationInterval() has run)
   //   n too small  -> "rho = 0.87 [n=5 \u05e7\u05d8\u05df \u05de\u05d3\u05d9 \u05dc\u05e8\u05d5\u05d5\u05d7]"
+  //   degenerate   -> "rho = 0.00 [\u05d0\u05d9\u05df \u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df: \u05d4\u05e6\u05d9\u05d5\u05df \u05d0\u05d5 \u05d4\u05d9\u05e2\u05d3 \u05e7\u05d1\u05d5\u05e2\u05d9\u05dd \u05d1\u05de\u05d3\u05d2\u05dd]"  (every
+  //                   resample had a constant score or target - e.g. a BYOD
+  //                   file with no assists column; n is not the problem)
+  // The reason codes are English; the label is Hebrew UI and never echoes one.
   function formatRhoWithCi(ci) {
     if (!ci || ci.rho == null) return '\u03c1 = \u2014';
     if (ci.lo == null || ci.hi == null) {
@@ -1974,7 +1978,9 @@
         ? '\u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df \u05d1\u05d7\u05d9\u05e9\u05d5\u05d1\u2026'
         : ci.reason && ci.reason.indexOf('n<') === 0
           ? 'n=' + ci.n + ' \u05e7\u05d8\u05df \u05de\u05d3\u05d9 \u05dc\u05e8\u05d5\u05d5\u05d7'
-          : (ci.reason || '\u05d0\u05d9\u05df \u05e8\u05d5\u05d5\u05d7');
+          : ci.reason === 'all replicates degenerate'
+            ? '\u05d0\u05d9\u05df \u05e8\u05d5\u05d5\u05d7 \u05d1\u05d8\u05d7\u05d5\u05df: \u05d4\u05e6\u05d9\u05d5\u05df \u05d0\u05d5 \u05d4\u05d9\u05e2\u05d3 \u05e7\u05d1\u05d5\u05e2\u05d9\u05dd \u05d1\u05de\u05d3\u05d2\u05dd'
+            : '\u05d0\u05d9\u05df \u05e8\u05d5\u05d5\u05d7';
       return '\u03c1 = ' + formatRhoValue(ci.rho) + ' [' + why + ']';
     }
     return '\u03c1 = ' + formatRhoValue(ci.rho) +
