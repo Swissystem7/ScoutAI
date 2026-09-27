@@ -5,7 +5,9 @@ tests and by a human who merges by hand. Optimise for a small, verifiable pull r
 
 ## Commands
 
-- Run the whole suite: `node --test test/demo.test.js test/trap.test.js test/byod.test.js`
+- Run the whole suite: `node --test` (runs every `*.test.js`, including a new test file). Note: `npm test` on
+  master still names three files (`test/demo.test.js test/trap.test.js test/byod.test.js`), so a new test file
+  is not run by `npm test` until PR #22 is merged; run `node --test` as well.
 - Run one test file: `node --test <path>` (Node's built-in runner; no other test framework)
 - There is no build step and there are no runtime dependencies to install.
 
