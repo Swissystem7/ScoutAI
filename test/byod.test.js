@@ -134,3 +134,19 @@ test('offer page is an offer, not a fake checkout', () => {
   assert.match(monetization, /13\.8\.2026/);
   assert.match(monetization, /github.com\/hudl\/open-data/);
 });
+
+test('offer contact opens a Hebrew workshop issue form that warns the issue is public', () => {
+  const formPath = path.join(root, '.github', 'ISSUE_TEMPLATE', 'workshop.yml');
+  assert.ok(fs.existsSync(formPath), 'missing .github/ISSUE_TEMPLATE/workshop.yml');
+  const form = fs.readFileSync(formPath, 'utf8');
+  assert.match(form, /^name: /m);
+  assert.match(form, /^title: "פנייה לסדנה/m);
+  assert.match(form, /ציבורי/);
+  assert.match(form, /אל תכתבו טלפון/);
+  assert.match(form, /נתוני שחקנים/);
+  assert.doesNotMatch(form, /type: input\s+id: (phone|email)/);
+  const plainNew = offer.match(/issues\/new(?!\?template=workshop\.yml)/g) || [];
+  assert.equal(plainNew.length, 0, 'every offer contact link must open the workshop form');
+  assert.match(offer, /issues\/new\?template=workshop\.yml/);
+  assert.match(offer, /הפנייה ציבורית/);
+});
