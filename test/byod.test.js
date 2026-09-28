@@ -203,3 +203,19 @@ test('every page footer a visitor sees is Hebrew (only the brand name ScoutAI in
     assert.doesNotMatch(visible, /[A-Za-z]{2,}/, page + ' footer has English: ' + visible.trim());
   }
 });
+
+test('offer price anchors are current and sourced; no page links to a raw .md file', () => {
+  for (const page of ['index.html', 'offer.html', 'licence.html', path.join('trap', 'index.html')]) {
+    const text = fs.readFileSync(path.join(root, page), 'utf8');
+    const rawMd = (text.match(/href="(?!https:\/\/github\.com\/)[^"]*\.md"/g) || []);
+    assert.deepEqual(rawMd, [], page + ' links to a .md file that GitHub Pages serves as raw text');
+  }
+  assert.doesNotMatch(offer, /מתחת לתוכנית וינגייט/);
+  if (/וינגייט/.test(offer)) assert.match(offer, /לא ייפתח[^<]*28\.9\.2026/);
+  assert.match(offer, /£60[^\n]*courses\.statsbomb\.com/);
+  assert.match(offer, /€675/);
+  assert.match(offer, /barcainnovationhub\.fcbarcelona\.com/);
+  assert.match(offer, /נכון ל־28\.9\.2026/);
+  assert.doesNotMatch(offer, /אינו פתוח<\/strong> נכון ל־13\.8\.2026/);
+  assert.match(monetization, /28\.9\.2026/);
+});
