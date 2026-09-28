@@ -30,13 +30,13 @@
     <nav class="nav" aria-label="ניווט">
       <a href="index.html">המעבדה</a>
       <a href="licence.html">רישיון</a>
-      <a href="https://github.com/Swissystem7/ScoutAI/issues/new?template=workshop.yml">פנייה ב-GitHub</a>
+      <a href="#contact">איך פונים</a>
     </nav>
   </aside>
 
   <section class="card" id="offer">
     <h1>סדנת מדד שקוף לאנליסט מתחיל</h1>
-    <p class="danger"><strong>אין הרשמה בדף הזה.</strong> אין טופס תשלום, אין מקומות שנותרו, אין «N נרשמו». נכון ל־27.9.2026 אף אחד לא נרשם דרך האתר, כי אין מנגנון הרשמה, ולא נפתחה אף פנייה לסדנה. פנייה נפתחת כטופס issue בגיטהאב, ואם יש התאמה נשלחת הצעת מחיר מחוץ לאתר.</p>
+    <p class="danger"><strong>אין הרשמה בדף הזה.</strong> אין טופס תשלום, אין מקומות שנותרו, אין «N נרשמו». נכון ל־27.9.2026 אף אחד לא נרשם דרך האתר, כי אין מנגנון הרשמה, ולא נפתחה אף פנייה לסדנה. פונים דרך <a href="#contact">«איך פונים»</a>, ואם יש התאמה נשלחת הצעת מחיר מחוץ לאתר.</p>
     <p>קהל: בוגרי <a href="https://www.sportpanel.co.il/scouting">קורס ספורט פאנל</a> וקהל <a href="https://myscout.co.il/">myscout.co.il</a> שרוצים ללמוד לבנות מדד — לא לקנות דירוג מוכן. זו <strong>לא</strong> תעודת מנהלת הליגות ולא תחליף לקורס של 22 מפגשים.</p>
   </section>
 
@@ -68,11 +68,16 @@
     </ul>
   </section>
 
-  <section class="card">
+  <section class="card" id="contact">
     <h2>איך פונים</h2>
-    <p>פתחו את <a href="https://github.com/Swissystem7/ScoutAI/issues/new?template=workshop.yml">טופס הפנייה לסדנה</a>. הוא שואל ארבע שאלות קצרות: סדנה או ייעוץ, רקע (למשל בוגר ספורט פאנל / אנליסט ב־myscout), האם יש לכם קובץ מורשה, ואיך נוח לכם להיפגש. צריך חשבון GitHub.</p>
-    <p class="notice"><strong>הפנייה ציבורית.</strong> כל אחד יכול לקרוא אותה. אל תכתבו טלפון, מייל או כתובת, ואל תצרפו נתוני שחקנים. התשובה תגיע כתגובה בגיטהאב, ואם יש התאמה נתאם ערוץ פרטי.</p>
-    <p>אין כתובת סליקה, אין וואטסאפ בדף, ואין ספירת נרשמים. אם לא תתקבל תשובה — זו הצעה שלא נסגרה, לא תור שלקוחות ממתינים בו.</p>
+    <div data-contact hidden>
+      <p><a href="#contact">פנייה פרטית לסדנה או לייעוץ</a>. זה ערוץ פרטי: הפנייה לא מתפרסמת בגיטהאב.</p>
+    </div>
+    <div data-contact-fallback>
+      <p>פתחו את <a href="https://github.com/Swissystem7/ScoutAI/issues/new?template=workshop.yml">טופס הפנייה לסדנה</a>. הוא שואל ארבע שאלות קצרות: סדנה או ייעוץ, רקע (למשל בוגר ספורט פאנל / אנליסט ב־myscout), האם יש לכם קובץ מורשה, ואיך נוח לכם להיפגש. צריך חשבון GitHub.</p>
+      <p class="notice"><strong>הפנייה ציבורית.</strong> כל אחד יכול לקרוא אותה. אל תכתבו טלפון, מייל או כתובת, ואל תצרפו נתוני שחקנים. התשובה תגיע כתגובה בגיטהאב, ואם יש התאמה נתאם ערוץ פרטי.</p>
+    </div>
+    <p>אין כתובת סליקה ואין ספירת נרשמים. אם לא תתקבל תשובה — זו הצעה שלא נסגרה, לא תור שלקוחות ממתינים בו.</p>
   </section>
 
   <section class="card">
@@ -81,5 +86,6 @@
   </section>
   <footer>ScoutAI · הצעה בלבד · 0 נרשמים דרך האתר, כי אין הרשמה · <a href="index.html">חזרה למעבדה</a></footer>
 </main>
+<script src="contact.js"></script>
 </body>
 </html>

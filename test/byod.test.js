@@ -150,3 +150,46 @@ test('offer contact opens a Hebrew workshop issue form that warns the issue is p
   assert.match(offer, /issues\/new\?template=workshop\.yml/);
   assert.match(offer, /הפנייה ציבורית/);
 });
+
+test('private contact is one config value (contact.js), hidden while empty, with the Hebrew issue form as fallback', () => {
+  const contactPath = path.join(root, 'contact.js');
+  assert.ok(fs.existsSync(contactPath), 'missing contact.js (the single CONTACT slot)');
+  const { CONTACT, contactHref, renderContact } = require('../contact.js');
+  assert.equal(CONTACT, '', 'no invented contact: the owner fills CONTACT');
+  assert.equal(contactHref(''), '');
+  assert.equal(contactHref('   '), '');
+  assert.equal(contactHref('javascript:alert(1)'), '');
+  assert.equal(contactHref('http://example.com'), '');
+  assert.equal(contactHref('050-0000000'), '');
+  assert.equal(contactHref('mailto:not-an-address'), '');
+  assert.equal(contactHref('mailto:a@b.co'), 'mailto:a@b.co');
+  assert.equal(contactHref(' https://example.com/x '), 'https://example.com/x');
+
+  const makeEl = (hidden) => ({ hidden, attrs: {}, link: { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }, querySelector() { return this.link; } });
+  const makeDoc = () => {
+    const slots = [makeEl(true)];
+    const fallbacks = [makeEl(false), makeEl(false)];
+    return { slots, fallbacks, querySelectorAll(sel) { return sel === '[data-contact]' ? slots : sel === '[data-contact-fallback]' ? fallbacks : []; } };
+  };
+  const empty = makeDoc();
+  assert.equal(renderContact(empty, ''), false);
+  assert.equal(empty.slots[0].hidden, true);
+  assert.ok(empty.fallbacks.every((el) => el.hidden === false));
+  const filled = makeDoc();
+  assert.equal(renderContact(filled, 'mailto:a@b.co'), true);
+  assert.equal(filled.slots[0].hidden, false);
+  assert.equal(filled.slots[0].link.attrs.href, 'mailto:a@b.co');
+  assert.ok(filled.fallbacks.every((el) => el.hidden === true));
+  const bad = makeDoc();
+  assert.equal(renderContact(bad, 'javascript:alert(1)'), false);
+  assert.equal(bad.slots[0].hidden, true);
+
+  assert.match(offer, /<script src="contact\.js"><\/script>/);
+  assert.match(offer, /data-contact hidden/);
+  const fallbackBlocks = offer.match(/data-contact-fallback[^>]*>[\s\S]*?issues\/new\?template=workshop\.yml/g) || [];
+  assert.ok(fallbackBlocks.length >= 1, 'the issue form link must sit inside a data-contact-fallback block');
+  for (const page of ['index.html', 'offer.html', 'licence.html', path.join('trap', 'index.html')]) {
+    const text = fs.readFileSync(path.join(root, page), 'utf8');
+    assert.doesNotMatch(text, /mailto:|tel:|wa\.me|whatsapp\.com/i, page + ' must not hard-code contact details');
+  }
+});
