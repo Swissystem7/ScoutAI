@@ -232,3 +232,39 @@ test('README tells the owner where the one contact value lives', () => {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   assert.match(readme, /`contact\.js`[^\n]*CONTACT/);
 });
+
+test('BYOD rejects Open Data by content, not only by metadata: a CSV re-save or a bare array is caught', () => {
+  const wc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'wc2018_event_aggregates.json'), 'utf8'));
+  const roster = createStore(wc).players;
+  const cols = ['name', 'team', 'position', 'totalMinutesProxy', 'pressures', 'tackles', 'interceptions', 'defensiveActions',
+    'progressiveActions', 'keyPasses', 'passesCompleted', 'shotXgSum', 'boxTouches', 'shotsOnTarget', 'goals', 'assists'];
+  const toCsv = rows => [cols.join(',')].concat(rows.map(row => cols.map(key => JSON.stringify(row[key] == null ? '' : row[key])).join(','))).join('\n');
+  const opts = { attested: true, openDataPlayers: roster };
+  const csv = parseUserDataset(toCsv(wc.players), opts);
+  assert.equal(csv.ok, false);
+  assert.equal(csv.detected, OPEN_DATA_PROVENANCE);
+  assert.equal(csv.contentMatches, wc.players.length);
+  assert.match(csv.errors[0], /לפי התוכן/);
+  const bare = parseUserDataset(JSON.stringify(wc.players), { attested: true, openDataPlayers: wc.players });
+  assert.equal(bare.ok, false);
+  assert.equal(bare.detected, OPEN_DATA_PROVENANCE);
+  const subset = parseUserDataset(toCsv(wc.players.slice(0, 25)), opts);
+  assert.equal(subset.ok, false, 'a 25-row slice of the shipped file is still Open Data');
+  // Same World Cup players from another, licensed provider: names match, counts do not.
+  const otherProvider = wc.players.slice(0, 40).map(row => Object.assign({}, row, {
+    tackles: row.tackles + 1, passesCompleted: row.passesCompleted + 3, pressures: row.pressures + 2,
+    keyPasses: row.keyPasses + 1, progressiveActions: row.progressiveActions + 1, boxTouches: row.boxTouches + 1,
+    interceptions: row.interceptions + 1, defensiveActions: row.defensiveActions + 1, shotsOnTarget: row.shotsOnTarget + 1,
+    goals: row.goals + 1, assists: row.assists + 1, shotXgSum: row.shotXgSum + 0.5
+  }));
+  const licensed = parseUserDataset(toCsv(otherProvider), opts);
+  assert.equal(licensed.ok, true);
+  assert.equal(licensed.provenance, USER_DATA_PROVENANCE);
+  const unchecked = parseUserDataset(toCsv(otherProvider), { attested: true });
+  assert.equal(unchecked.ok, true);
+  assert.ok(unchecked.warnings.some(text => /בדיקת התוכן מול Open Data לא רצה/.test(text)));
+  assert.match(html, /openDataPlayers:/);
+  assert.match(html, /parsed\.warnings/);
+  assert.match(licence, /לפי התוכן/);
+  assert.match(licence, /שמות ששונו/);
+});

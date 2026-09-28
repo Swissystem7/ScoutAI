@@ -950,7 +950,8 @@
     }
     recompute();
     byodStatus.textContent = statusText ||
-      (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.');
+      (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.' +
+        ((parsed.warnings || []).length ? ' ' + parsed.warnings.join(' ') : ''));
   }
 
   document.getElementById('loadUserData').addEventListener('click', function () {
@@ -964,11 +965,19 @@
     }
     const reader = new FileReader();
     reader.onload = function () {
-      const parsed = ScoutAIDemo.parseUserDataset(String(reader.result || ''), {
-        attested: attested,
-        fileName: file.name
+      const text = String(reader.result || '');
+      ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
+        return lab.store.players;
+      }, function () {
+        return null;
+      }).then(function (roster) {
+        const parsed = ScoutAIDemo.parseUserDataset(text, {
+          attested: attested,
+          fileName: file.name,
+          openDataPlayers: roster
+        });
+        applyParsedDataset(parsed);
       });
-      applyParsedDataset(parsed);
     };
     reader.onerror = function () {
       byodStatus.textContent = 'קריאת הקובץ המקומי נכשלה. דבר לא נשלח.';

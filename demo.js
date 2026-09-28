@@ -1621,6 +1621,44 @@
     return { ok: true, errors: errors, players: players };
   }
 
+  // Content check behind the metadata check: a row counts as Open Data when
+  // its name and team match a shipped row AND at least three count fields
+  // present in both are equal. Same players from another (licensed) provider
+  // have different counts and pass; a CSV re-save or a bare array does not.
+  // Renamed players are not caught - this is a guard, not a warranty.
+  function openDataRowKey(row) {
+    return String(row && row.name || '').trim().toLowerCase() + '|' + String(row && row.team || '').trim().toLowerCase();
+  }
+
+  function fieldValue(row, key) {
+    const src = row && row.counts && typeof row.counts === 'object' ? row.counts : row;
+    const raw = src ? src[key] : undefined;
+    if (raw === '' || raw == null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function openDataContentMatches(players, reference) {
+    const byKey = {};
+    (reference || []).forEach(function (row) { byKey[openDataRowKey(row)] = row; });
+    let matches = 0;
+    (players || []).forEach(function (row) {
+      const ref = byKey[openDataRowKey(row)];
+      if (!ref) return;
+      let compared = 0;
+      let equal = 0;
+      COUNT_FIELDS.forEach(function (key) {
+        const mine = fieldValue(row, key);
+        const theirs = fieldValue(ref, key);
+        if (mine == null || theirs == null) return;
+        compared += 1;
+        if (Math.abs(mine - theirs) <= 0.001) equal += 1;
+      });
+      if (compared >= 3 && equal === compared) matches += 1;
+    });
+    return matches;
+  }
+
   function parseUserDataset(text, options) {
     const opts = options || {};
     const raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').trim();
@@ -1666,11 +1704,27 @@
     if (!players.length) {
       return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
     }
+    const warnings = players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [];
+    if (Array.isArray(opts.openDataPlayers) && opts.openDataPlayers.length) {
+      const matches = openDataContentMatches(players, opts.openDataPlayers);
+      if (matches > 0 && matches >= Math.min(20, Math.ceil(players.length * 0.3))) {
+        return {
+          ok: false,
+          errors: ['הקובץ מזוהה כ-StatsBomb Open Data לפי התוכן: ' + matches + ' שורות זהות (שם, קבוצה וספירות) לקובץ מונדיאל 2018. הרישיון אוסר ניצול מסחרי. חזרו למצב הדמו החינמי.'],
+          players: [],
+          provenance: OPEN_DATA_PROVENANCE,
+          detected: OPEN_DATA_PROVENANCE,
+          contentMatches: matches
+        };
+      }
+    } else if (!synthetic) {
+      warnings.push('בדיקת התוכן מול Open Data לא רצה, כי קובץ הייחוס לא נטען. נבדקה רק המטא-דאטה.');
+    }
     const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
     return {
       ok: true,
       errors: parseErrors,
-      warnings: players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [],
+      warnings: warnings,
       players: players,
       provenance: provenance,
       source: {
