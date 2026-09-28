@@ -227,3 +227,8 @@ test('licence table scrolls inside its card on a phone instead of widening the p
   assert.ok(tables.length > 0);
   assert.equal(wrapped.length, tables.length, 'every table on licence.html sits in .table-wrap');
 });
+
+test('README tells the owner where the one contact value lives', () => {
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  assert.match(readme, /`contact\.js`[^\n]*CONTACT/);
+});
