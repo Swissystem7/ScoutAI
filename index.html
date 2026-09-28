@@ -204,6 +204,7 @@
     </select>
     <p id="validateStatus" class="status" role="status"></p>
     <p id="validateVerdict" class="lab-note"></p>
+    <p id="validateBaseline" class="lab-note"></p>
     <div id="validateStats" class="stats-grid"></div>
     <div id="validateTables" class="table-wrap"></div>
   </section>
@@ -766,6 +767,13 @@
     }).join('');
   }
 
+  function renderBaseline(current) {
+    const target = document.getElementById('validateBaseline');
+    if (!target || !store) return;
+    const base = ScoutAIDemo.minutesBaseline(store.players, current.spec);
+    target.textContent = 'קו בסיס: ' + base.verdict;
+  }
+
   function renderAll(current) {
     syncSlider('wGrit', current.spec.grit, 'Grit, ' + Math.round(current.spec.grit) + ' אחוז');
     syncSlider('wInv', current.spec.involvement, 'Involvement, ' + Math.round(current.spec.involvement) + ' אחוז');
@@ -778,6 +786,7 @@
     renderRadar(current);
     renderExplorer(current);
     renderValidation(current);
+    renderBaseline(current);
     renderFragility(current);
     renderExport(current);
     renderGlossary(current);

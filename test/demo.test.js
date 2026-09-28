@@ -561,6 +561,32 @@ test('duelsWon target is flagged as a leak: in the shipped file it is a copy of 
   assert.match(option[1], /דליפה/);
 });
 
+test('holdout shows a minutes-only baseline on the same test fold, with a verdict computed from the numbers', () => {
+  const lab = require('../demo.js');
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const players = lab.createStore(wc).players;
+  const base = lab.minutesBaseline(players, lab.DEFAULT_METRIC);
+  const report = lab.validateMetric(players, lab.DEFAULT_METRIC, { outcomeId: 'assists', splitId: 'groups' });
+  assert.equal(base.n, report.test.n);
+  assert.equal(base.metricRho, report.test.rho);
+  assert.equal(base.metricRho, 0.3);
+  assert.equal(base.minutesRho, 0.31);
+  assert.equal(base.beatsMinutes, false);
+  assert.match(base.verdict, /לא עוקף/);
+  const dribbles = lab.minutesBaseline(players, Object.assign({}, lab.DEFAULT_METRIC, { outcomeId: 'dribbles' }));
+  assert.ok(dribbles.metricRho > dribbles.minutesRho);
+  assert.equal(dribbles.beatsMinutes, true);
+  assert.doesNotMatch(dribbles.verdict, /לא עוקף/);
+  assert.match(dribbles.verdict, /עוקף/);
+  assert.notEqual(base.verdict, dribbles.verdict);
+  const leak = lab.minutesBaseline(players, Object.assign({}, lab.DEFAULT_METRIC, { outcomeId: 'goals' }));
+  assert.match(leak.verdict, /דליפה/);
+  const none = lab.minutesBaseline([], lab.DEFAULT_METRIC);
+  assert.equal(none.beatsMinutes, null);
+  assert.match(html, /id="validateBaseline"/);
+  assert.match(html, /ScoutAIDemo\.minutesBaseline\(/);
+});
+
 test('unused outcomes stay available and SAMPLE folds France to train and Brazil to test', () => {
   const store = createStore(SAMPLE);
   assert.equal(outcomeValue(store.players.find(row => row.name === 'Finisher'), 'goals'), 0);

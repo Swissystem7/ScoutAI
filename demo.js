@@ -1066,6 +1066,44 @@
     return 0;
   }
 
+  // Reference point for the holdout lab: rank the same test-fold players by
+  // minutes alone. The outcomes are tournament totals, so a player who played
+  // more collects more of them; a metric that does not beat this adds nothing
+  // over playing time. The verdict is computed from the two numbers.
+  function minutesBaseline(prepared, spec, options) {
+    const metric = normalizeMetricSpec(spec);
+    const opts = options || {};
+    const outcomeId = opts.outcomeId || metric.outcomeId;
+    const splitId = opts.splitId || metric.splitId;
+    const meta = outcomeMeta(outcomeId);
+    const test = scorePrepared(asPrepared(prepared), metric).filter(function (row) {
+      return assignFold(row, splitId) === 'test';
+    });
+    const outcomes = test.map(function (row) { return outcomeValue(row, outcomeId); });
+    const metricRho = spearman(test.map(function (row) { return row.score; }), outcomes);
+    const minutesRho = spearman(test.map(function (row) { return Number(row.minutes) || 0; }), outcomes);
+    const ready = metricRho != null && minutesRho != null && Number.isFinite(metricRho) && Number.isFinite(minutesRho);
+    const beatsMinutes = ready ? metricRho > minutesRho : null;
+    let verdict;
+    if (!ready) {
+      verdict = 'אין מספיק שחקנים במבחן כדי להשוות לדירוג לפי דקות בלבד.';
+    } else if (beatsMinutes) {
+      verdict = 'המדד (ρ=' + metricRho + ') עוקף את הדירוג לפי דקות בלבד (ρ=' + minutesRho + ') על אותם ' + test.length + ' שחקני מבחן.';
+    } else {
+      verdict = 'המדד (ρ=' + metricRho + ') לא עוקף את הדירוג לפי דקות בלבד (ρ=' + minutesRho + ') על אותם ' + test.length +
+        ' שחקני מבחן: מי ששיחק יותר צבר יותר ' + meta.label + ', והציון לא מוסיף על זמן המשחק.';
+    }
+    if (ready && meta.leaky) verdict += ' היעד מסומן כדליפה, ולכן גם ההשוואה הזו לא מלמדת על חיזוי.';
+    return {
+      outcomeId: outcomeId,
+      n: test.length,
+      metricRho: metricRho,
+      minutesRho: minutesRho,
+      beatsMinutes: beatsMinutes,
+      verdict: verdict
+    };
+  }
+
   function filePer90(player, field) {
     const src = player && player.per90File;
     if (!src || field == null) return null;
@@ -1671,6 +1709,7 @@
     RADAR_AXES: RADAR_AXES,
     COMPONENT_RECIPE: COMPONENT_RECIPE,
     DEFENDER_EXERCISE: DEFENDER_EXERCISE,
+    minutesBaseline: minutesBaseline,
     evaluateExercise: evaluateExercise,
     buildCompareRadar: buildCompareRadar,
     radarValues: radarValues,
