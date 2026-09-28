@@ -268,3 +268,19 @@ test('BYOD rejects Open Data by content, not only by metadata: a CSV re-save or 
   assert.match(licence, /לפי התוכן/);
   assert.match(licence, /שמות ששונו/);
 });
+
+test('offer.html shows a 3-hour agenda that walks all eight lab lessons', () => {
+  const { CURRICULUM_LESSONS } = require('../demo.js');
+  const section = (offer.match(/<section class="card" id="agenda">([\s\S]*?)<\/section>/) || [])[1];
+  assert.ok(section, 'agenda section exists');
+  assert.match(section, /<h2>סדר היום/);
+  CURRICULUM_LESSONS.forEach(lesson => {
+    const title = lesson.title.replace(/^\d+\.\s*/, '');
+    assert.ok(section.includes(title), 'agenda names lesson ' + title);
+  });
+  const minutes = [...section.matchAll(/<td>(\d):(\d\d)–(\d):(\d\d)<\/td>/g)]
+    .map(m => (Number(m[3]) * 60 + Number(m[4])) - (Number(m[1]) * 60 + Number(m[2])));
+  assert.ok(minutes.length >= 5);
+  assert.equal(minutes.reduce((a, b) => a + b, 0), 180);
+  assert.match(section, /class="table-wrap"/);
+});
