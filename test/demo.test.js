@@ -543,6 +543,24 @@ test('WC2018 group split is a complete 16-vs-16 team holdout, not a later season
   assert.match(html, /אין בריפו עונה שנייה/);
 });
 
+test('duelsWon target is flagged as a leak: in the shipped file it is a copy of tackles (a Grit input)', () => {
+  const lab = require('../demo.js');
+  const wc = require('../data/wc2018_event_aggregates.json');
+  const copies = wc.players.filter(row => row.duelsWon === row.tackles).length;
+  assert.equal(copies, wc.players.length, 'measured: duelsWon equals tackles on every shipped row');
+  const meta = lab.OUTCOMES.find(item => item.id === 'duelsWon');
+  assert.equal(meta.leaky, true);
+  assert.match(meta.leakNote, /tackles/);
+  assert.doesNotMatch(meta.leakNote, /לא זהה/);
+  const report = lab.validateMetric(lab.createStore(wc).players, lab.DEFAULT_METRIC, { outcomeId: 'duelsWon', splitId: 'groups' });
+  assert.equal(report.leaky, true);
+  assert.match(report.verdict, /tackles/);
+  const option = html.match(/<option value="duelsWon">([^<]*)<\/option>/);
+  assert.ok(option, 'duelsWon option exists');
+  assert.doesNotMatch(option[1], /לא בנוסחה/);
+  assert.match(option[1], /דליפה/);
+});
+
 test('unused outcomes stay available and SAMPLE folds France to train and Brazil to test', () => {
   const store = createStore(SAMPLE);
   assert.equal(outcomeValue(store.players.find(row => row.name === 'Finisher'), 'goals'), 0);
