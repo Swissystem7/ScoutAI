@@ -15,7 +15,7 @@
     .danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
     .ok{border-inline-start:4px solid #145c3d;background:#e6f3ea;padding:12px;color:#0f3d26}
     blockquote{margin:12px 0;padding:12px 16px;background:#f3f6f1;border-radius:12px;font-family:Georgia,serif}
-    table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    .table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
     footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
     :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
   </style>
@@ -80,6 +80,7 @@
 
   <section class="card">
     <h2>שתי שכבות רישיון</h2>
+    <div class="table-wrap" role="region" aria-label="טבלת שכבות הרישיון" tabindex="0">
     <table>
       <caption>מה חל על מה</caption>
       <thead><tr><th scope="col">שכבה</th><th scope="col">רישיון</th><th scope="col">מסחר</th></tr></thead>
@@ -90,6 +91,7 @@
         <tr><td><code>SYNTHETIC_EXAMPLE</code></td><td>קובץ הוראה שסופק כאן</td><td>לא נתוני משחק; לא Open Data</td></tr>
       </tbody>
     </table>
+    </div>
   </section>
 
   <section class="card">

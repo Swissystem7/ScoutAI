@@ -219,3 +219,11 @@ test('offer price anchors are current and sourced; no page links to a raw .md fi
   assert.doesNotMatch(offer, /אינו פתוח<\/strong> נכון ל־13\.8\.2026/);
   assert.match(monetization, /28\.9\.2026/);
 });
+
+test('licence table scrolls inside its card on a phone instead of widening the page', () => {
+  assert.match(licence, /\.table-wrap\{overflow-x:auto\}/);
+  const tables = licence.match(/<table>/g) || [];
+  const wrapped = licence.match(/<div class="table-wrap"[^>]*>\s*<table>/g) || [];
+  assert.ok(tables.length > 0);
+  assert.equal(wrapped.length, tables.length, 'every table on licence.html sits in .table-wrap');
+});
