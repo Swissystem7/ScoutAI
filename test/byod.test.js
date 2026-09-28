@@ -151,11 +151,33 @@ test('offer contact opens a Hebrew workshop issue form that warns the issue is p
   assert.match(offer, /הפנייה ציבורית/);
 });
 
+// The owner decided on 28.9: the public contact channel for all his apps is his Google Form
+// "משוב על האפליקציות", with the app field pre-filled as ScoutAI (an exact option of the form).
+const OWNER_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSdT8YduNx-VWKM3bWGUJdiSj4Sw9D-EA6R6c-oYVYCQmOVXxQ/viewform?usp=pp_url&entry.368039752=ScoutAI';
+
+test('CONTACT is the owner\'s Google Form, and offer.html shows it instead of the GitHub form', () => {
+  const { CONTACT, renderContact } = require('../contact.js');
+  assert.equal(CONTACT, OWNER_FORM);
+  assert.doesNotMatch(CONTACT, /@|tel:|wa\.me/, 'no email or phone');
+  // Run contact.js the way the browser does (no module), against a stand-in for offer.html's two blocks.
+  const slot = { hidden: true, link: { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }, querySelector() { return this.link; } };
+  const fallback = { hidden: false };
+  const doc = { readyState: 'complete', querySelectorAll: (sel) => (sel === '[data-contact]' ? [slot] : sel === '[data-contact-fallback]' ? [fallback] : []) };
+  const vm = require('node:vm');
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'contact.js'), 'utf8'), { window: { document: doc } });
+  assert.equal(slot.hidden, false, 'the contact block shows');
+  assert.equal(slot.link.attrs.href, OWNER_FORM, 'its link opens the form');
+  assert.equal(fallback.hidden, true, 'the GitHub issue fallback steps aside');
+  assert.equal(renderContact(doc, CONTACT), true);
+  const block = (offer.match(/<div data-contact hidden>([\s\S]*?)<\/div>/) || [])[1] || '';
+  assert.match(block, /טופס Google/, 'the block says it is a Google Form');
+});
+
 test('private contact is one config value (contact.js), hidden while empty, with the Hebrew issue form as fallback', () => {
   const contactPath = path.join(root, 'contact.js');
   assert.ok(fs.existsSync(contactPath), 'missing contact.js (the single CONTACT slot)');
   const { CONTACT, contactHref, renderContact } = require('../contact.js');
-  assert.equal(CONTACT, '', 'no invented contact: the owner fills CONTACT');
+  assert.equal(typeof CONTACT, 'string');
   assert.equal(contactHref(''), '');
   assert.equal(contactHref('   '), '');
   assert.equal(contactHref('javascript:alert(1)'), '');

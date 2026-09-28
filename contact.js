@@ -1,13 +1,14 @@
 /* ערוץ פנייה פרטי — ערך אחד שהבעלים ממלא.
  *
+ * לפי החלטת הבעלים (28.9) הערך הוא טופס Google «משוב על האפליקציות», עם ScoutAI ממולא מראש.
  * CONTACT ריק = הרכיב [data-contact] נשאר מוסתר, ומוצג טופס ה-issue בעברית ([data-contact-fallback]).
- * כדי לפתוח ערוץ פרטי: כתבו כאן קישור https:// (למשל טופס) או mailto:כתובת@דומיין. אין לשים ערך שלא אומת.
+ * הערך: קישור https:// (למשל טופס) או mailto:כתובת@דומיין. אין לשים ערך שלא אומת.
  * כל ערך אחר (טקסט, http://, javascript:, מספר טלפון גולמי) נדחה והרכיב נשאר מוסתר.
  */
 (function (root) {
   'use strict';
 
-  const CONTACT = '';
+  const CONTACT = 'https://docs.google.com/forms/d/e/1FAIpQLSdT8YduNx-VWKM3bWGUJdiSj4Sw9D-EA6R6c-oYVYCQmOVXxQ/viewform?usp=pp_url&entry.368039752=ScoutAI';
 
   function contactHref(value) {
     const v = String(value == null ? '' : value).trim();
