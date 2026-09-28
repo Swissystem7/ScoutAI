@@ -193,3 +193,13 @@ test('private contact is one config value (contact.js), hidden while empty, with
     assert.doesNotMatch(text, /mailto:|tel:|wa\.me|whatsapp\.com/i, page + ' must not hard-code contact details');
   }
 });
+
+test('every page footer a visitor sees is Hebrew (only the brand name ScoutAI in Latin letters)', () => {
+  for (const page of ['index.html', 'offer.html', 'licence.html', path.join('trap', 'index.html')]) {
+    const text = fs.readFileSync(path.join(root, page), 'utf8');
+    const footer = (text.match(/<footer>([\s\S]*?)<\/footer>/) || [])[1];
+    assert.ok(footer, page + ' has a footer');
+    const visible = footer.replace(/<[^>]+>/g, ' ').replace(/ScoutAI/g, '');
+    assert.doesNotMatch(visible, /[A-Za-z]{2,}/, page + ' footer has English: ' + visible.trim());
+  }
+});
