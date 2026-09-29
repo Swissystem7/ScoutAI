@@ -1775,6 +1775,8 @@
     worldCupGroup: worldCupGroup,
     assignFold: assignFold,
     spearman: spearman,
+    rankValues: rankValues,
+    preparePlayer: preparePlayer,
     pearson: pearson,
     outcomeValue: outcomeValue,
     buildEventExplorer: buildEventExplorer,
