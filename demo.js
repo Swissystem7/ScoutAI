@@ -1775,8 +1775,6 @@
     worldCupGroup: worldCupGroup,
     assignFold: assignFold,
     spearman: spearman,
-    rankValues: rankValues,
-    preparePlayer: preparePlayer,
     pearson: pearson,
     outcomeValue: outcomeValue,
     buildEventExplorer: buildEventExplorer,
@@ -1788,6 +1786,8 @@
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
     OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,
+    rankValues: rankValues,
+    preparePlayer: preparePlayer,
     USER_DATA_PROVENANCE: USER_DATA_PROVENANCE,
     SYNTHETIC_PROVENANCE: SYNTHETIC_PROVENANCE,
     OPEN_DATA_SOURCE: OPEN_DATA_SOURCE
