@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>רשימה קצרה ודוח סקאוטינג — ScoutAI</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
+    body{margin:0;background:#f3f6f1}.skip{position:absolute;inset-inline-start:-999px;top:8px;background:#fff;color:#10281d;padding:8px 12px;border-radius:8px;z-index:5}
+    .skip:focus{inset-inline-start:8px}.shell{max-width:1000px;margin:auto;padding:24px}
+    .banner{background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code{display:inline-block;margin:2px;background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700;display:inline-flex;align-items:center;min-height:44px}
+    .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}
+    h1,h2{margin-top:0}p,li{line-height:1.6}code{overflow-wrap:anywhere}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}
+    label{display:block;margin:12px 0 6px;font-weight:700}
+    select,input,button,textarea{font:inherit;max-width:100%}
+    select,input[type=search],input[type=text]{padding:10px;border-radius:10px;border:1px solid #8a9a8e;min-height:44px;width:100%}
+    textarea{width:100%;min-height:100px;padding:10px;border-radius:10px;border:1px solid #8a9a8e;direction:ltr;text-align:left}
+    button{min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid #145c3d;background:#145c3d;color:#fff;font-weight:700;cursor:pointer}
+    button.ghost{background:#fff;color:#145c3d}button.warn{background:#fff;color:#8a1f1f;border-color:#8a1f1f}
+    .controls{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px}
+    .table-wrap{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;font-size:.9rem}
+    caption{text-align:start;font-weight:700;padding:8px 0}th,td{text-align:start;padding:7px 6px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    th{font-size:.82rem;color:#2d3a32}td.num{direction:ltr;text-align:end;white-space:nowrap}
+    .muted{color:#3d4a42;font-size:.88rem}
+    .status{min-height:1.5em;font-weight:700}
+    .list{display:grid;gap:8px;padding:0;list-style:none}.list li{background:#f3f6f1;border-radius:12px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+    .actions{display:flex;flex-wrap:wrap;gap:8px}
+    .report{background:#fff;border:2px solid #10281d;border-radius:14px;padding:22px;margin-top:14px}
+    .report h2{margin:0}.report h3{margin:14px 0 6px;font-size:1rem;border-bottom:1px solid #c5d0c6;padding-bottom:4px}
+    .report .meta{color:#3d4a42;margin:4px 0 0}
+    .report ul{margin:0;padding-inline-start:20px}
+    .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .bar{max-width:620px;display:grid;grid-template-columns:minmax(0,1fr) 120px 34px;gap:8px;align-items:center;font-size:.86rem;margin:3px 0}
+    .bar .track{background:#e3ebe4;border-radius:999px;height:10px;overflow:hidden}.bar .fill{background:#1f7a52;height:100%;border-radius:999px}
+    .bar strong{direction:ltr;text-align:end}
+    .small{font-size:.8rem;color:#3d4a42}
+    :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
+    footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
+    @media(max-width:650px){.shell{padding:12px}.card{padding:16px}.controls,.cols{grid-template-columns:1fr}.report{padding:14px}}
+    @media print{
+      @page{size:A4;margin:12mm}
+      body,:root{background:#fff}
+      .skip,.shell>aside,.shell>section:not(#reportCard),.shell>footer,#reportCard>h2,#reportCard>p,.no-print{display:none!important}
+      .shell{padding:0;max-width:none}
+      #reportCard{border:none;padding:0;margin:0}
+      .report{border:none;padding:0;margin:0;font-size:11px}
+      .report h3{margin:8px 0 4px}
+      .bar{margin:1px 0}
+      .no-print{display:none!important}
+    }
+  </style>
+</head>
+<body>
+<a class="skip" href="#shortlist">דלגו לרשימה הקצרה</a>
+<main class="shell">
+  <aside class="banner" aria-label="סיווג הדף">
+    <code>STATSBOMB_OPEN_DATA</code> טורנירי נבחרות 2018–2024 — לימוד/מחקר, לא למכירה.
+    <code>NO_FACE_MODEL</code> אין תמונות, אין מדידות גוף, אין טענות על אופי.
+    <code>LOCAL_ONLY</code> הרשימה נשמרת רק בדפדפן שלכם.
+    <div class="nav">
+      <a href="../">מעבדת המדד</a>
+      <a href="../radar/">רדאר תופעות</a>
+      <a href="../mentality/">מדד מנטליות</a>
+      <a href="../licence.html">רישיון</a>
+    </div>
+  </aside>
+
+  <section class="card" id="search">
+    <h1>רשימה קצרה ודוח סקאוטינג בעמוד אחד</h1>
+    <p>בחרו שחקנים לרשימה קצרה. לכל שחקן אפשר להפיק דוח בעברית: חוזקות וחולשות מהנתונים (אחוזון מול אותה עמדה באותו טורניר), התאמה לתפקיד, הסתייגויות על הנתונים והערת רישיון. את הדוח אפשר להדפיס או לשמור כ-PDF, ואת הרשימה כולה לייצא ל-CSV.</p>
+    <p class="notice">הדוח מתאר מה השחקן עשה עם הכדור ובלעדיו לפי נתוני אירועים — הוא לא מודד גובה, כוח או מהירות, ולא «קורא» אופי. זו בחירה: סטטיסטיקה של גוף נוטה להעדיף שחקנים גדולים, והדוח הזה בודק מה השחקן <em>עושה</em>.</p>
+    <div class="controls">
+      <div><label for="q">חיפוש שם או נבחרת</label><input id="q" type="search" autocomplete="off"></div>
+      <div><label for="tSel">טורניר</label><select id="tSel"></select></div>
+      <div><label for="gSel">עמדה</label><select id="gSel">
+        <option value="ALL">הכל</option><option value="GK">שוער</option><option value="DF">הגנה</option><option value="MF">קישור</option><option value="FW">התקפה</option>
+      </select></div>
+      <div><label for="mSel">מינימום דקות</label><select id="mSel">
+        <option value="90">90+</option><option value="270" selected>270+</option><option value="450">450+</option>
+      </select></div>
+    </div>
+    <div class="table-wrap" id="results"></div>
+    <p id="searchStatus" class="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" id="shortlist">
+    <h2>הרשימה הקצרה שלכם</h2>
+    <ul id="shortList" class="list"></ul>
+    <div class="actions">
+      <button id="csvBtn" type="button">ייצוא CSV של הרשימה</button>
+      <button id="clearBtn" type="button" class="warn">ניקוי הרשימה</button>
+    </div>
+    <p id="listStatus" class="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" id="reportCard">
+    <h2>דוח סקאוטינג</h2>
+    <p class="muted no-print">בחרו «דוח» ליד שחקן ברשימה. «הדפסה» מדפיסה רק את הדוח (אפשר לבחור «שמירה כ-PDF» בחלון ההדפסה).</p>
+    <div class="actions no-print"><button id="printBtn" type="button" disabled>הדפסה / PDF</button></div>
+    <div id="reportBox" aria-live="polite"></div>
+  </section>
+
+  <section class="card" id="byod">
+    <h2>שחקנים מהנתונים שלכם</h2>
+    <p>CSV עם העמודות <code dir="ltr">name, position, minutes</code> ואופציונלית <code dir="ltr">team, matches</code> וכל אחת מהספירות: <code dir="ltr" id="byodCols"></code>. ה-position באנגלית כמו אצל StatsBomb (למשל <code dir="ltr">Center Back</code>, <code dir="ltr">Left Wing</code>). האחוזונים יחושבו רק מול השחקנים בקובץ שלכם (270+ דקות). הקובץ לא נשלח לשרת.</p>
+    <label for="byodFile">קובץ CSV</label>
+    <input id="byodFile" type="file" accept=".csv,text/csv">
+    <label for="byodText">או הדביקו כאן</label>
+    <textarea id="byodText" spellcheck="false"></textarea>
+    <p><button id="byodLoad" type="button">טענו שחקנים</button></p>
+    <p id="byodStatus" class="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <footer>נתונים: <span dir="ltr">StatsBomb Open Data</span> (<a href="https://github.com/hudl/open-data" rel="noopener">hudl/open-data</a>) — מחקר ושיתוף ציבורי עם קרדיט; שימוש מסחרי אסור. הדוחות הם כלי לימוד, לא שירות סקאוטינג.</footer>
+</main>
+<script src="../radar.js"></script>
+<script src="../scout-report.js"></script>
+<script>
+(function () {
+  'use strict';
+  const R = window.ScoutAIRadar;
+  const S = window.ScoutAIReport;
+  const state = { pool: [], byod: [], labels: { byod: 'הנתונים שלכם' }, current: null };
+  function el(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function storage() { try { return window.localStorage; } catch (e) { return null; } }
+  function allPlayers() { return state.pool.concat(state.byod); }
+  function find(item) {
+    const k = S.keyOf(item);
+    const hit = allPlayers().find(function (p) { return S.keyOf(p) === k; });
+    return hit || (item.row ? item.row : null);
+  }
+  function poolFor(p) { return p.t === 'byod' ? state.byod.length ? state.byod : [p] : state.pool; }
+  function list() { return S.loadShortlist(storage()); }
+
+  function renderSearch() {
+    const q = el('q').value.trim().toLowerCase();
+    const t = el('tSel').value;
+    const g = el('gSel').value;
+    const m = Number(el('mSel').value);
+    const rows = allPlayers().filter(function (p) {
+      return (t === 'ALL' || p.t === t) && (g === 'ALL' || p.positionGroup === g) && Number(p.minutes) >= m &&
+        (!q || String(p.name).toLowerCase().indexOf(q) >= 0 || String(p.team).toLowerCase().indexOf(q) >= 0);
+    }).sort(function (a, b) { return b.minutes - a.minutes; }).slice(0, 25);
+    el('results').innerHTML = rows.length ? '<table><caption>עד 25 תוצאות (לפי דקות)</caption><thead><tr><th scope="col">שחקן</th><th scope="col">טורניר</th><th scope="col">עמדה</th><th scope="col">דקות</th><th scope="col"><span class="muted">פעולה</span></th></tr></thead><tbody>' +
+      rows.map(function (p) {
+        return '<tr><th scope="row">' + esc(p.name) + '<br><span class="muted">' + esc(p.team) + '</span></th><td>' + esc(state.labels[p.t] || p.t) + '</td><td>' + esc(S.GROUP_LABELS[p.positionGroup] || '') + '</td><td class="num">' + Math.round(p.minutes) + '</td><td><button type="button" class="ghost" data-add="' + esc(S.keyOf(p)) + '">הוסיפו</button></td></tr>';
+      }).join('') + '</tbody></table>' : '<p class="muted">אין תוצאות.</p>';
+    el('results').querySelectorAll('[data-add]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const p = allPlayers().find(function (x) { return S.keyOf(x) === b.getAttribute('data-add'); });
+        const before = list();
+        const after = S.addToShortlist(before, p);
+        const ok = S.saveShortlist(storage(), after);
+        el('searchStatus').textContent = !ok ? 'הדפדפן לא מאפשר שמירה מקומית — הרשימה לא נשמרה.'
+          : after.length === before.length ? p.name + ' כבר ברשימה.' : p.name + ' נוסף לרשימה.';
+        renderList();
+      });
+    });
+  }
+
+  function renderList() {
+    const items = list();
+    el('shortList').innerHTML = items.length ? items.map(function (it) {
+      const p = find(it);
+      return '<li><span><strong>' + esc(it.name) + '</strong> <span class="muted">(' + esc(it.team) + ', ' + esc(state.labels[it.t] || it.t) + ')</span>' +
+        (it.note ? '<br><span class="muted">' + esc(it.note) + '</span>' : '') + (p ? '' : '<br><span class="muted">הנתונים לא נמצאו.</span>') + '</span>' +
+        '<span class="actions"><button type="button" data-report="' + esc(S.keyOf(it)) + '"' + (p ? '' : ' disabled') + '>דוח</button><button type="button" class="ghost" data-remove="' + esc(S.keyOf(it)) + '">הסרה</button></span></li>';
+    }).join('') : '<li><span class="muted">הרשימה ריקה. הוסיפו שחקנים מהחיפוש או מ<a href="../radar/">רדאר התופעות</a>.</span></li>';
+    el('shortList').querySelectorAll('[data-report]').forEach(function (b) {
+      b.addEventListener('click', function () { showReport(b.getAttribute('data-report')); });
+    });
+    el('shortList').querySelectorAll('[data-remove]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const key = b.getAttribute('data-remove');
+        const it = list().find(function (x) { return S.keyOf(x) === key; });
+        S.saveShortlist(storage(), S.removeFromShortlist(list(), it));
+        el('listStatus').textContent = (it ? it.name : '') + ' הוסר מהרשימה.';
+        renderList();
+      });
+    });
+  }
+
+  function bar(r) {
+    const pct = r.pct == null ? 0 : r.pct;
+    return '<div class="bar"><span>' + esc(r.label) + (r.kind === 'style' ? ' <span class="small">(סגנון, לא חוזקה)</span>' : '') + ' <span class="small" dir="ltr">' + esc(S.fmt(r.value, r.kind)) + '</span></span><span class="track" aria-hidden="true"><span class="fill" style="display:block;width:' + pct + '%"></span></span><strong>' + (r.pct == null ? '—' : r.pct) + '</strong></div>';
+  }
+
+  function showReport(key) {
+    const it = list().find(function (x) { return S.keyOf(x) === key; });
+    const p = it && find(it);
+    if (!p) return;
+    const rep = S.buildReport(poolFor(p), p, state.labels[p.t] || p.t);
+    state.current = rep;
+    const today = new Date().toLocaleDateString('he-IL');
+    const best = rep.roles[0];
+    el('reportBox').innerHTML = '<article class="report" aria-label="דוח סקאוטינג">' +
+      '<h2>' + esc(rep.player.name) + '</h2>' +
+      '<p class="meta">' + esc(rep.player.team) + ' · ' + esc(rep.player.groupLabel) + ' (' + esc(rep.player.position) + ') · ' + esc(rep.tournamentLabel) + ' · ' + Math.round(rep.player.minutes) + ' דקות ב-' + rep.player.matches + ' משחקים · הופק ' + esc(today) + '</p>' +
+      (it.note ? '<p class="meta">הערה: ' + esc(it.note) + '</p>' : '') +
+      '<div class="cols"><div><h3>חוזקות מהנתונים</h3>' +
+      (rep.strengths.length ? '<ul>' + rep.strengths.map(function (s) { return '<li>' + esc(rep.describe(s)) + '</li>'; }).join('') + '</ul>' : '<p>' + esc(rep.noStrengthNote) + '</p>') +
+      '</div><div><h3>חולשות / מה לבדוק בווידאו</h3>' +
+      (rep.weaknesses.length ? '<ul>' + rep.weaknesses.map(function (s) { return '<li>' + esc(rep.describe(s)) + '</li>'; }).join('') + '</ul>' : '<p>' + esc(rep.noWeaknessNote) + '</p>') +
+      '</div></div>' +
+      '<h3>התאמה לתפקיד</h3>' +
+      (rep.roles.length ? '<p>' + (best && best.score != null ? 'התאמה הגבוהה ביותר: <strong>' + esc(best.label) + '</strong> (' + best.score + '/100). ' : '') +
+        rep.roles.slice(1).map(function (r) { return esc(r.label) + ' ' + (r.score == null ? '—' : r.score); }).join(' · ') + '</p><p class="small">ציון התאמה = ממוצע האחוזונים של המדדים שמגדירים את התפקיד. זה פרופיל סגנון, לא דירוג איכות.</p>' : '<p>אין תבנית תפקיד לעמדה הזו.</p>') +
+      '<h3>פרופיל מלא (אחוזון בעמדה, 0–100)</h3>' + rep.profile.map(bar).join('') +
+      '<h3>הסתייגויות על הנתונים</h3><ul>' + rep.caveats.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>' +
+      '<h3>רישיון</h3><p class="small">' + esc(rep.licence) + '</p>' +
+      '</article>';
+    el('printBtn').disabled = false;
+  }
+
+  function download(name, text, type) {
+    const blob = new Blob([text], { type: type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  el('csvBtn').addEventListener('click', function () {
+    const items = list();
+    const reports = [];
+    const notes = [];
+    items.forEach(function (it) {
+      const p = find(it);
+      if (!p) return;
+      reports.push(S.buildReport(poolFor(p), p, state.labels[p.t] || p.t));
+      notes.push(it.note || '');
+    });
+    if (!reports.length) { el('listStatus').textContent = 'הרשימה ריקה — אין מה לייצא.'; return; }
+    download('scoutai-shortlist.csv', S.shortlistCsv(reports, notes), 'text/csv;charset=utf-8');
+    el('listStatus').textContent = 'יוצא קובץ CSV עם ' + reports.length + ' שחקנים.';
+  });
+  el('clearBtn').addEventListener('click', function () {
+    S.saveShortlist(storage(), []);
+    el('listStatus').textContent = 'הרשימה נוקתה.';
+    renderList();
+  });
+  el('printBtn').addEventListener('click', function () { window.print(); });
+  ['q', 'tSel', 'gSel', 'mSel'].forEach(function (id) { el(id).addEventListener(id === 'q' ? 'input' : 'change', renderSearch); });
+
+  el('byodCols').textContent = S.BYOD_COLUMNS.filter(function (c) { return c !== 'minutes' && c !== 'matches'; }).join(', ');
+  function loadByod() {
+    const res = S.parseByodPlayers(R.parseCsv(el('byodText').value));
+    if (res.error) { el('byodStatus').textContent = res.error; return; }
+    state.byod = res.players;
+    if (!el('tSel').querySelector('option[value="byod"]')) el('tSel').insertAdjacentHTML('beforeend', '<option value="byod">הנתונים שלכם</option>');
+    el('tSel').value = 'byod';
+    el('mSel').value = '90';
+    el('byodStatus').textContent = res.players.length + ' שחקנים נטענו (רק בזיכרון הדף). ' + res.players.filter(function (p) { return p.minutes >= S.PEER_MIN_MINUTES; }).length + ' מהם עם 270+ דקות משמשים להשוואה.';
+    renderSearch();
+    renderList();
+  }
+  el('byodLoad').addEventListener('click', loadByod);
+  el('byodFile').addEventListener('change', function () {
+    const file = el('byodFile').files && el('byodFile').files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () { el('byodText').value = String(reader.result || ''); loadByod(); };
+    reader.readAsText(file);
+  });
+
+  fetch('../' + R.DATA_PATH).then(function (res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function (json) {
+    const d = R.decode(json);
+    state.pool = d.players;
+    d.tournaments.forEach(function (t) { state.labels[t.key] = t.label; });
+    el('tSel').innerHTML = '<option value="ALL">כל הטורנירים</option>' + d.tournaments.map(function (t) {
+      return '<option value="' + esc(t.key) + '">' + esc(t.label) + '</option>';
+    }).join('');
+    renderSearch();
+    renderList();
+  }).catch(function () {
+    el('searchStatus').textContent = 'לא הצלחנו לטעון את קובץ הנתונים. פתחו את הדף דרך שרת (לא מקובץ מקומי).';
+    renderList();
+  });
+}());
+</script>
+</body>
+</html>
