@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>רדאר תופעות — ScoutAI</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1;--a:#1f7a52;--b:#c26a00;--ink2:#3d4a42;--grid:#c5d0c6}*{box-sizing:border-box}
+    body{margin:0;background:#f3f6f1}.skip{position:absolute;inset-inline-start:-999px;top:8px;background:#fff;color:#10281d;padding:8px 12px;border-radius:8px;z-index:5}
+    .skip:focus{inset-inline-start:8px}.shell{max-width:1040px;margin:auto;padding:24px}
+    .banner{background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code{display:inline-block;margin:2px;background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700;display:inline-flex;align-items:center;min-height:44px}
+    .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}
+    h1,h2{margin-top:0}p,li{line-height:1.65}code{overflow-wrap:anywhere}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}
+    .danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
+    .ok{border-inline-start:4px solid #145c3d;background:#e6f3ea;padding:12px;color:#0f3d26}
+    .verdict{font-size:1.1rem;font-weight:700;padding:14px;border-radius:12px;margin:12px 0;background:#eef4ee;border:2px solid #145c3d;color:#0f3d26}
+    label{display:block;margin:12px 0 6px;font-weight:700}
+    select,textarea,button,input[type=file]{font:inherit;max-width:100%}
+    select{padding:10px;border-radius:10px;border:1px solid #8a9a8e;min-height:44px;width:100%}
+    textarea{width:100%;min-height:120px;padding:10px;border-radius:10px;border:1px solid #8a9a8e;direction:ltr;text-align:left}
+    button{min-height:44px;padding:8px 14px;border-radius:10px;border:1px solid #145c3d;background:#145c3d;color:#fff;font-weight:700;cursor:pointer}
+    button.ghost{background:#fff;color:#145c3d}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .table-wrap{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;font-size:.9rem}
+    caption{text-align:start;font-weight:700;padding:8px 0}th,td{text-align:start;padding:8px 6px;border-bottom:1px solid var(--grid);vertical-align:top}
+    th{font-size:.82rem;color:#2d3a32}td.num{direction:ltr;text-align:end;white-space:nowrap}
+    .muted{color:var(--ink2);font-size:.88rem}
+    .pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:.82rem;font-weight:700;white-space:nowrap}
+    .pill.confirmed{background:#e6f3ea;color:#0f3d26;border:1px solid #145c3d}
+    .pill.hint{background:#fff6dd;color:#3d2e00;border:1px solid #8a5a00}
+    .pill.conflict{background:#f8ecec;color:#3d1010;border:1px solid #8a1f1f}
+    .pill.noise{background:#eef0ee;color:#2d3a32;border:1px solid #8a9a8e}
+    .forest{width:100%;min-width:560px;height:auto;display:block}
+    .forest text{font-size:11px;fill:#2d3a32}
+    .legend{display:flex;flex-wrap:wrap;gap:14px;margin:6px 0;font-size:.88rem}
+    .legend span{display:inline-flex;align-items:center;gap:6px}
+    .tip{position:fixed;pointer-events:none;background:#10281d;color:#fff;padding:8px 10px;border-radius:8px;font-size:.82rem;max-width:280px;line-height:1.5;z-index:9;display:none}
+    .trends{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:0;list-style:none}
+    .trends li{background:#f3f6f1;border-radius:12px;padding:14px}
+    .trends h3{margin:0 0 6px;font-size:1rem}
+    .ex{display:grid;gap:8px;padding:0;list-style:none}.ex li{background:#f3f6f1;border-radius:12px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+    .status{min-height:1.5em;font-weight:700}
+    :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
+    footer{color:var(--ink2);font-size:.9rem;margin:22px 0}
+    @media(max-width:650px){.shell{padding:12px}.card{padding:16px}.controls{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#results">דלגו לתוצאות</a>
+<main class="shell">
+  <aside class="banner" aria-label="סיווג הדף">
+    <code>STATSBOMB_OPEN_DATA</code> ארבעה טורנירי נבחרות גברים בלבד — לימוד/מחקר, לא למכירה.
+    <code>NO_FACE_MODEL</code> אין תמונות ואין ניתוח פנים.
+    <div class="nav">
+      <a href="../">מעבדת המדד</a>
+      <a href="../shortlist/">רשימה קצרה ודוחות</a>
+      <a href="../mentality/">מדד מנטליות</a>
+      <a href="../licence.html">רישיון</a>
+    </div>
+  </aside>
+
+  <section class="card" id="hero">
+    <h1>רדאר תופעות — מה משתנה בכדורגל, ומי הקדים את השינוי</h1>
+    <p>הדף משווה 14 מדדים טקטיים בין טורנירים — עוצמת לחץ, אורך מסירה, הגבהות, מצבים נייחים, משחק רגל של שוערים — ומראה לכל מדד כמה השתנה, עם רווח סמך. שינוי שלא שוחזר בזוג טורנירים שני מסומן כרמז בלבד; שינוי שרווח הסמך שלו כולל אפס מסומן «בתוך הרעש». לכל מגמה מוצגים שחקנים שכבר שיחקו «בכיוון החדש» בטורניר המוקדם.</p>
+    <div id="headline" class="verdict" role="status" aria-live="polite">מחשב…</div>
+  </section>
+
+  <section class="card" id="coverage">
+    <h2>מה מכוסה — ומה לא</h2>
+    <div class="table-wrap" id="coverageTable"></div>
+    <p class="notice"><strong>הנתונים הפתוחים מוגבלים.</strong> יש כאן רק ארבעה טורנירי נבחרות גברים (כל המשחקים שפורסמו בהם). אין ליגות, אין כדורגל נשים, ואין אף משחק מעונת 2025/26 — לכן הרדאר לא יכול לאשר או להפריך את מגמות 2025/26 שבהמשך הדף. טורניר נבחרות שונה מליגה: מעט משחקים, סגל שנבחר ולא נקנה, ומאמנים שונים בכל מהדורה. «שינוי» כאן הוא שינוי בין מהדורות של אותו טורניר, לא הוכחה למגמה עולמית.</p>
+    <p class="muted">כל המדדים מחושבים ב־<code>tools/build-radar.js</code> מקבצי האירועים של StatsBomb ונשמרים ב־<code>data/radar_tournaments.json</code> (שורה לכל קבוצה בכל משחק, ושורה לכל שחקן בכל טורניר). דקות קבוצה = דקות שעון של המחציות וההארכות; במונדיאל 2022 נוספו הרבה דקות תוספת (ממוצע 101 דקות שעון במשחק רגיל לעומת 97 ב-2018), ולכן מדדי «ל-90» שם נמוכים בכ-4% בלי שום שינוי טקטי. מדדי שיעור (%) לא מושפעים מזה.</p>
+  </section>
+
+  <section class="card" id="method">
+    <h2>איך נבדק — נקבע מראש, לפני שראינו תוצאה</h2>
+    <ul>
+      <li><strong>שני זוגות:</strong> גילוי = מונדיאל 2018 ← מונדיאל 2022; שחזור = יורו 2020 ← יורו 2024. הזוג השני הוא מבחן מוחזק: אותה הגדרה, נתונים אחרים.</li>
+      <li><strong>רווח סמך:</strong> bootstrap של 2,000 דגימות, שבו דוגמים <em>משחקים שלמים</em> (שתי הקבוצות יחד) בכל טורניר בנפרד; מרווח אחוזונים 95%. גודל אפקט: Hedges' g על ערכי קבוצה-משחק, גם הוא עם רווח סמך.</li>
+      <li><strong>כלל הכרעה:</strong> «תופעה משוחזרת» רק אם רווח הסמך של השינוי לא כולל 0 <strong>בשני</strong> הזוגות ובאותו כיוון. «רמז» = רק בזוג אחד. «בתוך הרעש» = באף זוג. «סותר» = כיוונים הפוכים.</li>
+      <li><strong>ריבוי השוואות:</strong> 14 מדדים × 2 זוגות = 28 בדיקות; ברמת 95% צפויות בערך 1.4 «תגליות» מקריות. לכן רמז בזוג אחד לא מספיק.</li>
+      <li><strong>בדיקת פלצבו:</strong> מפצלים כל טורניר לשני חצאים (משחקים לסירוגין) ומריצים את אותו מבחן. שם אין שינוי אמיתי — אז כל «שינוי» שנמצא הוא רעש.</li>
+    </ul>
+    <div id="placebo" class="ok" role="status" aria-live="polite">מריץ בדיקת פלצבו…</div>
+  </section>
+
+  <section class="card" id="results">
+    <h2>התוצאות — 14 מדדים</h2>
+    <label for="filterSelect">הצגה</label>
+    <select id="filterSelect">
+      <option value="all">כל המדדים</option>
+      <option value="moving">רק מה שזז (משוחזר, רמז או סותר)</option>
+    </select>
+    <div class="legend" aria-hidden="true">
+      <span><svg width="18" height="12"><circle cx="9" cy="6" r="5" fill="#1f7a52"/></svg>גילוי: מונדיאל 2018→2022</span>
+      <span><svg width="18" height="12"><rect x="4" y="1" width="10" height="10" rx="2" fill="#c26a00"/></svg>שחזור: יורו 2020→2024</span>
+      <span class="muted">הקו = רווח סמך 95% של Hedges' g; קו אנכי = אפס (אין שינוי)</span>
+    </div>
+    <div id="forest" class="table-wrap"></div>
+    <div class="table-wrap" id="resultsTable"></div>
+    <p class="muted">g: 0.2 קטן, 0.5 בינוני, 0.8 גדול (מוסכמה גסה). Δ = ערך בטורניר המאוחר פחות המוקדם, ביחידות המדד.</p>
+  </section>
+
+  <section class="card" id="exemplars">
+    <h2>מי הקדים את המגמה</h2>
+    <p>לכל מדד שזז: חמשת השחקנים בטורניר <strong>המוקדם</strong> שהיו הכי רחוקים «בכיוון החדש» — יחסית לשחקנים באותה קבוצת עמדה (180+ דקות, ערך מכווץ לממוצע העמדה כשיש מעט נתונים). אם השחקן שיחק גם בטורניר המאוחר, מוצג הערך שלו שם. זה תיאור, לא ניבוי: שחקן שהקדים מגמה לא בהכרח יהיה טוב יותר.</p>
+    <div class="controls">
+      <div><label for="exMetric">מדד</label><select id="exMetric"></select></div>
+      <div><label for="exPair">זוג טורנירים</label><select id="exPair"></select></div>
+    </div>
+    <p id="exNote" class="muted"></p>
+    <ul id="exList" class="ex"></ul>
+    <p id="exStatus" class="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" id="world">
+    <h2>מה משתנה בכדורגל 2025–2026 — לפי מקורות</h2>
+    <p class="muted">סיכום של דיווחים פומביים (בעיקר פרמייר ליג) שנבדקו ב-<span id="checkedDate"></span>. אלה לא נתונים שלנו ולא חושבו כאן. ליד כל מגמה: מה הרדאר מצא על המדד הקרוב ביותר — בטורנירי נבחרות עד 2024, כלומר תחרות אחרת ותקופה מוקדמת.</p>
+    <ul id="trendList" class="trends"></ul>
+  </section>
+
+  <section class="card" id="byod">
+    <h2>הביאו נתונים שלכם</h2>
+    <p>קובץ CSV עם עמודה <code dir="ltr">group</code> (בדיוק שני ערכים — המוקדם מופיע ראשון), עמודה אופציונלית <code dir="ltr">match_id</code> (לדגימת משחקים שלמים), וכל עמודה מספרית שתרצו להשוות (ערך אחד לשורה, למשל קבוצה-משחק). החישוב רץ בדפדפן; הקובץ לא נשלח לשום מקום.</p>
+    <label for="byodFile">קובץ CSV</label>
+    <input id="byodFile" type="file" accept=".csv,text/csv">
+    <label for="byodText">או הדביקו כאן</label>
+    <textarea id="byodText" spellcheck="false"></textarea>
+    <p><button id="byodRun" type="button">הריצו השוואה</button> <button id="byodSample" type="button" class="ghost">טענו דוגמה סינתטית</button></p>
+    <p id="byodStatus" class="status" role="status" aria-live="polite"></p>
+    <div class="table-wrap" id="byodTable"></div>
+  </section>
+
+  <footer>
+    נתונים: <span dir="ltr">StatsBomb Open Data</span> (<a href="https://github.com/hudl/open-data" rel="noopener">hudl/open-data</a>) — מחקר ושיתוף ציבורי עם קרדיט; שימוש מסחרי בנתונים ובניתוח שנגזר מהם אסור. הרדאר הוא כלי לימוד ומחקר.
+  </footer>
+</main>
+<div class="tip" id="tip" role="tooltip"></div>
+<script src="../radar.js"></script>
+<script src="../scout-report.js"></script>
+<script>
+(function () {
+  'use strict';
+  const R = window.ScoutAIRadar;
+  const S = window.ScoutAIReport;
+  const state = { data: null, rows: null };
+  function el(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function n(x, d) { return x == null || !isFinite(x) ? '—' : Number(x).toFixed(d == null ? 2 : d); }
+  function ci(c, d) { return c ? '[' + n(c[0], d) + ', ' + n(c[1], d) + ']' : '—'; }
+  function storage() { try { return window.localStorage; } catch (e) { return null; } }
+  const DIR = { up: 'עלה', down: 'ירד', noise: 'בתוך הרעש' };
+  const TLABEL = {};
+
+  function renderCoverage() {
+    const d = state.data;
+    el('coverageTable').innerHTML = '<table><caption>טורנירים בנתונים</caption><thead><tr><th scope="col">טורניר</th><th scope="col">משחקים</th><th scope="col">שורות קבוצה-משחק</th><th scope="col">שחקנים (45+ דק׳)</th></tr></thead><tbody>' +
+      d.tournaments.map(function (t) {
+        TLABEL[t.key] = t.label;
+        return '<tr><th scope="row">' + esc(t.label) + '</th><td class="num">' + t.matches + '</td><td class="num">' +
+          d.teams.filter(function (r) { return r.t === t.key; }).length + '</td><td class="num">' +
+          d.players.filter(function (p) { return p.t === t.key; }).length + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function counts() {
+    const c = { confirmed: 0, hint: 0, conflict: 0, noise: 0 };
+    state.rows.forEach(function (r) { c[r.verdict] += 1; });
+    return c;
+  }
+
+  function renderHeadline() {
+    const c = counts();
+    const conf = state.rows.filter(function (r) { return r.verdict === 'confirmed'; })
+      .map(function (r) { return r.metric.label + ' (' + DIR[r.dir] + ')'; });
+    el('headline').textContent = 'מתוך 14 מדדים: ' + c.confirmed + ' תופעות משוחזרות בשני הזוגות, ' + c.hint + ' רמזים בזוג אחד, סותרים בין הזוגות: ' + c.conflict + ', בתוך הרעש: ' + c.noise + '.' +
+      (conf.length ? ' משוחזר: ' + conf.join('; ') + '.' : '');
+  }
+
+  function forest() {
+    const filter = el('filterSelect').value;
+    const rows = state.rows.filter(function (r) { return filter === 'all' || r.verdict !== 'noise'; });
+    let lo = -1;
+    let hi = 1;
+    rows.forEach(function (r) { r.pairs.forEach(function (p) { if (p.gCi) { lo = Math.min(lo, p.gCi[0]); hi = Math.max(hi, p.gCi[1]); } }); });
+    lo = Math.floor(lo * 2) / 2; hi = Math.ceil(hi * 2) / 2;
+    const W = 640; const labelW = 0; const padL = 16; const padR = 16; const rowH = 34; const top = 22;
+    const H = top + rows.length * rowH + 10;
+    function x(v) { return padL + labelW + (v - lo) / (hi - lo) * (W - padL - padR - labelW); }
+    let svg = '<svg class="forest" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="תרשים יער: Hedges g ורווח סמך לכל מדד ולכל זוג טורנירים. הטבלה למטה מכילה את אותם ערכים." direction="ltr">';
+    for (let t = lo; t <= hi + 1e-9; t += 0.5) {
+      svg += '<line x1="' + x(t) + '" x2="' + x(t) + '" y1="' + (top - 6) + '" y2="' + (H - 6) + '" stroke="' + (Math.abs(t) < 1e-9 ? '#2d3a32' : '#e3ebe4') + '" stroke-width="' + (Math.abs(t) < 1e-9 ? 1.5 : 1) + '"/>';
+      svg += '<text x="' + x(t) + '" y="12" text-anchor="middle">' + t.toFixed(1) + '</text>';
+    }
+    rows.forEach(function (r, i) {
+      const y0 = top + i * rowH;
+      svg += '<text x="' + (W - padR) + '" y="' + (y0 + 8) + '" text-anchor="start" direction="rtl" style="font-weight:700;direction:rtl;unicode-bidi:plaintext">' + esc(r.metric.label) + ' · ' + esc(R.VERDICT_LABELS[r.verdict]) + '</text>';
+      r.pairs.forEach(function (p, j) {
+        if (!p.gCi || p.g == null) return;
+        const y = y0 + 16 + j * 9;
+        const color = j === 0 ? '#1f7a52' : '#c26a00';
+        const tip = (j === 0 ? 'גילוי 2018→2022' : 'שחזור 2020→2024') + ' · ' + r.metric.label + ': g ' + n(p.g) + ' ' + ci(p.gCi) + '; ' + n(p.a) + ' → ' + n(p.b) + ' · ' + DIR[p.dir];
+        svg += '<g data-tip="' + esc(tip) + '"><rect x="' + x(p.gCi[0]) + '" y="' + (y - 5) + '" width="' + Math.max(12, x(p.gCi[1]) - x(p.gCi[0])) + '" height="10" fill="transparent"/>';
+        svg += '<line x1="' + x(p.gCi[0]) + '" x2="' + x(p.gCi[1]) + '" y1="' + y + '" y2="' + y + '" stroke="' + color + '" stroke-width="2" stroke-linecap="round"/>';
+        svg += j === 0
+          ? '<circle cx="' + x(p.g) + '" cy="' + y + '" r="4.5" fill="' + color + '" stroke="#fff" stroke-width="2"/>'
+          : '<rect x="' + (x(p.g) - 4.5) + '" y="' + (y - 4.5) + '" width="9" height="9" rx="2" fill="' + color + '" stroke="#fff" stroke-width="2"/>';
+        svg += '</g>';
+      });
+    });
+    svg += '</svg>';
+    el('forest').innerHTML = svg;
+    const tipEl = el('tip');
+    el('forest').querySelectorAll('[data-tip]').forEach(function (g) {
+      g.addEventListener('mousemove', function (e) {
+        tipEl.textContent = g.getAttribute('data-tip');
+        tipEl.style.display = 'block';
+        const left = Math.min(window.innerWidth - 290, e.clientX + 12);
+        tipEl.style.left = Math.max(4, left) + 'px';
+        tipEl.style.top = (e.clientY + 14) + 'px';
+      });
+      g.addEventListener('mouseleave', function () { tipEl.style.display = 'none'; });
+    });
+
+    el('resultsTable').innerHTML = '<table><caption>ערכים, שינוי ורווחי סמך 95%</caption><thead><tr><th scope="col">מדד</th><th scope="col">הכרעה</th><th scope="col">זוג</th><th scope="col">מוקדם → מאוחר</th><th scope="col">Δ</th><th scope="col">95% CI</th><th scope="col">g</th><th scope="col">95% CI</th><th scope="col">גודל</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return r.pairs.map(function (p, j) {
+          return '<tr>' + (j === 0
+            ? '<th scope="row" rowspan="2">' + esc(r.metric.label) + '<br><span class="muted">' + esc(r.metric.help) + '</span>' + (r.metric.caution ? '<br><span class="muted"><strong>זהירות:</strong> ' + esc(r.metric.caution) + '</span>' : '') + '</th><td rowspan="2"><span class="pill ' + r.verdict + '">' + esc(R.VERDICT_LABELS[r.verdict]) + '</span></td>'
+            : '') +
+            '<td>' + (j === 0 ? 'מונד׳ 18→22' : 'יורו 20→24') + '</td><td class="num">' + n(p.a) + ' → ' + n(p.b) + '</td><td class="num">' + n(p.diff) + '</td><td class="num">' + ci(p.ci) + '</td><td class="num">' + n(p.g) + '</td><td class="num">' + ci(p.gCi) + '</td><td>' + esc(p.dir === 'noise' ? 'בתוך הרעש' : R.sizeLabel(p.g)) + '</td></tr>';
+        }).join('');
+      }).join('') + '</tbody></table>';
+  }
+
+  function renderPlacebo() {
+    const res = state.data.tournaments.map(function (t) { return R.placebo(state.data, t.key); });
+    const flagged = res.reduce(function (s, r) { return s + r.flagged; }, 0);
+    const total = res.reduce(function (s, r) { return s + r.total; }, 0);
+    el('placebo').textContent = 'פלצבו: בפיצול כל טורניר לשני חצאים, ' + flagged + ' מתוך ' + total + ' בדיקות (' + Math.round(flagged / total * 100) + '%) «זזו» — וזה רעש בהגדרה. הציפייה ברמת 95% היא כ-5%. ' +
+      res.map(function (r) { return TLABEL[r.tournament] + ': ' + r.flagged + '/' + r.total; }).join(' · ') + '.';
+  }
+
+  function fillExemplarSelects() {
+    const moving = state.rows.filter(function (r) { return r.verdict !== 'noise' && r.verdict !== 'conflict'; });
+    el('exMetric').innerHTML = moving.map(function (r) {
+      return '<option value="' + r.metric.id + '">' + esc(r.metric.label) + ' — ' + esc(R.VERDICT_LABELS[r.verdict]) + '</option>';
+    }).join('');
+    renderExemplars();
+  }
+
+  function renderExemplars() {
+    const row = state.rows.find(function (r) { return r.metric.id === el('exMetric').value; });
+    if (!row) { el('exList').innerHTML = ''; el('exNote').textContent = 'אין מדד שזז.'; return; }
+    const pairs = row.pairs.filter(function (p) { return p.dir !== 'noise'; });
+    const current = el('exPair').value;
+    el('exPair').innerHTML = pairs.map(function (p) {
+      const def = R.PAIRS.find(function (x) { return x.id === p.pair; });
+      return '<option value="' + p.pair + '"' + (p.pair === current ? ' selected' : '') + '>' + esc(def.label) + '</option>';
+    }).join('');
+    const pairId = el('exPair').value;
+    const p = row.pairs.find(function (x) { return x.pair === pairId; });
+    const pairDef = R.PAIRS.find(function (x) { return x.id === pairId; });
+    const spec = row.metric.player;
+    const dirText = p.dir === 'up' ? 'עלה' : 'ירד';
+    if (!spec) {
+      const teams = R.teamExemplars(state.data, row.metric.id, pairId, p.dir, 5);
+      el('exNote').textContent = row.metric.label + ' ' + dirText + ' (' + n(p.a) + ' → ' + n(p.b) + '). מדד קבוצתי — מוצגות נבחרות ב' + TLABEL[pairDef.from] + ' (3+ משחקים).';
+      el('exList').innerHTML = teams.map(function (t) {
+        return '<li><span><strong>' + esc(t.team) + '</strong> — ' + n(t.value) + ' <span class="muted">(' + t.matches + ' משחקים)</span></span></li>';
+      }).join('');
+      return;
+    }
+    const list = R.exemplars(state.data, row.metric.id, pairId, p.dir, 5);
+    el('exNote').textContent = row.metric.label + ' ' + dirText + ' ברמת הקבוצה (' + n(p.a) + ' → ' + n(p.b) + '). אצל שחקנים המדד הוא «' + spec.label + '». מוצגים שחקנים מ' + TLABEL[pairDef.from] + ' שהיו ' + (p.dir === 'up' ? 'הכי גבוהים' : 'הכי נמוכים') + ' ביחס לעמדתם.' + (row.verdict === 'hint' ? ' שימו לב: זה רק רמז — לא שוחזר בזוג השני.' : '');
+    el('exList').innerHTML = list.map(function (e) {
+      return '<li><span><strong>' + esc(e.name) + '</strong> <span class="muted">(' + esc(e.team) + ', ' + esc(S.GROUP_LABELS[e.positionGroup] || '') + ', ' + Math.round(e.minutes) + ' דק׳)</span><br>' +
+        esc(spec.label) + ': ' + n(e.raw) + ' <span class="muted">(ממוצע עמדה ' + n(e.groupMean) + ', z ' + n(e.z) + ')</span>' +
+        (e.later ? ' · ב' + esc(TLABEL[pairDef.to]) + ': ' + n(e.later.raw) + ' <span class="muted">(' + Math.round(e.later.minutes) + ' דק׳)</span>' : ' · <span class="muted">לא שיחק ב' + esc(TLABEL[pairDef.to]) + '</span>') +
+        '</span><button type="button" class="ghost" data-add="' + esc(e.t + ':' + e.id) + '">הוסיפו לרשימה הקצרה</button></li>';
+    }).join('');
+    el('exList').querySelectorAll('[data-add]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const key = b.getAttribute('data-add');
+        const pl = state.data.players.find(function (x) { return x.t + ':' + x.id === key; });
+        if (!pl) return;
+        const st = storage();
+        const before = S.loadShortlist(st);
+        const after = S.addToShortlist(before, pl, 'מהרדאר: ' + row.metric.label);
+        const ok = S.saveShortlist(st, after);
+        el('exStatus').textContent = !ok ? 'הדפדפן לא מאפשר שמירה מקומית — הרשימה לא נשמרה.'
+          : after.length === before.length ? pl.name + ' כבר ברשימה.' : pl.name + ' נוסף לרשימה הקצרה (' + after.length + ' שחקנים).';
+      });
+    });
+  }
+
+  function renderTrends() {
+    el('checkedDate').textContent = R.TREND_CHECKED.split('-').reverse().join('.');
+    el('trendList').innerHTML = R.WEB_TRENDS.map(function (t) {
+      const row = t.metric && state.rows.find(function (r) { return r.metric.id === t.metric; });
+      const ours = row
+        ? 'ברדאר (' + row.metric.label + '): <span class="pill ' + row.verdict + '">' + esc(R.VERDICT_LABELS[row.verdict]) + '</span>' + (row.dir ? ' — ' + DIR[row.dir] : '') +
+          '. מונד׳ ' + n(row.pairs[0].a, 1) + '→' + n(row.pairs[0].b, 1) + ', יורו ' + n(row.pairs[1].a, 1) + '→' + n(row.pairs[1].b, 1) + '.'
+        : 'אין מדד מקביל בנתונים הפתוחים.';
+      return '<li><h3>' + esc(t.title) + '</h3><p>' + esc(t.text) + '</p><p class="muted">מקור: <a href="' + esc(t.url) + '" rel="noopener">' + esc(t.source) + '</a>, <span dir="ltr">' + esc(t.date) + '</span></p><p class="muted">' + ours + '</p></li>';
+    }).join('');
+  }
+
+  const SAMPLE = 'group,match_id,team,press_per90,long_share\n2024,1,A,120,11.2\n2024,1,B,131,10.1\n2024,2,C,118,12.5\n2024,2,D,125,9.8\n2024,3,E,122,12.0\n2024,3,F,140,10.5\n2024,4,G,119,11.9\n2024,4,H,127,10.2\n2024,5,I,121,11.1\n2024,5,J,133,10.9\n2025,6,A,128,13.5\n2025,6,B,139,12.2\n2025,7,C,126,14.1\n2025,7,D,131,12.9\n2025,8,E,129,13.8\n2025,8,F,142,12.4\n2025,9,G,125,14.0\n2025,9,H,134,12.8\n2025,10,I,130,13.3\n2025,10,J,137,13.1\n';
+
+  function runByod() {
+    const res = R.byodRadar(el('byodText').value);
+    if (res.error) { el('byodStatus').textContent = res.error; el('byodTable').innerHTML = ''; return; }
+    el('byodStatus').textContent = res.rows + ' שורות, ' + res.groups[0] + ' ← ' + res.groups[1] + '. bootstrap של 1,000 דגימות לפי match_id.';
+    el('byodTable').innerHTML = '<table><caption>השוואה בנתונים שלכם</caption><thead><tr><th scope="col">עמודה</th><th scope="col">' + esc(res.groups[0]) + ' → ' + esc(res.groups[1]) + '</th><th scope="col">Δ</th><th scope="col">95% CI</th><th scope="col">g</th><th scope="col">כיוון</th></tr></thead><tbody>' +
+      res.results.map(function (r) {
+        return '<tr><th scope="row" dir="ltr">' + esc(r.label) + '</th><td class="num">' + n(r.a) + ' → ' + n(r.b) + '</td><td class="num">' + n(r.diff) + '</td><td class="num">' + ci(r.ci) + '</td><td class="num">' + n(r.g) + '</td><td>' + (r.degenerate ? 'מעט מדי משחקים (פחות מ-5 בקבוצה)' : DIR[r.dir]) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  el('filterSelect').addEventListener('change', forest);
+  el('exMetric').addEventListener('change', function () { el('exPair').value = ''; renderExemplars(); });
+  el('exPair').addEventListener('change', renderExemplars);
+  el('byodRun').addEventListener('click', runByod);
+  el('byodSample').addEventListener('click', function () { el('byodText').value = SAMPLE; runByod(); });
+  el('byodFile').addEventListener('change', function () {
+    const file = el('byodFile').files && el('byodFile').files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () { el('byodText').value = String(reader.result || ''); runByod(); };
+    reader.readAsText(file);
+  });
+
+  fetch('../' + R.DATA_PATH).then(function (res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function (json) {
+    state.data = R.decode(json);
+    renderCoverage();
+    state.rows = R.radar(state.data);
+    renderHeadline();
+    forest();
+    fillExemplarSelects();
+    renderTrends();
+    setTimeout(renderPlacebo, 30);
+  }).catch(function () {
+    el('headline').textContent = 'לא הצלחנו לטעון את קובץ הנתונים. פתחו את הדף דרך שרת (לא מקובץ מקומי).';
+  });
+}());
+</script>
+</body>
+</html>
