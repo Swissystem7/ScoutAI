@@ -1047,7 +1047,7 @@
   const OUTCOMES = Object.freeze([
     { id: 'assists', label: 'בישולים', field: 'assists', leaky: false, leakNote: 'בישול לא נכנס לנוסחה. מסירת מפתח כן — זה לא אותו שדה.' },
     { id: 'dribbles', label: 'כדרורים', field: 'dribbles', leaky: false, leakNote: 'כדרור נאסף בקובץ ולא נכנס לציון.' },
-    { id: 'duelsWon', label: 'דו-קרבות שנרכשו', field: 'duelsWon', leaky: false, leakNote: 'דו-קרב שנרכש לא זהה לתיקול שנכנס ל-Grit.' },
+    { id: 'duelsWon', label: 'דו-קרבות שנרכשו', field: 'duelsWon', leaky: true, leakNote: 'דליפה: בקובץ מונדיאל 2018 העמודה duelsWon זהה ל-tackles (קלט של Grit) בכל 605 השורות. בקובץ שלכם בדקו אם היא נגזרת מתיקולים לפני שקוראים את ρ.' },
     { id: 'goals', label: 'שערים', field: 'goals', leaky: true, leakNote: 'דליפה: Clutch בנוי מ-xG ומבעיטות למסגרת, שמתואמים עם שערים.' },
     { id: 'box', label: 'שערים+בישולים', field: 'box', leaky: true, leakNote: 'דליפה: תיבת הניקוד מתואמת עם Clutch.' }
   ]);
@@ -1064,6 +1064,44 @@
     if (outcomeId === 'dribbles') return counts.dribbles || 0;
     if (outcomeId === 'duelsWon') return counts.duelsWon || 0;
     return 0;
+  }
+
+  // Reference point for the holdout lab: rank the same test-fold players by
+  // minutes alone. The outcomes are tournament totals, so a player who played
+  // more collects more of them; a metric that does not beat this adds nothing
+  // over playing time. The verdict is computed from the two numbers.
+  function minutesBaseline(prepared, spec, options) {
+    const metric = normalizeMetricSpec(spec);
+    const opts = options || {};
+    const outcomeId = opts.outcomeId || metric.outcomeId;
+    const splitId = opts.splitId || metric.splitId;
+    const meta = outcomeMeta(outcomeId);
+    const test = scorePrepared(asPrepared(prepared), metric).filter(function (row) {
+      return assignFold(row, splitId) === 'test';
+    });
+    const outcomes = test.map(function (row) { return outcomeValue(row, outcomeId); });
+    const metricRho = spearman(test.map(function (row) { return row.score; }), outcomes);
+    const minutesRho = spearman(test.map(function (row) { return Number(row.minutes) || 0; }), outcomes);
+    const ready = metricRho != null && minutesRho != null && Number.isFinite(metricRho) && Number.isFinite(minutesRho);
+    const beatsMinutes = ready ? metricRho > minutesRho : null;
+    let verdict;
+    if (!ready) {
+      verdict = 'אין מספיק שחקנים במבחן כדי להשוות לדירוג לפי דקות בלבד.';
+    } else if (beatsMinutes) {
+      verdict = 'המדד (ρ=' + metricRho + ') עוקף את הדירוג לפי דקות בלבד (ρ=' + minutesRho + ') על אותם ' + test.length + ' שחקני מבחן.';
+    } else {
+      verdict = 'המדד (ρ=' + metricRho + ') לא עוקף את הדירוג לפי דקות בלבד (ρ=' + minutesRho + ') על אותם ' + test.length +
+        ' שחקני מבחן: מי ששיחק יותר צבר יותר ' + meta.label + ', והציון לא מוסיף על זמן המשחק.';
+    }
+    if (ready && meta.leaky) verdict += ' היעד מסומן כדליפה, ולכן גם ההשוואה הזו לא מלמדת על חיזוי.';
+    return {
+      outcomeId: outcomeId,
+      n: test.length,
+      metricRho: metricRho,
+      minutesRho: minutesRho,
+      beatsMinutes: beatsMinutes,
+      verdict: verdict
+    };
   }
 
   function filePer90(player, field) {
@@ -1583,6 +1621,44 @@
     return { ok: true, errors: errors, players: players };
   }
 
+  // Content check behind the metadata check: a row counts as Open Data when
+  // its name and team match a shipped row AND at least three count fields
+  // present in both are equal. Same players from another (licensed) provider
+  // have different counts and pass; a CSV re-save or a bare array does not.
+  // Renamed players are not caught - this is a guard, not a warranty.
+  function openDataRowKey(row) {
+    return String(row && row.name || '').trim().toLowerCase() + '|' + String(row && row.team || '').trim().toLowerCase();
+  }
+
+  function fieldValue(row, key) {
+    const src = row && row.counts && typeof row.counts === 'object' ? row.counts : row;
+    const raw = src ? src[key] : undefined;
+    if (raw === '' || raw == null) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function openDataContentMatches(players, reference) {
+    const byKey = {};
+    (reference || []).forEach(function (row) { byKey[openDataRowKey(row)] = row; });
+    let matches = 0;
+    (players || []).forEach(function (row) {
+      const ref = byKey[openDataRowKey(row)];
+      if (!ref) return;
+      let compared = 0;
+      let equal = 0;
+      COUNT_FIELDS.forEach(function (key) {
+        const mine = fieldValue(row, key);
+        const theirs = fieldValue(ref, key);
+        if (mine == null || theirs == null) return;
+        compared += 1;
+        if (Math.abs(mine - theirs) <= 0.001) equal += 1;
+      });
+      if (compared >= 3 && equal === compared) matches += 1;
+    });
+    return matches;
+  }
+
   function parseUserDataset(text, options) {
     const opts = options || {};
     const raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').trim();
@@ -1628,11 +1704,27 @@
     if (!players.length) {
       return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
     }
+    const warnings = players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [];
+    if (Array.isArray(opts.openDataPlayers) && opts.openDataPlayers.length) {
+      const matches = openDataContentMatches(players, opts.openDataPlayers);
+      if (matches > 0 && matches >= Math.min(20, Math.ceil(players.length * 0.3))) {
+        return {
+          ok: false,
+          errors: ['הקובץ מזוהה כ-StatsBomb Open Data לפי התוכן: ' + matches + ' שורות זהות (שם, קבוצה וספירות) לקובץ מונדיאל 2018. הרישיון אוסר ניצול מסחרי. חזרו למצב הדמו החינמי.'],
+          players: [],
+          provenance: OPEN_DATA_PROVENANCE,
+          detected: OPEN_DATA_PROVENANCE,
+          contentMatches: matches
+        };
+      }
+    } else if (!synthetic) {
+      warnings.push('בדיקת התוכן מול Open Data לא רצה, כי קובץ הייחוס לא נטען. נבדקה רק המטא-דאטה.');
+    }
     const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
     return {
       ok: true,
       errors: parseErrors,
-      warnings: players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [],
+      warnings: warnings,
       players: players,
       provenance: provenance,
       source: {
@@ -1671,6 +1763,7 @@
     RADAR_AXES: RADAR_AXES,
     COMPONENT_RECIPE: COMPONENT_RECIPE,
     DEFENDER_EXERCISE: DEFENDER_EXERCISE,
+    minutesBaseline: minutesBaseline,
     evaluateExercise: evaluateExercise,
     buildCompareRadar: buildCompareRadar,
     radarValues: radarValues,
@@ -1693,6 +1786,8 @@
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
     OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,
+    rankValues: rankValues,
+    preparePlayer: preparePlayer,
     USER_DATA_PROVENANCE: USER_DATA_PROVENANCE,
     SYNTHETIC_PROVENANCE: SYNTHETIC_PROVENANCE,
     OPEN_DATA_SOURCE: OPEN_DATA_SOURCE

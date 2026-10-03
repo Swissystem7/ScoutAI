@@ -134,3 +134,175 @@ test('offer page is an offer, not a fake checkout', () => {
   assert.match(monetization, /13\.8\.2026/);
   assert.match(monetization, /github.com\/hudl\/open-data/);
 });
+
+test('offer contact opens a Hebrew workshop issue form that warns the issue is public', () => {
+  const formPath = path.join(root, '.github', 'ISSUE_TEMPLATE', 'workshop.yml');
+  assert.ok(fs.existsSync(formPath), 'missing .github/ISSUE_TEMPLATE/workshop.yml');
+  const form = fs.readFileSync(formPath, 'utf8');
+  assert.match(form, /^name: /m);
+  assert.match(form, /^title: "פנייה לסדנה/m);
+  assert.match(form, /ציבורי/);
+  assert.match(form, /אל תכתבו טלפון/);
+  assert.match(form, /נתוני שחקנים/);
+  assert.doesNotMatch(form, /type: input\s+id: (phone|email)/);
+  const plainNew = offer.match(/issues\/new(?!\?template=workshop\.yml)/g) || [];
+  assert.equal(plainNew.length, 0, 'every offer contact link must open the workshop form');
+  assert.match(offer, /issues\/new\?template=workshop\.yml/);
+  assert.match(offer, /הפנייה ציבורית/);
+});
+
+// The owner decided on 28.9: the public contact channel for all his apps is his Google Form
+// "משוב על האפליקציות", with the app field pre-filled as ScoutAI (an exact option of the form).
+const OWNER_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSdT8YduNx-VWKM3bWGUJdiSj4Sw9D-EA6R6c-oYVYCQmOVXxQ/viewform?usp=pp_url&entry.368039752=ScoutAI';
+
+test('CONTACT is the owner\'s Google Form, and offer.html shows it instead of the GitHub form', () => {
+  const { CONTACT, renderContact } = require('../contact.js');
+  assert.equal(CONTACT, OWNER_FORM);
+  assert.doesNotMatch(CONTACT, /@|tel:|wa\.me/, 'no email or phone');
+  // Run contact.js the way the browser does (no module), against a stand-in for offer.html's two blocks.
+  const slot = { hidden: true, link: { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }, querySelector() { return this.link; } };
+  const fallback = { hidden: false };
+  const doc = { readyState: 'complete', querySelectorAll: (sel) => (sel === '[data-contact]' ? [slot] : sel === '[data-contact-fallback]' ? [fallback] : []) };
+  const vm = require('node:vm');
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'contact.js'), 'utf8'), { window: { document: doc } });
+  assert.equal(slot.hidden, false, 'the contact block shows');
+  assert.equal(slot.link.attrs.href, OWNER_FORM, 'its link opens the form');
+  assert.equal(fallback.hidden, true, 'the GitHub issue fallback steps aside');
+  assert.equal(renderContact(doc, CONTACT), true);
+  const block = (offer.match(/<div data-contact hidden>([\s\S]*?)<\/div>/) || [])[1] || '';
+  assert.match(block, /טופס Google/, 'the block says it is a Google Form');
+});
+
+test('private contact is one config value (contact.js), hidden while empty, with the Hebrew issue form as fallback', () => {
+  const contactPath = path.join(root, 'contact.js');
+  assert.ok(fs.existsSync(contactPath), 'missing contact.js (the single CONTACT slot)');
+  const { CONTACT, contactHref, renderContact } = require('../contact.js');
+  assert.equal(typeof CONTACT, 'string');
+  assert.equal(contactHref(''), '');
+  assert.equal(contactHref('   '), '');
+  assert.equal(contactHref('javascript:alert(1)'), '');
+  assert.equal(contactHref('http://example.com'), '');
+  assert.equal(contactHref('050-0000000'), '');
+  assert.equal(contactHref('mailto:not-an-address'), '');
+  assert.equal(contactHref('mailto:a@b.co'), 'mailto:a@b.co');
+  assert.equal(contactHref(' https://example.com/x '), 'https://example.com/x');
+
+  const makeEl = (hidden) => ({ hidden, attrs: {}, link: { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } }, querySelector() { return this.link; } });
+  const makeDoc = () => {
+    const slots = [makeEl(true)];
+    const fallbacks = [makeEl(false), makeEl(false)];
+    return { slots, fallbacks, querySelectorAll(sel) { return sel === '[data-contact]' ? slots : sel === '[data-contact-fallback]' ? fallbacks : []; } };
+  };
+  const empty = makeDoc();
+  assert.equal(renderContact(empty, ''), false);
+  assert.equal(empty.slots[0].hidden, true);
+  assert.ok(empty.fallbacks.every((el) => el.hidden === false));
+  const filled = makeDoc();
+  assert.equal(renderContact(filled, 'mailto:a@b.co'), true);
+  assert.equal(filled.slots[0].hidden, false);
+  assert.equal(filled.slots[0].link.attrs.href, 'mailto:a@b.co');
+  assert.ok(filled.fallbacks.every((el) => el.hidden === true));
+  const bad = makeDoc();
+  assert.equal(renderContact(bad, 'javascript:alert(1)'), false);
+  assert.equal(bad.slots[0].hidden, true);
+
+  assert.match(offer, /<script src="contact\.js"><\/script>/);
+  assert.match(offer, /data-contact hidden/);
+  const fallbackBlocks = offer.match(/data-contact-fallback[^>]*>[\s\S]*?issues\/new\?template=workshop\.yml/g) || [];
+  assert.ok(fallbackBlocks.length >= 1, 'the issue form link must sit inside a data-contact-fallback block');
+  for (const page of ['index.html', 'offer.html', 'licence.html', path.join('trap', 'index.html')]) {
+    const text = fs.readFileSync(path.join(root, page), 'utf8');
+    assert.doesNotMatch(text, /mailto:|tel:|wa\.me|whatsapp\.com/i, page + ' must not hard-code contact details');
+  }
+});
+
+test('every page footer a visitor sees is Hebrew (only the brand name ScoutAI in Latin letters)', () => {
+  for (const page of ['index.html', 'offer.html', 'licence.html', path.join('trap', 'index.html')]) {
+    const text = fs.readFileSync(path.join(root, page), 'utf8');
+    const footer = (text.match(/<footer>([\s\S]*?)<\/footer>/) || [])[1];
+    assert.ok(footer, page + ' has a footer');
+    const visible = footer.replace(/<[^>]+>/g, ' ').replace(/ScoutAI/g, '');
+    assert.doesNotMatch(visible, /[A-Za-z]{2,}/, page + ' footer has English: ' + visible.trim());
+  }
+});
+
+test('offer price anchors are current and sourced; no page links to a raw .md file', () => {
+  for (const page of ['index.html', 'offer.html', 'licence.html', path.join('trap', 'index.html')]) {
+    const text = fs.readFileSync(path.join(root, page), 'utf8');
+    const rawMd = (text.match(/href="(?!https:\/\/github\.com\/)[^"]*\.md"/g) || []);
+    assert.deepEqual(rawMd, [], page + ' links to a .md file that GitHub Pages serves as raw text');
+  }
+  assert.doesNotMatch(offer, /מתחת לתוכנית וינגייט/);
+  if (/וינגייט/.test(offer)) assert.match(offer, /לא ייפתח[^<]*28\.9\.2026/);
+  assert.match(offer, /£60[^\n]*courses\.statsbomb\.com/);
+  assert.match(offer, /€675/);
+  assert.match(offer, /barcainnovationhub\.fcbarcelona\.com/);
+  assert.match(offer, /נכון ל־28\.9\.2026/);
+  assert.doesNotMatch(offer, /אינו פתוח<\/strong> נכון ל־13\.8\.2026/);
+  assert.match(monetization, /28\.9\.2026/);
+});
+
+test('licence table scrolls inside its card on a phone instead of widening the page', () => {
+  assert.match(licence, /\.table-wrap\{overflow-x:auto\}/);
+  const tables = licence.match(/<table>/g) || [];
+  const wrapped = licence.match(/<div class="table-wrap"[^>]*>\s*<table>/g) || [];
+  assert.ok(tables.length > 0);
+  assert.equal(wrapped.length, tables.length, 'every table on licence.html sits in .table-wrap');
+});
+
+test('README tells the owner where the one contact value lives', () => {
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  assert.match(readme, /`contact\.js`[^\n]*CONTACT/);
+});
+
+test('BYOD rejects Open Data by content, not only by metadata: a CSV re-save or a bare array is caught', () => {
+  const wc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'wc2018_event_aggregates.json'), 'utf8'));
+  const roster = createStore(wc).players;
+  const cols = ['name', 'team', 'position', 'totalMinutesProxy', 'pressures', 'tackles', 'interceptions', 'defensiveActions',
+    'progressiveActions', 'keyPasses', 'passesCompleted', 'shotXgSum', 'boxTouches', 'shotsOnTarget', 'goals', 'assists'];
+  const toCsv = rows => [cols.join(',')].concat(rows.map(row => cols.map(key => JSON.stringify(row[key] == null ? '' : row[key])).join(','))).join('\n');
+  const opts = { attested: true, openDataPlayers: roster };
+  const csv = parseUserDataset(toCsv(wc.players), opts);
+  assert.equal(csv.ok, false);
+  assert.equal(csv.detected, OPEN_DATA_PROVENANCE);
+  assert.equal(csv.contentMatches, wc.players.length);
+  assert.match(csv.errors[0], /לפי התוכן/);
+  const bare = parseUserDataset(JSON.stringify(wc.players), { attested: true, openDataPlayers: wc.players });
+  assert.equal(bare.ok, false);
+  assert.equal(bare.detected, OPEN_DATA_PROVENANCE);
+  const subset = parseUserDataset(toCsv(wc.players.slice(0, 25)), opts);
+  assert.equal(subset.ok, false, 'a 25-row slice of the shipped file is still Open Data');
+  // Same World Cup players from another, licensed provider: names match, counts do not.
+  const otherProvider = wc.players.slice(0, 40).map(row => Object.assign({}, row, {
+    tackles: row.tackles + 1, passesCompleted: row.passesCompleted + 3, pressures: row.pressures + 2,
+    keyPasses: row.keyPasses + 1, progressiveActions: row.progressiveActions + 1, boxTouches: row.boxTouches + 1,
+    interceptions: row.interceptions + 1, defensiveActions: row.defensiveActions + 1, shotsOnTarget: row.shotsOnTarget + 1,
+    goals: row.goals + 1, assists: row.assists + 1, shotXgSum: row.shotXgSum + 0.5
+  }));
+  const licensed = parseUserDataset(toCsv(otherProvider), opts);
+  assert.equal(licensed.ok, true);
+  assert.equal(licensed.provenance, USER_DATA_PROVENANCE);
+  const unchecked = parseUserDataset(toCsv(otherProvider), { attested: true });
+  assert.equal(unchecked.ok, true);
+  assert.ok(unchecked.warnings.some(text => /בדיקת התוכן מול Open Data לא רצה/.test(text)));
+  assert.match(html, /openDataPlayers:/);
+  assert.match(html, /parsed\.warnings/);
+  assert.match(licence, /לפי התוכן/);
+  assert.match(licence, /שמות ששונו/);
+});
+
+test('offer.html shows a 3-hour agenda that walks all eight lab lessons', () => {
+  const { CURRICULUM_LESSONS } = require('../demo.js');
+  const section = (offer.match(/<section class="card" id="agenda">([\s\S]*?)<\/section>/) || [])[1];
+  assert.ok(section, 'agenda section exists');
+  assert.match(section, /<h2>סדר היום/);
+  CURRICULUM_LESSONS.forEach(lesson => {
+    const title = lesson.title.replace(/^\d+\.\s*/, '');
+    assert.ok(section.includes(title), 'agenda names lesson ' + title);
+  });
+  const minutes = [...section.matchAll(/<td>(\d):(\d\d)–(\d):(\d\d)<\/td>/g)]
+    .map(m => (Number(m[3]) * 60 + Number(m[4])) - (Number(m[1]) * 60 + Number(m[2])));
+  assert.ok(minutes.length >= 5);
+  assert.equal(minutes.reduce((a, b) => a + b, 0), 180);
+  assert.match(section, /class="table-wrap"/);
+});
