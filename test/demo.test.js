@@ -673,8 +673,11 @@ test('BYOD lesson and explorer never claim the World Cup file', () => {
   assert.doesNotMatch(syntheticLesson[0].body, /STATSBOMB_OPEN_DATA/);
 });
 
-test('product tree has no factory SaaS, no CI workflows, and no broken root proofs', () => {
-  assert.equal(fs.existsSync(path.join(root, '.github', 'workflows')), false);
+test('product tree has no factory SaaS, one CI workflow that only runs the suite, and no broken root proofs', () => {
+  const workflows = path.join(root, '.github', 'workflows');
+  assert.deepEqual(fs.readdirSync(workflows).sort(), ['validate.yml']);
+  const validate = fs.readFileSync(path.join(workflows, 'validate.yml'), 'utf8');
+  assert.doesNotMatch(validate, /pr merge|merge --auto|--admin|deploy-pages|pages-build|--force/);
   assert.equal(fs.existsSync(path.join(root, 'lib')), false);
   assert.equal(fs.existsSync(path.join(root, 'proof-big5.js')), false);
   assert.equal(fs.existsSync(path.join(root, 'poc-calibrated.json')), false);
