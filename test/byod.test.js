@@ -13,7 +13,11 @@ const {
   USER_DATA_PROVENANCE,
   SYNTHETIC_PROVENANCE,
   OPEN_DATA_PROVENANCE,
-  USER_DATASET_COLUMNS
+  USER_DATASET_COLUMNS,
+  playerKey,
+  serializeMetricHash,
+  parseMetricHash,
+  DEFAULT_METRIC
 } = require('../demo.js');
 
 const root = path.join(__dirname, '..');
@@ -133,4 +137,83 @@ test('offer page is an offer, not a fake checkout', () => {
   assert.match(monetization, /1\.2\.2/);
   assert.match(monetization, /13\.8\.2026/);
   assert.match(monetization, /github.com\/hudl\/open-data/);
+});
+
+function twoCohens() {
+  return {
+    players: [
+      {
+        name: 'Cohen', team: 'A', position: 'Center Back',
+        totalMinutesProxy: 360, pressures: 60, tackles: 14, interceptions: 12,
+        defensiveActions: 50, progressiveActions: 10, keyPasses: 0, passesCompleted: 150,
+        shotXgSum: 0.05, boxTouches: 2, shotsOnTarget: 0
+      },
+      {
+        name: 'Cohen', team: 'A', position: 'Center Forward',
+        totalMinutesProxy: 300, pressures: 25, tackles: 2, interceptions: 1,
+        defensiveActions: 8, progressiveActions: 30, keyPasses: 6, passesCompleted: 70,
+        shotXgSum: 2.4, boxTouches: 30, shotsOnTarget: 7
+      }
+    ]
+  };
+}
+
+test('two players with the same name in the same team get separate ids', () => {
+  const store = createStore(twoCohens(), { provenance: USER_DATA_PROVENANCE });
+  const players = store.players;
+  assert.equal(players.length, 2);
+  assert.notEqual(players[0].id, players[1].id);
+  assert.equal(players[0].id, 'Cohen|A', 'first occurrence keeps the plain key');
+  assert.equal(players[1].id, 'Cohen|A#2', 'collision gets a #2 suffix');
+
+  const view = store.derive({ minMinutes: 90, selectedId: players[1].id });
+  assert.equal(view.selected.position, 'Center Forward');
+  assert.equal(view.selected.id, players[1].id);
+
+  const first = store.derive({ minMinutes: 90, selectedId: players[0].id });
+  assert.equal(first.selected.position, 'Center Back');
+});
+
+test('the second same-name player is reachable in compare radar and Δ rank', () => {
+  const store = createStore(twoCohens(), { provenance: USER_DATA_PROVENANCE });
+  const [back, forward] = store.players;
+  const view = store.derive(
+    { grit: 0, involvement: 0, clutch: 100, minMinutes: 90, selectedId: back.id, compareId: forward.id },
+    DEFAULT_METRIC
+  );
+  assert.equal(view.rows.length, 2);
+  assert.equal(new Set(view.rows.map((row) => row.id)).size, 2);
+  assert.equal(view.compared.position, 'Center Forward');
+  assert.equal(view.radar.a.id, back.id);
+  assert.equal(view.radar.b.id, forward.id);
+  view.rows.forEach((row) => {
+    assert.ok(Number.isFinite(row.deltaRank), `Δ rank for ${row.id} is present`);
+    assert.ok(Number.isFinite(row.baselineScore), `baseline score for ${row.id} is present`);
+  });
+  const fwd = view.rows.find((row) => row.id === forward.id);
+  const def = view.rows.find((row) => row.id === back.id);
+  assert.notEqual(fwd.baselineScore, def.baselineScore, 'each Cohen is matched to its own baseline row');
+});
+
+test('a third duplicate gets #3 and suffixed ids survive the hash permalink', () => {
+  const data = twoCohens();
+  data.players.push(Object.assign({}, data.players[0], { position: 'Goalkeeper' }));
+  const store = createStore(data, { provenance: USER_DATA_PROVENANCE });
+  assert.deepEqual(store.players.map((row) => row.id), ['Cohen|A', 'Cohen|A#2', 'Cohen|A#3']);
+  const parsed = parseMetricHash('#' + serializeMetricHash({ minMinutes: 90, selectedId: 'Cohen|A#3', compareId: 'Cohen|A#2' }));
+  assert.equal(parsed.selectedId, 'Cohen|A#3');
+  assert.equal(parsed.compareId, 'Cohen|A#2');
+  assert.equal(store.derive(parsed).selected.position, 'Goalkeeper');
+});
+
+test('shipped WC2018 file keeps every player id unchanged', () => {
+  const raw = JSON.parse(fs.readFileSync(path.join(root, 'data', 'wc2018_event_aggregates.json'), 'utf8'));
+  const store = createStore(raw);
+  assert.ok(store.players.length > 0);
+  assert.equal(store.players.length, raw.players.length);
+  store.players.forEach((row, i) => {
+    assert.equal(row.id, playerKey(raw.players[i]));
+  });
+  assert.equal(new Set(store.players.map((row) => row.id)).size, store.players.length, 'no duplicate ids');
+  assert.ok(store.players.every((row) => !/#\d+$/.test(row.id)), 'no collision suffix was needed');
 });

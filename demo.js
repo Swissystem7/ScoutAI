@@ -398,8 +398,21 @@
           ? 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
           : 'Synthetic teaching file shipped with ScoutAI — not match data'
       });
+    // Two rows with the same name|team (e.g. two «Cohen» in one club file)
+    // must stay separately selectable: the first keeps its id, later
+    // collisions get '#2', '#3', … so unique ids are never changed.
+    const seenIds = new Set();
     const players = flagImpossibleMinutes(eventPlayers(rawPlayers).map(function (row) {
-      return preparePlayer(row, { provenance: provenance });
+      const prepared = preparePlayer(row, { provenance: provenance });
+      let id = prepared.id;
+      if (seenIds.has(id)) {
+        let n = 2;
+        while (seenIds.has(prepared.id + '#' + n)) n += 1;
+        id = prepared.id + '#' + n;
+        prepared.id = id;
+      }
+      seenIds.add(id);
+      return prepared;
     }));
     function derive(spec, baselineSpec) {
       const metric = normalizeMetricSpec(spec);
