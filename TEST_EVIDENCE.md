@@ -8,14 +8,16 @@ npm test
 
 That runs `node --test test/demo.test.js test/trap.test.js test/byod.test.js`.
 
-Recorded on 2026-08-13 after the honesty pass (single data layer, no video theater, no factory `lib/`, BYOD provenance, shipped-file receipts):
+Re-measured on 2026-09-24 with Node 22.22.2, on this branch (`npm test`):
 
 ```text
 node --test test/demo.test.js test/trap.test.js test/byod.test.js
-tests 48
-pass 48
+tests 69
+pass 69
 fail 0
 ```
+
+(Earlier record, 2026-08-13 after the honesty pass: tests 48, pass 48, fail 0.)
 
 The suite covers:
 
