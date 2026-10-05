@@ -940,8 +940,10 @@
       document.getElementById('splitSelect').value = 'hash';
     }
     recompute();
-    byodStatus.textContent = statusText ||
-      (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.');
+    const notes = (parsed.errors || []).concat(parsed.warnings || []);
+    byodStatus.textContent = (statusText ||
+      (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.')) +
+      (notes.length ? ' ' + notes.join(' ') : '');
   }
 
   document.getElementById('loadUserData').addEventListener('click', function () {

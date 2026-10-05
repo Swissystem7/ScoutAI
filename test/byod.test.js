@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const {
   parseUserDataset,
+  parseCsvRecords,
   looksLikeOpenDataPayload,
   createStore,
   exportMetricBundle,
@@ -90,6 +91,39 @@ test('parses CSV and the shipped synthetic example', () => {
   assert.equal(example.source, 'SYNTHETIC_EXAMPLE');
   const store = createStore(example, { provenance: SYNTHETIC_PROVENANCE, source: syn.source });
   assert.equal(store.derive({ minMinutes: 90 }).rows.length, 4);
+});
+
+test('CSV keeps quoted commas, doubled quotes and line breaks inside one field', () => {
+  const csv = [
+    '\uFEFFname,team,position,minutes,pressures',
+    '"Silva, Thiago","Gamma ""B""",Center Back,270,20',
+    '"O""Neil",Away,"Right Wing","180",8',
+    '',
+    '"Two\nLines",Home,Left Back,90,3',
+    'Plain,Home,Left Back,90,3',
+    ''
+  ].join('\r\n');
+  assert.deepEqual(parseCsvRecords('a,b\r\n"x, y","p ""q"""\n'), [['a', 'b'], ['x, y', 'p "q"']]);
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'excel.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.errors, []);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Silva, Thiago', 'O"Neil', 'Two\nLines', 'Plain']);
+  assert.equal(parsed.players[0].team, 'Gamma "B"');
+  assert.equal(parsed.players[0].pressures, '20');
+  assert.equal(parsed.players[1].totalMinutesProxy, 180);
+  assert.equal(parsed.players[1].position, 'Right Wing');
+  const ids = new Set(parsed.players.map(playerKey));
+  assert.equal(ids.size, 4);
+});
+
+test('CSV rows without a name are reported, not silently dropped', () => {
+  const csv = 'name,minutes\nAlpha,90\n,45\n"",30\n';
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players.length, 1);
+  assert.deepEqual(parsed.errors, ['שורה 3: חסר שם', 'שורה 4: חסר שם']);
+  assert.deepEqual(parsed.warnings, ['שחקן אחד — הדירוג יהיה טריוויאלי']);
+  assert.ok(html.includes('parsed.warnings'), 'the BYOD status line must surface warnings and skipped rows');
 });
 
 test('methodology and export stay source-honest', () => {

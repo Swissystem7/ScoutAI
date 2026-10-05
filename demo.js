@@ -1538,32 +1538,59 @@
     return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
 
-  function splitCsvLine(line) {
-    const out = [];
+  // RFC 4180 style tokenizer. A quoted field may hold the delimiter, a doubled
+  // quote ("") and even a line break; Excel writes all three when it exports a
+  // sheet, so a one-line splitter silently mangles names like "Silva, Thiago".
+  function parseCsvRecords(text) {
+    const src = String(text || '').replace(/^\uFEFF/, '');
+    const records = [];
+    let row = [];
     let cur = '';
     let quoted = false;
-    const text = String(line || '');
-    for (let i = 0; i < text.length; i += 1) {
-      const ch = text[i];
-      if (ch === '"') {
-        quoted = !quoted;
-      } else if ((ch === ',' || ch === '\t') && !quoted) {
-        out.push(cur.trim());
+    let fieldStart = true;
+    for (let i = 0; i < src.length; i += 1) {
+      const ch = src[i];
+      if (quoted) {
+        if (ch !== '"') {
+          cur += ch;
+        } else if (src[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else {
+          quoted = false;
+        }
+        continue;
+      }
+      if (ch === '"' && fieldStart) {
+        quoted = true;
+        fieldStart = false;
+      } else if (ch === ',' || ch === '\t') {
+        row.push(cur.trim());
         cur = '';
+        fieldStart = true;
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && src[i + 1] === '\n') i += 1;
+        row.push(cur.trim());
+        records.push(row);
+        row = [];
+        cur = '';
+        fieldStart = true;
       } else {
         cur += ch;
+        fieldStart = false;
       }
     }
-    out.push(cur.trim());
-    return out;
+    row.push(cur.trim());
+    records.push(row);
+    return records.filter(function (cells) {
+      return cells.some(function (cell) { return cell !== ''; });
+    });
   }
 
   function parseUserCsv(text) {
-    const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (line) {
-      return line.trim();
-    });
+    const lines = parseCsvRecords(text);
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
-    const headers = splitCsvLine(lines[0]).map(function (h) { return h.toLowerCase(); });
+    const headers = lines[0].map(function (h) { return h.toLowerCase(); });
     const nameIdx = headers.indexOf('name');
     if (nameIdx < 0) return { ok: false, errors: ['חסרה עמודת name'], players: [] };
     const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalminutesproxy');
@@ -1573,8 +1600,7 @@
     });
     const players = [];
     const errors = [];
-    lines.slice(1).forEach(function (line, i) {
-      const cells = splitCsvLine(line);
+    lines.slice(1).forEach(function (cells, i) {
       const name = cells[nameIdx];
       if (!name) {
         errors.push('שורה ' + (i + 2) + ': חסר שם');
@@ -1587,9 +1613,9 @@
         if (idx < 0) return;
         const raw = cells[idx];
         if (raw === '' || raw == null) return;
-        row[key] = key === 'team' || key === 'position' ? raw : raw;
+        row[key] = raw;
       });
-      if (minIdx >= 0 && cells[minIdx] !== '') row.totalMinutesProxy = Number(cells[minIdx]);
+      if (minIdx >= 0 && cells[minIdx] !== '' && cells[minIdx] != null) row.totalMinutesProxy = Number(cells[minIdx]);
       players.push(row);
     });
     if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [] };
@@ -1703,6 +1729,7 @@
     evaluateCurriculum: evaluateCurriculum,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
+    parseCsvRecords: parseCsvRecords,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
     OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,
