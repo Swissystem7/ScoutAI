@@ -1538,11 +1538,45 @@
     return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
 
+  // Excel in a locale whose decimal mark is the comma (most of Europe) writes
+  // `;` between cells and often a first line `sep=;`. Without this, such a
+  // file collapses into one column and the user is told the name column is
+  // missing, which is false. Pick the delimiter the header line uses most
+  // (outside quotes), honouring an explicit sep= hint when present.
+  const CSV_DELIMITERS = Object.freeze([',', ';', '\t']);
+
+  function detectCsvDelimiter(text) {
+    const src = String(text || '').replace(/^\uFEFF/, '');
+    const hint = /^sep=(.)(?:\r\n|\r|\n)/i.exec(src);
+    if (hint && CSV_DELIMITERS.indexOf(hint[1]) >= 0) {
+      return { delimiter: hint[1], offset: hint[0].length };
+    }
+    const headerEnd = src.search(/\r|\n/);
+    const header = headerEnd < 0 ? src : src.slice(0, headerEnd);
+    const counts = {};
+    CSV_DELIMITERS.forEach(function (d) { counts[d] = 0; });
+    let quoted = false;
+    for (let i = 0; i < header.length; i += 1) {
+      const ch = header[i];
+      if (ch === '"') quoted = !quoted;
+      else if (!quoted && Object.prototype.hasOwnProperty.call(counts, ch)) counts[ch] += 1;
+    }
+    let best = ',';
+    CSV_DELIMITERS.forEach(function (d) {
+      if (counts[d] > counts[best]) best = d;
+    });
+    return { delimiter: best, offset: 0 };
+  }
+
   // RFC 4180 style tokenizer. A quoted field may hold the delimiter, a doubled
   // quote ("") and even a line break; Excel writes all three when it exports a
   // sheet, so a one-line splitter silently mangles names like "Silva, Thiago".
-  function parseCsvRecords(text) {
-    const src = String(text || '').replace(/^\uFEFF/, '');
+  // The delimiter is detected from the header unless options.delimiter is set.
+  function parseCsvRecords(text, options) {
+    const opts = options || {};
+    const detected = detectCsvDelimiter(text);
+    const delimiter = CSV_DELIMITERS.indexOf(opts.delimiter) >= 0 ? opts.delimiter : detected.delimiter;
+    const src = String(text || '').replace(/^\uFEFF/, '').slice(detected.offset);
     const records = [];
     let row = [];
     let cur = '';
@@ -1564,7 +1598,7 @@
       if (ch === '"' && fieldStart) {
         quoted = true;
         fieldStart = false;
-      } else if (ch === ',' || ch === '\t') {
+      } else if (ch === delimiter) {
         row.push(cur.trim());
         cur = '';
         fieldStart = true;
@@ -1592,9 +1626,13 @@
   // a zero that was never in the file would still look like a measurement.
   const NUMERIC_USER_FIELDS = Object.freeze(['minutes', 'totalMinutesProxy'].concat(COUNT_FIELDS));
 
-  function csvNumber(raw) {
-    const text = String(raw == null ? '' : raw).trim();
+  // decimalComma: in a `;`-delimited file the comma cannot be a separator, so
+  // "12,5" is unambiguously twelve and a half and is accepted. In a comma file
+  // it stays an error (the tokenizer would have split it anyway).
+  function csvNumber(raw, decimalComma) {
+    let text = String(raw == null ? '' : raw).trim();
     if (text === '') return null;
+    if (decimalComma && /^-?\d+,\d+$/.test(text)) text = text.replace(',', '.');
     const n = Number(text);
     return Number.isFinite(n) ? n : null;
   }
@@ -1611,11 +1649,23 @@
   }
 
   function parseUserCsv(text) {
-    const lines = parseCsvRecords(text);
+    const detected = detectCsvDelimiter(text);
+    const delimiter = detected.delimiter;
+    const decimalComma = delimiter === ';';
+    // Line numbers in messages are file lines: a sep= hint line pushes the
+    // header to line 2 and the first player to line 3.
+    const firstDataLine = detected.offset ? 3 : 2;
+    const lines = parseCsvRecords(text, { delimiter: delimiter });
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
     const headers = lines[0].map(function (h) { return h.toLowerCase(); });
     const nameIdx = headers.indexOf('name');
-    if (nameIdx < 0) return { ok: false, errors: ['חסרה עמודת name'], players: [] };
+    if (nameIdx < 0) {
+      return {
+        ok: false,
+        errors: ['חסרה עמודת name. כותרות שנמצאו: ' + lines[0].slice(0, 6).join(' | ') + (lines[0].length > 6 ? ' | …' : '')],
+        players: []
+      };
+    }
     const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalminutesproxy');
     const col = {};
     USER_DATASET_COLUMNS.forEach(function (key) {
@@ -1626,14 +1676,14 @@
     lines.slice(1).forEach(function (cells, i) {
       const name = cells[nameIdx];
       if (!name) {
-        errors.push('שורה ' + (i + 2) + ': חסר שם');
+        errors.push('שורה ' + (i + firstDataLine) + ': חסר שם');
         return;
       }
       const row = { name: name };
-      const lineNo = i + 2;
+      const lineNo = i + firstDataLine;
       const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
       if (minutesRaw !== '' && minutesRaw != null) {
-        const minutes = csvNumber(minutesRaw);
+        const minutes = csvNumber(minutesRaw, decimalComma);
         if (minutes === null) {
           errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
           return;
@@ -1651,7 +1701,7 @@
           row[key] = raw;
           return;
         }
-        const n = csvNumber(raw);
+        const n = csvNumber(raw, decimalComma);
         if (n === null) {
           errors.push('שורה ' + lineNo + ': ' + key + '=«' + raw + '» אינו מספר — התא נשאר ריק');
           return;
@@ -1778,6 +1828,8 @@
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
     parseCsvRecords: parseCsvRecords,
+    detectCsvDelimiter: detectCsvDelimiter,
+    CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
