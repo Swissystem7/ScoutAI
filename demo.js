@@ -1587,6 +1587,29 @@
     });
   }
 
+  // Numeric columns a user file may carry. A cell that is not a plain number
+  // (e.g. "12,5", "abc", "n/a") is reported, never silently turned into 0:
+  // a zero that was never in the file would still look like a measurement.
+  const NUMERIC_USER_FIELDS = Object.freeze(['minutes', 'totalMinutesProxy'].concat(COUNT_FIELDS));
+
+  function csvNumber(raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    if (text === '') return null;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Shared with the JSON path: list the numeric fields of one player row
+  // whose value is present but not a finite number.
+  function invalidNumericFields(row) {
+    const bad = [];
+    NUMERIC_USER_FIELDS.forEach(function (key) {
+      if (!row || row[key] == null || row[key] === '') return;
+      if (typeof row[key] === 'object' || csvNumber(row[key]) === null) bad.push({ key: key, value: row[key] });
+    });
+    return bad;
+  }
+
   function parseUserCsv(text) {
     const lines = parseCsvRecords(text);
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
@@ -1607,15 +1630,34 @@
         return;
       }
       const row = { name: name };
+      const lineNo = i + 2;
+      const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
+      if (minutesRaw !== '' && minutesRaw != null) {
+        const minutes = csvNumber(minutesRaw);
+        if (minutes === null) {
+          errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
+          return;
+        }
+        row.totalMinutesProxy = minutes;
+        row.minutes = minutes;
+      }
       USER_DATASET_COLUMNS.forEach(function (key) {
-        if (key === 'name') return;
+        if (key === 'name' || key === 'minutes') return;
         const idx = col[key];
         if (idx < 0) return;
         const raw = cells[idx];
         if (raw === '' || raw == null) return;
-        row[key] = raw;
+        if (NUMERIC_USER_FIELDS.indexOf(key) < 0) {
+          row[key] = raw;
+          return;
+        }
+        const n = csvNumber(raw);
+        if (n === null) {
+          errors.push('שורה ' + lineNo + ': ' + key + '=«' + raw + '» אינו מספר — התא נשאר ריק');
+          return;
+        }
+        row[key] = n;
       });
-      if (minIdx >= 0 && cells[minIdx] !== '' && cells[minIdx] != null) row.totalMinutesProxy = Number(cells[minIdx]);
       players.push(row);
     });
     if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [] };
@@ -1667,6 +1709,12 @@
     if (!players.length) {
       return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
     }
+    players.forEach(function (row) {
+      invalidNumericFields(row).forEach(function (bad) {
+        parseErrors.push('שחקן «' + row.name + '»: ' + bad.key + '=«' + String(bad.value) + '» אינו מספר — נחשב כחסר');
+        delete row[bad.key];
+      });
+    });
     const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
     return {
       ok: true,
@@ -1730,6 +1778,8 @@
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
     parseCsvRecords: parseCsvRecords,
+    invalidNumericFields: invalidNumericFields,
+    NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
     OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,
