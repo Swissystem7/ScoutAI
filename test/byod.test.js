@@ -15,6 +15,8 @@ const {
   SYNTHETIC_PROVENANCE,
   OPEN_DATA_PROVENANCE,
   USER_DATASET_COLUMNS,
+  NUMERIC_USER_FIELDS,
+  invalidNumericFields,
   playerKey,
   serializeMetricHash,
   parseMetricHash,
@@ -109,7 +111,7 @@ test('CSV keeps quoted commas, doubled quotes and line breaks inside one field',
   assert.deepEqual(parsed.errors, []);
   assert.deepEqual(parsed.players.map((p) => p.name), ['Silva, Thiago', 'O"Neil', 'Two\nLines', 'Plain']);
   assert.equal(parsed.players[0].team, 'Gamma "B"');
-  assert.equal(parsed.players[0].pressures, '20');
+  assert.equal(parsed.players[0].pressures, 20);
   assert.equal(parsed.players[1].totalMinutesProxy, 180);
   assert.equal(parsed.players[1].position, 'Right Wing');
   const ids = new Set(parsed.players.map(playerKey));
@@ -124,6 +126,46 @@ test('CSV rows without a name are reported, not silently dropped', () => {
   assert.deepEqual(parsed.errors, ['שורה 3: חסר שם', 'שורה 4: חסר שם']);
   assert.deepEqual(parsed.warnings, ['שחקן אחד — הדירוג יהיה טריוויאלי']);
   assert.ok(html.includes('parsed.warnings'), 'the BYOD status line must surface warnings and skipped rows');
+});
+
+test('non-numeric stat cells are reported and never silently become 0', () => {
+  const csv = [
+    'name,team,minutes,pressures,tackles',
+    'Alpha,Home,abc,12,1',
+    'Beta,Home,90,"12,5",2',
+    'Gamma,Home, 90 ,7,n/a',
+    'Delta,Home,90,,3'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'messy.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Beta', 'Gamma', 'Delta']);
+  assert.deepEqual(parsed.errors, [
+    'שורה 2: minutes=«abc» אינו מספר — השחקן דולג',
+    'שורה 3: pressures=«12,5» אינו מספר — התא נשאר ריק',
+    'שורה 4: tackles=«n/a» אינו מספר — התא נשאר ריק'
+  ]);
+  assert.equal(parsed.players[0].totalMinutesProxy, 90);
+  assert.equal('pressures' in parsed.players[0], false);
+  assert.equal(parsed.players[1].pressures, 7);
+  assert.equal('tackles' in parsed.players[1], false);
+  assert.equal('pressures' in parsed.players[2], false);
+  assert.ok(NUMERIC_USER_FIELDS.includes('minutes') && NUMERIC_USER_FIELDS.includes('shotXgSum'));
+
+  const json = parseUserDataset(JSON.stringify({
+    players: [
+      { name: 'J', team: 'T', minutes: 'x', pressures: 'n/a', tackles: 3 },
+      { name: 'K', team: 'T', minutes: 90, pressures: [1] }
+    ]
+  }), { attested: true });
+  assert.equal(json.ok, true);
+  assert.deepEqual(json.errors, [
+    'שחקן «J»: minutes=«x» אינו מספר — נחשב כחסר',
+    'שחקן «J»: pressures=«n/a» אינו מספר — נחשב כחסר',
+    'שחקן «K»: pressures=«1» אינו מספר — נחשב כחסר'
+  ]);
+  assert.deepEqual(json.players[0], { name: 'J', team: 'T', tackles: 3 });
+  assert.deepEqual(invalidNumericFields({ name: 'ok', minutes: 90, pressures: '7', shotXgSum: 0.4 }), []);
+  assert.deepEqual(invalidNumericFields({ name: 'bad', minutes: Infinity }), [{ key: 'minutes', value: Infinity }]);
 });
 
 test('methodology and export stay source-honest', () => {
