@@ -1762,11 +1762,20 @@
   // (a stray Unicode minus or a formula export), so it is dropped like a
   // non-numeric cell and reported per player. Zero minutes is a legal
   // value (an unused squad member) and is only counted, not removed.
+  // When the file does have minutes but some rows do not (an empty Min
+  // cell, a "-" blanked by stripMissingMarkers, a negative value dropped
+  // here, or a JSON player without the key), those players load with 0
+  // minutes: every per-90 component is 0 and they never pass the minutes
+  // threshold, so they vanish from the ranking with no message. Say so
+  // once, by name, up to MISSING_MINUTES_NAMES names.
+  const MISSING_MINUTES_NAMES = 5;
+
   function auditMinutesAndSigns(players) {
     const errors = [];
     const warnings = [];
     let withMinutes = 0;
     let zeroMinutes = 0;
+    const noMinutes = [];
     (players || []).forEach(function (row) {
       if (!row) return;
       // CSV sets both minutes keys to the same value: report it once.
@@ -1778,15 +1787,26 @@
         delete row[key];
       });
       const minutes = Number(row.totalMinutesProxy != null && row.totalMinutesProxy !== '' ? row.totalMinutesProxy : row.minutes);
-      if ((row.totalMinutesProxy == null || row.totalMinutesProxy === '') && (row.minutes == null || row.minutes === '')) return;
-      if (!Number.isFinite(minutes)) return;
+      if (((row.totalMinutesProxy == null || row.totalMinutesProxy === '') && (row.minutes == null || row.minutes === '')) ||
+        !Number.isFinite(minutes)) {
+        noMinutes.push(String(row.name == null ? '' : row.name).trim() || '(בלי שם)');
+        return;
+      }
       withMinutes += 1;
       if (minutes === 0) zeroMinutes += 1;
     });
     if (players && players.length && !withMinutes) {
       warnings.push('אף שחקן בלי דקות (עמודת minutes / דקות / Min חסרה או ריקה) — כל הרכיבים ל-90 יהיו 0 ואף שחקן לא יעבור את סף הדקות');
-    } else if (zeroMinutes) {
-      warnings.push((zeroMinutes === 1 ? 'שחקן אחד' : zeroMinutes + ' שחקנים') + ' עם 0 דקות — מקבל 0 בכל רכיב ולא עובר את סף הדקות');
+    } else {
+      if (noMinutes.length) {
+        const shown = noMinutes.slice(0, MISSING_MINUTES_NAMES).join(', ') +
+          (noMinutes.length > MISSING_MINUTES_NAMES ? ' ועוד ' + (noMinutes.length - MISSING_MINUTES_NAMES) : '');
+        warnings.push((noMinutes.length === 1 ? 'שחקן אחד בלי דקות (תא ריק): ' : noMinutes.length + ' שחקנים בלי דקות (תא ריק): ') +
+          shown + ' — נטענים עם 0 דקות: 0 בכל רכיב ולא עוברים את סף הדקות, לכן לא יופיעו בדירוג');
+      }
+      if (zeroMinutes) {
+        warnings.push((zeroMinutes === 1 ? 'שחקן אחד' : zeroMinutes + ' שחקנים') + ' עם 0 דקות — מקבל 0 בכל רכיב ולא עובר את סף הדקות');
+      }
     }
     return { errors: errors, warnings: warnings };
   }
