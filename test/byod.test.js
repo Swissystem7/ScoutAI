@@ -7,6 +7,8 @@ const test = require('node:test');
 const {
   parseUserDataset,
   parseCsvRecords,
+  detectCsvDelimiter,
+  CSV_DELIMITERS,
   looksLikeOpenDataPayload,
   createStore,
   exportMetricBundle,
@@ -116,6 +118,52 @@ test('CSV keeps quoted commas, doubled quotes and line breaks inside one field',
   assert.equal(parsed.players[1].position, 'Right Wing');
   const ids = new Set(parsed.players.map(playerKey));
   assert.equal(ids.size, 4);
+});
+
+test('European Excel CSV: `;` delimiter, sep= hint and decimal comma are understood', () => {
+  // Delimiter is read from the header line, quotes do not count.
+  assert.deepEqual(detectCsvDelimiter('name,team\nA,B'), { delimiter: ',', offset: 0 });
+  assert.deepEqual(detectCsvDelimiter('name;team\nA;B'), { delimiter: ';', offset: 0 });
+  assert.deepEqual(detectCsvDelimiter('name\tteam\nA\tB'), { delimiter: '\t', offset: 0 });
+  assert.deepEqual(detectCsvDelimiter('"a;b;c",d\n1,2'), { delimiter: ',', offset: 0 });
+  assert.deepEqual(detectCsvDelimiter('sep=;\r\nname;team'), { delimiter: ';', offset: 7 });
+  assert.deepEqual(detectCsvDelimiter(''), { delimiter: ',', offset: 0 });
+  assert.deepEqual(CSV_DELIMITERS, [',', ';', '\t']);
+
+  // A tab inside a comma file is data, not a cell boundary.
+  assert.deepEqual(parseCsvRecords('name,team\nA\tB,C'), [['name', 'team'], ['A\tB', 'C']]);
+  // sep= line is consumed, never parsed as a header.
+  assert.deepEqual(parseCsvRecords('sep=;\nname;team\nA;B'), [['name', 'team'], ['A', 'B']]);
+
+  const csv = [
+    '﻿sep=;',
+    'name;team;position;minutes;pressures;shotXgSum',
+    '"Silva, Thiago";Home;Center Back;270;20;0,15',
+    'Beta;Away;Right Wing;180;8;1,2',
+    'Gamma;Away;Right Wing;90;abc;2'
+  ].join('\r\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'excel-de.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Silva, Thiago', 'Beta', 'Gamma']);
+  assert.equal(parsed.players[0].team, 'Home');
+  assert.equal(parsed.players[0].totalMinutesProxy, 270);
+  assert.equal(parsed.players[0].shotXgSum, 0.15);
+  assert.equal(parsed.players[1].shotXgSum, 1.2);
+  assert.deepEqual(parsed.errors, ['שורה 5: pressures=«abc» אינו מספר — התא נשאר ריק']);
+
+  // In a comma file "12,5" is still not a number (see the messy.csv test);
+  // the decimal comma is only unlocked when the comma cannot be a separator.
+  const commaFile = parseUserDataset('name,minutes,pressures\nA,90,"12,5"\n', { attested: true });
+  assert.equal('pressures' in commaFile.players[0], false);
+  assert.equal(commaFile.errors.length, 1);
+
+  // The wrong-column error now shows what was actually read, so a user whose
+  // file collapsed into one column can see why.
+  const noName = parseUserDataset('player|minutes\nA|90\n', { attested: true });
+  assert.equal(noName.ok, false);
+  assert.match(noName.errors[0], /חסרה עמודת name/);
+  assert.match(noName.errors[0], /player\|minutes/);
+  assert.ok(html.includes('מפריד'), 'the BYOD help text must say that ; and tab delimiters are accepted');
 });
 
 test('CSV rows without a name are reported, not silently dropped', () => {
