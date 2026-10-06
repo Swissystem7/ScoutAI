@@ -31,6 +31,9 @@ const {
   auditMinutesAndSigns,
   stripMissingMarkers,
   MISSING_MARKERS,
+  isSummaryRowName,
+  stripSummaryRows,
+  SUMMARY_ROW_LABELS,
   playerKey,
   serializeMetricHash,
   parseMetricHash,
@@ -675,4 +678,59 @@ test('negative minutes and counts are dropped and reported per player, zero minu
     'שחקן «J»: tackles=«-1» שלילי — נחשב כחסר'
   ]);
   assert.deepEqual(auditMinutesAndSigns([{ name: 'ok', minutes: 90, pressures: 0 }]), { errors: [], warnings: [] });
+});
+
+test('FBref-style Squad Total / Opponent Total rows are dropped and reported, never ranked as a player', () => {
+  // An FBref squad export: every cell of the two trailing rows is a valid number, so
+  // nothing is malformed, yet "Squad Total" carries the whole team's minutes and counts.
+  const csv = [
+    'Player,Squad,Pos,Min,Press,Tkl,Int',
+    'Alpha,Home,CB,900,90,30,20',
+    'Beta,Home,CM,800,120,25,10',
+    'Gamma,Home,ST,700,60,10,5',
+    'Squad Total,Home,,2400,270,65,35',
+    'Opponent Total,Home,,2400,250,70,40',
+    ''
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((row) => row.name), ['Alpha', 'Beta', 'Gamma']);
+  assert.deepEqual(parsed.errors, []);
+  assert.ok(parsed.warnings.some((w) => w === 'שורות סיכום דולגו (אינן שחקנים): Squad Total, Opponent Total'), parsed.warnings.join(' | '));
+  // The blank position of the total rows must not surface as an OT report.
+  assert.ok(!parsed.warnings.some((w) => /OT/.test(w)), parsed.warnings.join(' | '));
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance });
+  const rows = store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows;
+  assert.equal(rows.length, 3);
+  assert.ok(rows.every((row) => !/total/i.test(row.name)));
+
+  // Hebrew labels, with or without gershayim, and a repeated label counted once.
+  const hebrew = parseUserDataset('שם,דקות,tackles\nא,300,3\nסה"כ,300,3\nסה"כ,300,3\nסה״כ,300,3\nממוצע,300,3\n', { attested: true });
+  assert.deepEqual(hebrew.players.map((row) => row.name), ['א']);
+  assert.ok(hebrew.warnings.some((w) => /שורות סיכום/.test(w) && /סה"כ ×2, סה״כ, ממוצע/.test(w)), hebrew.warnings.join(' | '));
+
+  // JSON path shares the rule.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', minutes: 300 }, { name: 'Total', team: 'T', minutes: 3000 }] }), { attested: true });
+  assert.deepEqual(json.players.map((row) => row.name), ['J']);
+  assert.ok(json.warnings.some((w) => /שורות סיכום/.test(w) && /Total/.test(w)));
+
+  // A file that is only totals is an error, not a one-player ranking.
+  const onlyTotals = parseUserDataset('name,minutes\nTotal,3000\n', { attested: true });
+  assert.equal(onlyTotals.ok, false);
+  assert.ok(/שורות סיכום/.test(onlyTotals.errors[0]), onlyTotals.errors.join(' | '));
+
+  // Real surnames and partial matches stay players.
+  ['Totaro', 'Mean Machine', 'Totally', 'Average Joe', 'Sum Lee', 'Totalt Erik', 'Thiago Silva'].forEach((name) => {
+    assert.equal(isSummaryRowName(name), false, name);
+  });
+  ['Total', ' TOTAL ', 'Totals', 'Squad Total', 'Team  Total', 'Total:', 'League Total', 'Avg', 'סה"כ', 'סהכ', 'סך הכל'].forEach((name) => {
+    assert.equal(isSummaryRowName(name), true, name);
+  });
+  assert.ok(SUMMARY_ROW_LABELS.includes('squad total') && SUMMARY_ROW_LABELS.includes('opponent total'));
+  assert.deepEqual(stripSummaryRows([{ name: 'A' }, null, { name: 'Total' }]), {
+    players: [{ name: 'A' }, null],
+    warnings: ['שורות סיכום דולגו (אינן שחקנים): Total']
+  });
+  assert.deepEqual(stripSummaryRows([{ name: 'A' }]).warnings, []);
+  assert.ok(html.includes('Squad Total'), 'the BYOD help text must mention the summary-row rule');
 });

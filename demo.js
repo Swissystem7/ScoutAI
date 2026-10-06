@@ -1791,6 +1791,48 @@
     return { errors: errors, warnings: warnings };
   }
 
+  // Spreadsheet exports end with aggregate rows: FBref writes "Squad Total"
+  // and "Opponent Total" under the Player column, Excel users add Total /
+  // Average / סה"כ. Such a row carries the whole team's minutes and counts
+  // under a player name, so it loads as a player, tops every count and ranks
+  // first - with no error, because every cell is a valid number. It is not a
+  // player: drop it and say so once. Matching is exact on the trimmed,
+  // lower-cased name with quote marks removed, plus any name ending in
+  // " total", so a surname like Totaro or Mean is never touched.
+  const HEBREW_GERESH = String.fromCharCode(0x05F3);
+  const HEBREW_GERSHAYIM = String.fromCharCode(0x05F4);
+  const SUMMARY_ROW_LABELS = Object.freeze(['total', 'totals', 'sum', 'subtotal', 'grand total', 'squad total',
+    'opponent total', 'team total', 'average', 'avg', 'mean', 'median',
+    'סהכ', 'סך הכל', 'סך הכול', 'סיכום', 'ממוצע', 'חציון']);
+  const SUMMARY_QUOTES_RE = new RegExp('["\'' + HEBREW_GERESH + HEBREW_GERSHAYIM + ':.]', 'g');
+
+  // True when a name cell is an aggregate label rather than a player.
+  function isSummaryRowName(name) {
+    const plain = String(name == null ? '' : name).toLowerCase()
+      .replace(SUMMARY_QUOTES_RE, '').replace(/\s+/g, ' ').trim();
+    if (!plain) return false;
+    return SUMMARY_ROW_LABELS.indexOf(plain) >= 0 || /\stotal$/.test(plain);
+  }
+
+  // Remove aggregate rows from a player list and report the labels dropped.
+  function stripSummaryRows(players) {
+    const kept = [];
+    const dropped = [];
+    const counts = {};
+    (players || []).forEach(function (row) {
+      if (!row || !isSummaryRowName(row.name)) {
+        kept.push(row);
+        return;
+      }
+      const label = String(row.name).trim();
+      if (!counts[label]) { counts[label] = 0; dropped.push(label); }
+      counts[label] += 1;
+    });
+    const warnings = dropped.length ? ['שורות סיכום דולגו (אינן שחקנים): ' +
+      dropped.map(function (label) { return counts[label] > 1 ? label + ' ×' + counts[label] : label; }).join(', ')] : [];
+    return { players: kept, warnings: warnings };
+  }
+
   // Header spellings a user sheet may carry for a column the lab reads.
   // Matching ignores case, spaces, underscores, hyphens and dots, so
   // Key Passes, key_passes and KEY-PASSES all load as keyPasses. The short
@@ -2039,11 +2081,18 @@
         provenance: null
       };
     }
-    const players = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    const named = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    const summary = stripSummaryRows(named);
+    const players = summary.players;
     if (!players.length) {
-      return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
+      return {
+        ok: false,
+        errors: [named.length ? 'כל השורות הן שורות סיכום (Total / סה"כ) — אין שחקנים' : 'אין שחקנים עם שדה name'],
+        players: [],
+        provenance: null
+      };
     }
-    parseWarnings = parseWarnings.concat(stripMissingMarkers(players));
+    parseWarnings = parseWarnings.concat(summary.warnings).concat(stripMissingMarkers(players));
     players.forEach(function (row) {
       invalidNumericFields(row).forEach(function (bad) {
         parseErrors.push('שחקן «' + row.name + '»: ' + bad.key + '=«' + String(bad.value) + '» אינו מספר — נחשב כחסר');
@@ -2132,6 +2181,9 @@
     csvMissingMarker: csvMissingMarker,
     stripMissingMarkers: stripMissingMarkers,
     MISSING_MARKERS: MISSING_MARKERS,
+    isSummaryRowName: isSummaryRowName,
+    stripSummaryRows: stripSummaryRows,
+    SUMMARY_ROW_LABELS: SUMMARY_ROW_LABELS,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
