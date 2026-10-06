@@ -1655,6 +1655,82 @@
     return bad;
   }
 
+  // Header names the CSV path reads, lower-cased (matching is case-insensitive).
+  const CSV_KNOWN_HEADERS = Object.freeze(
+    USER_DATASET_COLUMNS.map(function (key) { return key.toLowerCase(); }).concat(['totalminutesproxy'])
+  );
+
+  // Levenshtein distance, only used to suggest a known header for a typo.
+  function editDistance(a, b) {
+    const prev = [];
+    for (let j = 0; j <= b.length; j += 1) prev[j] = j;
+    for (let i = 1; i <= a.length; i += 1) {
+      let diag = prev[0];
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const tmp = prev[j];
+        prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+        diag = tmp;
+      }
+    }
+    return prev[b.length];
+  }
+
+  // The known header closest to an unknown one, or null when nothing is near.
+  // "tackle" → tackles, "Key_Passes" → keyPasses, "xg" → null.
+  function suggestCsvHeader(header) {
+    const plain = String(header || '').toLowerCase().replace(/[\s_\-]+/g, '');
+    if (!plain) return null;
+    let best = null;
+    let bestDist = Infinity;
+    USER_DATASET_COLUMNS.forEach(function (key) {
+      const known = key.toLowerCase();
+      const dist = known === plain ? 0 : editDistance(plain, known);
+      if (dist < bestDist) { bestDist = dist; best = key; }
+    });
+    const limit = plain.length >= 8 ? 3 : 2;
+    return bestDist <= limit ? best : null;
+  }
+
+  // A header the lab does not read is not an error, but it must not pass in
+  // silence: a sheet with "tackle", "Key Passes" or "xG" loads fine and
+  // every player then scores 0 on stats the file actually carries. Say which
+  // columns were ignored, suggest the nearest known name, and flag a header
+  // that appears twice (only the first copy is read).
+  function auditCsvHeaders(rawHeaders) {
+    const warnings = [];
+    const seen = {};
+    const dupes = [];
+    const unknown = [];
+    let stats = 0;
+    rawHeaders.forEach(function (raw) {
+      const header = String(raw || '');
+      const lower = header.toLowerCase();
+      if (!lower) return;
+      if (seen[lower]) {
+        if (dupes.indexOf(header) < 0) dupes.push(header);
+        return;
+      }
+      seen[lower] = true;
+      if (CSV_KNOWN_HEADERS.indexOf(lower) < 0) {
+        const hint = suggestCsvHeader(header);
+        unknown.push(hint ? header + ' (אולי ' + hint + '?)' : header);
+      } else if (COUNT_FIELDS.some(function (key) { return key.toLowerCase() === lower; })) {
+        stats += 1;
+      }
+    });
+    if (dupes.length) {
+      warnings.push('כותרת כפולה: ' + dupes.join(', ') + ' — נקראת רק העמודה הראשונה');
+    }
+    if (unknown.length) {
+      warnings.push('עמודות שלא זוהו ולא נטענו: ' + unknown.join(', '));
+    }
+    if (!stats) {
+      warnings.push('אף עמודת ספירה מוכרת לא נמצאה — כל השחקנים יקבלו 0 בכל רכיב. עמודות מוכרות: ' + COUNT_FIELDS.join(', '));
+    }
+    return warnings;
+  }
+
   function parseUserCsv(text) {
     const detected = detectCsvDelimiter(text);
     const delimiter = detected.delimiter;
@@ -1680,6 +1756,7 @@
     });
     const players = [];
     const errors = [];
+    const warnings = auditCsvHeaders(lines[0]);
     // A row wider than the header is almost always a name with an unquoted
     // delimiter ("Silva, Thiago" saved from a text editor): every stat after
     // it lands one column to the right, so the player would be scored on
@@ -1735,8 +1812,8 @@
       });
       players.push(row);
     });
-    if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [] };
-    return { ok: true, errors: errors, players: players };
+    if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [], warnings: warnings };
+    return { ok: true, errors: errors, warnings: warnings, players: players };
   }
 
   function parseUserDataset(text, options) {
@@ -1747,6 +1824,7 @@
     }
     let dataset = null;
     let parseErrors = [];
+    let parseWarnings = [];
     if (raw.charAt(0) === '{' || raw.charAt(0) === '[') {
       try {
         dataset = JSON.parse(raw);
@@ -1758,6 +1836,7 @@
       if (!csv.ok) return { ok: false, errors: csv.errors, players: [], provenance: null };
       dataset = { players: csv.players };
       parseErrors = csv.errors || [];
+      parseWarnings = csv.warnings || [];
     }
     if (looksLikeOpenDataPayload(dataset)) {
       return {
@@ -1794,7 +1873,7 @@
     return {
       ok: true,
       errors: parseErrors,
-      warnings: players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [],
+      warnings: parseWarnings.concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
       provenance: provenance,
       source: {
@@ -1854,6 +1933,8 @@
     parseUserDataset: parseUserDataset,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
+    auditCsvHeaders: auditCsvHeaders,
+    suggestCsvHeader: suggestCsvHeader,
     CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,

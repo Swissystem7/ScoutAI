@@ -8,6 +8,8 @@ const {
   parseUserDataset,
   parseCsvRecords,
   detectCsvDelimiter,
+  auditCsvHeaders,
+  suggestCsvHeader,
   CSV_DELIMITERS,
   looksLikeOpenDataPayload,
   createStore,
@@ -172,7 +174,10 @@ test('CSV rows without a name are reported, not silently dropped', () => {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.players.length, 1);
   assert.deepEqual(parsed.errors, ['שורה 3: חסר שם', 'שורה 4: חסר שם']);
-  assert.deepEqual(parsed.warnings, ['שחקן אחד — הדירוג יהיה טריוויאלי']);
+  // name+minutes only: the header audit says, truthfully, that nothing will be scored.
+  assert.equal(parsed.warnings.length, 2);
+  assert.ok(parsed.warnings[0].startsWith('אף עמודת ספירה מוכרת לא נמצאה'));
+  assert.equal(parsed.warnings[1], 'שחקן אחד — הדירוג יהיה טריוויאלי');
   assert.ok(html.includes('parsed.warnings'), 'the BYOD status line must surface warnings and skipped rows');
 });
 
@@ -370,4 +375,49 @@ test('shipped WC2018 file keeps every player id unchanged', () => {
   });
   assert.equal(new Set(store.players.map((row) => row.id)).size, store.players.length, 'no duplicate ids');
   assert.ok(store.players.every((row) => !/#\d+$/.test(row.id)), 'no collision suffix was needed');
+});
+
+test('CSV headers the lab does not read are reported with a suggestion, duplicates too', () => {
+  const csv = [
+    'name,team,minutes,tackle,Pressures,Key Passes,xG,name',
+    'Alpha,Home,270,5,10,2,0.4,ignored',
+    'Beta,Home,270,3,2,1,0.1,ignored'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'typos.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.errors, []);
+  assert.deepEqual(parsed.warnings, [
+    'כותרת כפולה: name — נקראת רק העמודה הראשונה',
+    'עמודות שלא זוהו ולא נטענו: tackle (אולי tackles?), Key Passes (אולי keyPasses?), xG'
+  ]);
+  // Case-insensitive match still works and the unknown columns never reach the player.
+  assert.deepEqual(parsed.players[0], { name: 'Alpha', team: 'Home', totalMinutesProxy: 270, minutes: 270, pressures: 10 });
+
+  assert.equal(suggestCsvHeader('tackle'), 'tackles');
+  assert.equal(suggestCsvHeader('key_passes'), 'keyPasses');
+  assert.equal(suggestCsvHeader('Defensive Actions'), 'defensiveActions');
+  assert.equal(suggestCsvHeader('shots_on_target'), 'shotsOnTarget');
+  assert.equal(suggestCsvHeader('xG'), null);
+  assert.equal(suggestCsvHeader('club'), null);
+
+  // A clean header produces no warning at all.
+  assert.deepEqual(auditCsvHeaders(['name', 'team', 'position', 'minutes', 'pressures', 'tackles', '']), []);
+  assert.deepEqual(auditCsvHeaders(['Name', 'TotalMinutesProxy', 'Goals']), []);
+});
+
+test('CSV without any recognised stat column warns that every score will be 0', () => {
+  const csv = 'name,minutes,tkl,int\nAlpha,270,5,3\nBeta,270,2,1\n';
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.warnings.length, 2);
+  assert.equal(parsed.warnings[0], 'עמודות שלא זוהו ולא נטענו: tkl, int');
+  assert.ok(parsed.warnings[1].startsWith('אף עמודת ספירה מוכרת לא נמצאה — כל השחקנים יקבלו 0'));
+  assert.ok(parsed.warnings[1].includes('pressures, tackles'));
+  const store = createStore({ players: parsed.players }, { provenance: USER_DATA_PROVENANCE });
+  assert.ok(store.derive({ minMinutes: 90 }).rows.every((row) => row.score === 0), 'the warning tells the truth');
+
+  // Header-only warnings also travel with a rejected file (no players survived).
+  const rejected = parseUserDataset('name,minutes,tkl\nAlpha,abc,5\n', { attested: true });
+  assert.equal(rejected.ok, false);
+  assert.ok(html.includes('שלא זוהתה'), 'the BYOD help text must mention unknown-column reporting');
 });
