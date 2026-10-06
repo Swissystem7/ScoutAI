@@ -1833,6 +1833,77 @@
     return { players: kept, warnings: warnings };
   }
 
+  // The same player name twice in one file is legal and loads as two rows
+  // (the store gives the second id a #2 suffix), but it is rarely what the
+  // user meant: a sheet pasted twice, or an FBref export in which a player
+  // who moved mid-season appears once per squad. Both rows rank separately,
+  // each on part of the player's minutes, with no error, because every cell
+  // is valid. Say so once, by name: an identical copy (every read field
+  // equal) is called a copy, two rows in one team are listed with a count,
+  // two teams are listed by team. Nothing is merged or dropped - which row
+  // is right is the user's call, in the file. Names match ignoring case and
+  // runs of spaces, so "cohen" and "Cohen " are the same player.
+  function plainPlayerName(name) {
+    return String(name == null ? '' : name).toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  // True when two player rows carry the same value in every field the lab reads.
+  function sameUserRow(a, b) {
+    const keys = USER_DATASET_COLUMNS.concat(['totalMinutesProxy']);
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      const x = a[key] == null || a[key] === '' ? '' : String(a[key]).trim();
+      const y = b[key] == null || b[key] === '' ? '' : String(b[key]).trim();
+      if (x !== y) return false;
+    }
+    return true;
+  }
+
+  function auditDuplicateNames(players) {
+    const groups = {};
+    const order = [];
+    (players || []).forEach(function (row) {
+      if (!row) return;
+      const key = plainPlayerName(row.name);
+      if (!key) return;
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(row);
+    });
+    const copies = [];
+    const sameTeam = [];
+    const teams = [];
+    order.forEach(function (key) {
+      const rows = groups[key];
+      if (rows.length < 2) return;
+      const label = String(rows[0].name).trim();
+      const teamNames = [];
+      rows.forEach(function (row) {
+        const team = row.team == null ? '' : String(row.team).trim();
+        if (teamNames.indexOf(team) < 0) teamNames.push(team);
+      });
+      if (teamNames.length > 1) {
+        teams.push(label + ' (' + teamNames.map(function (t) { return t || '—'; }).join(', ') + ')');
+        return;
+      }
+      const identical = rows.every(function (row) { return sameUserRow(row, rows[0]); });
+      (identical ? copies : sameTeam).push(label + ' ×' + rows.length);
+    });
+    const warnings = [];
+    if (copies.length) {
+      warnings.push('שורות זהות (אותו שחקן, אותם ערכים): ' + copies.join(', ') +
+        ' — כל עותק נטען ומדורג בנפרד; מחקו את העותק בקובץ');
+    }
+    if (sameTeam.length) {
+      warnings.push('שם שחקן חוזר באותה קבוצה: ' + sameTeam.join(', ') +
+        ' — כל שורה נטענת ומדורגת בנפרד (המזהה השני מקבל #2), לא מאוחדת');
+    }
+    if (teams.length) {
+      warnings.push('שם שחקן חוזר בקבוצות שונות: ' + teams.join('; ') +
+        ' — כנראה מעבר באמצע עונה או שני שחקנים; כל שורה מדורגת בנפרד על חלק מהדקות, לא מאוחדת');
+    }
+    return warnings;
+  }
+
   // Header spellings a user sheet may carry for a column the lab reads.
   // Matching ignores case, spaces, underscores, hyphens and dots, so
   // Key Passes, key_passes and KEY-PASSES all load as keyPasses. The short
@@ -2208,6 +2279,7 @@
       ok: true,
       errors: parseErrors,
       warnings: parseWarnings
+        .concat(auditDuplicateNames(players))
         .concat(auditPositions(players))
         .concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
@@ -2289,6 +2361,7 @@
     MISSING_MARKERS: MISSING_MARKERS,
     isSummaryRowName: isSummaryRowName,
     stripSummaryRows: stripSummaryRows,
+    auditDuplicateNames: auditDuplicateNames,
     SUMMARY_ROW_LABELS: SUMMARY_ROW_LABELS,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
