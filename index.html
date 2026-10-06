@@ -11,7 +11,7 @@
     .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
     label{display:block;margin:14px 0 6px;font-weight:700}input,button,select{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
-    input[type=file],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
+    input[type=file],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.actions button{margin-inline-end:8px}.status{min-height:1.5em;font-weight:700}
     .formula{font-size:.95rem;color:#0f3d26;margin:12px 0;font-weight:700}
     .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}caption{text-align:start;font-weight:700;padding:8px 0;color:#17211b}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
@@ -394,8 +394,8 @@
     lessonNav.innerHTML = steps.map(function (step, i) {
       return '<button type="button" data-step="' + i + '"' + (i === lessonIndex ? ' aria-current="step"' : '') + ' aria-label="שלב ' + (i + 1) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next">הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' + (lessonIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' + (lessonIndex >= steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const step = steps[lessonIndex];
     if (!step) {
       lessonRoot.innerHTML = '';
@@ -718,8 +718,8 @@
         (lesson.passed ? ' class="done"' : '') +
         ' aria-label="' + escapeHtml(lesson.title) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-course="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-course="next">הבא</button>';
+      '<button type="button" class="secondary" data-course="prev"' + (idx === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-course="next"' + (idx >= lessons.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const lesson = lessons[idx];
     if (!lesson) {
       document.getElementById('courseRoot').innerHTML = '';

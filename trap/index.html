@@ -11,7 +11,7 @@
     .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
     label{display:block;margin:14px 0 6px;font-weight:700}input,button,select,textarea{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
-    input[type=text]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
+    input[type=text]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
     button.secondary{background:#fff;color:#145c3d;border:2px solid #145c3d;margin-inline-end:8px}
     .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700}
@@ -245,8 +245,8 @@
       return '<button type="button" data-step="' + i + '"' +
         (i === walkIndex ? ' aria-current="step"' : '') + '>' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next">הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' + (walkIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' + (walkIndex >= steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const step = steps[walkIndex];
     document.getElementById('walkRoot').innerHTML =
       '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' +
