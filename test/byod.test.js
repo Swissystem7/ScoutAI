@@ -9,6 +9,9 @@ const {
   parseCsvRecords,
   detectCsvDelimiter,
   auditCsvHeaders,
+  auditPositions,
+  positionGroup,
+  POSITION_CODES,
   suggestCsvHeader,
   CSV_DELIMITERS,
   looksLikeOpenDataPayload,
@@ -420,4 +423,66 @@ test('CSV without any recognised stat column warns that every score will be 0', 
   const rejected = parseUserDataset('name,minutes,tkl\nAlpha,abc,5\n', { attested: true });
   assert.equal(rejected.ok, false);
   assert.ok(html.includes('שלא זוהתה'), 'the BYOD help text must mention unknown-column reporting');
+});
+
+test('positionGroup reads FIFA/Opta codes, Hebrew words and multi-role cells, not only StatsBomb names', () => {
+  // Long names still work, and word order keeps "Wing Back" a defender.
+  assert.equal(positionGroup('Center Defensive Midfield'), 'MF');
+  assert.equal(positionGroup('Right Wing Back'), 'DF');
+  assert.equal(positionGroup('Attacking Midfield'), 'MF');
+  // Codes, any case, and the first role of a multi-role cell.
+  assert.equal(positionGroup('GK'), 'GK');
+  assert.equal(positionGroup('cb'), 'DF');
+  assert.equal(positionGroup('CDM'), 'MF');
+  assert.equal(positionGroup('ST'), 'FW');
+  assert.equal(positionGroup('CB/RB'), 'DF');
+  assert.equal(positionGroup('ST, LW'), 'FW');
+  // Hebrew.
+  assert.equal(positionGroup('שוער'), 'GK');
+  assert.equal(positionGroup('בלם'), 'DF');
+  assert.equal(positionGroup('קשר אחורי'), 'MF');
+  assert.equal(positionGroup('חלוץ מרכזי'), 'FW');
+  // Every published code maps to its own group.
+  Object.keys(POSITION_CODES).forEach((group) => {
+    POSITION_CODES[group].forEach((code) => assert.equal(positionGroup(code), group, code));
+  });
+  // Unknown and empty stay OT; empty is not an error worth reporting.
+  assert.equal(positionGroup('Pivot'), 'OT');
+  assert.equal(positionGroup(''), 'OT');
+  assert.deepEqual(auditPositions([{ position: 'CB' }, { position: '' }, {}]), []);
+  const notes = auditPositions([{ position: 'Pivot' }, { position: 'CB' }, { position: 'Pivot' }, { position: 'Enganche' }]);
+  assert.equal(notes.length, 1);
+  assert.ok(notes[0].startsWith('עמדות שלא זוהו ונחשבות OT'));
+  assert.ok(notes[0].includes('Pivot, Enganche'), 'each unknown label is listed once');
+});
+
+test('CSV with coded positions normalises inside the right groups and reports the labels it cannot place', () => {
+  const header = 'name,team,position,minutes,pressures,shotXgSum';
+  const coded = [header, 'A,X,CB,900,90,0.1', 'B,X,RB,900,30,0.1', 'C,X,ST,900,10,3', 'D,X,CF,900,10,1'].join('\n');
+  const parsed = parseUserDataset(coded, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.warnings, [], 'recognised codes produce no warning');
+  const store = createStore({ players: parsed.players }, { provenance: USER_DATA_PROVENANCE });
+  const rows = store.derive({ minMinutes: 90, normalizePosition: true }).rows;
+  const groups = {};
+  rows.forEach((row) => { groups[row.name] = row.positionGroup; });
+  assert.deepEqual(groups, { A: 'DF', B: 'DF', C: 'FW', D: 'FW' });
+  // Percentiles are taken inside the group: the top defender and the top
+  // forward both sit at the top of their own grit/clutch ladder.
+  const byName = {};
+  rows.forEach((row) => { byName[row.name] = row.components; });
+  assert.ok(byName.A.grit > byName.B.grit, 'CB with more pressures ranks above the RB inside DF');
+  assert.ok(byName.C.clutch > byName.D.clutch, 'ST with more xG ranks above the CF inside FW');
+
+  const unknown = [header, 'A,X,Pivot,900,90,0.1', 'B,X,Enganche,900,30,0.1', 'C,X,ST,900,10,3'].join('\n');
+  const flagged = parseUserDataset(unknown, { attested: true });
+  assert.equal(flagged.ok, true);
+  assert.equal(flagged.warnings.length, 1);
+  assert.ok(flagged.warnings[0].includes('Pivot, Enganche'));
+  assert.ok(!flagged.warnings[0].split(' — ')[0].includes('ST'), 'recognised codes are not listed as unknown');
+  // The JSON path gets the same report.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'A', minutes: 900, position: 'Pivot' }, { name: 'B', minutes: 900, position: 'GK' }] }), { attested: true });
+  assert.equal(json.warnings.length, 1);
+  assert.ok(json.warnings[0].includes('Pivot'));
+  assert.ok(html.includes('CDM') && html.includes('OT'), 'the BYOD help text must list accepted position codes');
 });
