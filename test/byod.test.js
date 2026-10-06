@@ -216,6 +216,36 @@ test('non-numeric stat cells are reported and never silently become 0', () => {
   assert.deepEqual(invalidNumericFields({ name: 'bad', minutes: Infinity }), [{ key: 'minutes', value: Infinity }]);
 });
 
+test('CSV rows wider than the header are skipped, short rows name the missing columns', () => {
+  const csv = [
+    'name,team,minutes,pressures,tackles,,',
+    'Silva, Thiago,Home,90,12,1',
+    'Alpha,Home,90,7,2,,',
+    'Beta,Home,90',
+    'Gamma,Home,90,5,3'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'shifted.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha', 'Beta', 'Gamma']);
+  assert.deepEqual(parsed.errors, [
+    'שורה 2: 6 תאים מול 5 כותרות — כנראה מפריד לא מצוטט בתוך שם; השורה דולגה',
+    'שורה 4: 3 תאים מול 5 כותרות — pressures, tackles נחשבים ריקים'
+  ]);
+  assert.deepEqual(parsed.players[0], { name: 'Alpha', team: 'Home', totalMinutesProxy: 90, minutes: 90, pressures: 7, tackles: 2 });
+  assert.deepEqual(parsed.players[1], { name: 'Beta', team: 'Home', totalMinutesProxy: 90, minutes: 90 });
+  assert.equal(parsed.players[2].tackles, 3);
+
+  const quoted = parseUserDataset('name,minutes,pressures\n"Silva, Thiago",90,12\n', { attested: true });
+  assert.deepEqual(quoted.errors, []);
+  assert.equal(quoted.players[0].name, 'Silva, Thiago');
+  assert.equal(quoted.players[0].pressures, 12);
+
+  const semi = parseUserDataset('sep=;\nname;minutes;pressures\nSilva; Thiago;90;12\n', { attested: true });
+  assert.equal(semi.ok, false);
+  assert.deepEqual(semi.errors, ['שורה 3: 4 תאים מול 3 כותרות — כנראה מפריד לא מצוטט בתוך שם; השורה דולגה']);
+  assert.ok(html.includes('מספר תאים'), 'the BYOD help text must mention the row-width check');
+});
+
 test('methodology and export stay source-honest', () => {
   const open = methodologyParagraph({ grit: 40, involvement: 30, clutch: 30, minMinutes: 270 });
   assert.match(open, /אוסר שימוש מסחרי/);

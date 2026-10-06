@@ -1637,6 +1637,13 @@
     return Number.isFinite(n) ? n : null;
   }
 
+  // Number of cells up to the last non-empty one.
+  function usedWidth(cells) {
+    let n = cells.length;
+    while (n > 0 && cells[n - 1] === '') n -= 1;
+    return n;
+  }
+
   // Shared with the JSON path: list the numeric fields of one player row
   // whose value is present but not a finite number.
   function invalidNumericFields(row) {
@@ -1673,7 +1680,19 @@
     });
     const players = [];
     const errors = [];
+    // A row wider than the header is almost always a name with an unquoted
+    // delimiter ("Silva, Thiago" saved from a text editor): every stat after
+    // it lands one column to the right, so the player would be scored on
+    // the wrong numbers. Skip and say so. Trailing empty cells (Excel pads
+    // "name,minutes,,,") are not a shift and are ignored on both sides.
+    const headerWidth = usedWidth(headers);
     lines.slice(1).forEach(function (cells, i) {
+      const width = usedWidth(cells);
+      if (width > headerWidth) {
+        errors.push('שורה ' + (i + firstDataLine) + ': ' + width + ' תאים מול ' + headerWidth +
+          ' כותרות — כנראה מפריד לא מצוטט בתוך שם; השורה דולגה');
+        return;
+      }
       const name = cells[nameIdx];
       if (!name) {
         errors.push('שורה ' + (i + firstDataLine) + ': חסר שם');
@@ -1681,6 +1700,12 @@
       }
       const row = { name: name };
       const lineNo = i + firstDataLine;
+      if (width < headerWidth) {
+        // Short row: keep the player, but say which columns never arrived so
+        // a blank stat is not mistaken for a measured zero.
+        errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
+          ' כותרות — ' + lines[0].slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
+      }
       const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
       if (minutesRaw !== '' && minutesRaw != null) {
         const minutes = csvNumber(minutesRaw, decimalComma);
