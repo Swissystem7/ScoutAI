@@ -116,13 +116,62 @@
     return String(row && row.name || '') + '|' + String(row && row.team || '');
   }
 
+  // Position labels a user file may carry. StatsBomb writes long English
+  // names ("Center Defensive Midfield"); a club export or a hand-made sheet
+  // usually writes the FIFA/Opta code ("CDM", "RB", "ST") or a Hebrew word.
+  // Anything unrecognised lands in OT, and with position normalisation on,
+  // every OT player is then ranked only against the other unknowns, so a
+  // file of CB/CM/ST rows used to collapse into one silent group.
+  const POSITION_CODES = Object.freeze({
+    GK: ['GK', 'G', 'GR', 'POR', 'TW'],
+    DF: ['DF', 'D', 'DEF', 'CB', 'LB', 'RB', 'LCB', 'RCB', 'LWB', 'RWB', 'WB', 'FB', 'SW', 'DC', 'DL', 'DR'],
+    MF: ['MF', 'M', 'MID', 'CM', 'DM', 'CDM', 'DMF', 'AM', 'CAM', 'AMF', 'LM', 'RM', 'LCM', 'RCM', 'MC', 'ML', 'MR', 'DMC', 'AMC'],
+    FW: ['FW', 'F', 'FWD', 'ST', 'CF', 'LW', 'RW', 'LF', 'RF', 'SS', 'ATT', 'WF', 'AML', 'AMR', 'FC']
+  });
+  const POSITION_CODE_GROUP = (function () {
+    const map = {};
+    Object.keys(POSITION_CODES).forEach(function (group) {
+      POSITION_CODES[group].forEach(function (code) { map[code] = group; });
+    });
+    return map;
+  }());
+  // Order matters: "Right Wing Back" is a defender, "Attacking Midfield" a
+  // midfielder, so the back/defence and midfield tests run before wing/attack.
+  const POSITION_WORDS = Object.freeze([
+    { group: 'GK', re: /goalkeeper|keeper|portero|torwart|שוער/i },
+    { group: 'MF', re: /midfield|mediocampista|mittelfeld|קשר/i },
+    { group: 'DF', re: /back|defen|defensa|verteidiger|libero|sweeper|מגן|בלם/i },
+    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i }
+  ]);
+
   function positionGroup(position) {
-    const text = String(position || '');
-    if (/goalkeeper/i.test(text)) return 'GK';
-    if (/midfield/i.test(text)) return 'MF';
-    if (/back|defen/i.test(text)) return 'DF';
-    if (/forward|wing|striker/i.test(text)) return 'FW';
+    const text = String(position || '').trim();
+    if (!text) return 'OT';
+    for (let i = 0; i < POSITION_WORDS.length; i += 1) {
+      if (POSITION_WORDS[i].re.test(text)) return POSITION_WORDS[i].group;
+    }
+    // Codes: the first recognised token wins, so "CB/RB" and "ST, CF" read
+    // as the player's primary role.
+    const tokens = text.toUpperCase().split(/[^A-Z]+/);
+    for (let j = 0; j < tokens.length; j += 1) {
+      if (Object.prototype.hasOwnProperty.call(POSITION_CODE_GROUP, tokens[j])) return POSITION_CODE_GROUP[tokens[j]];
+    }
     return 'OT';
+  }
+
+  // Distinct position labels of a player list that positionGroup cannot
+  // place. Reported once per file so the OT bucket is never a surprise.
+  function auditPositions(players) {
+    const unknown = [];
+    (players || []).forEach(function (row) {
+      const text = String(row && row.position || '').trim();
+      if (!text || positionGroup(text) !== 'OT' || unknown.indexOf(text) >= 0) return;
+      unknown.push(text);
+    });
+    if (!unknown.length) return [];
+    const shown = unknown.slice(0, 8).join(', ') + (unknown.length > 8 ? ' ועוד ' + (unknown.length - 8) : '');
+    return ['עמדות שלא זוהו ונחשבות OT (ינורמלו רק זו מול זו): ' + shown +
+      ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית'];
   }
 
   function per90(value, minutes) {
@@ -1873,7 +1922,9 @@
     return {
       ok: true,
       errors: parseErrors,
-      warnings: parseWarnings.concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
+      warnings: parseWarnings
+        .concat(auditPositions(players))
+        .concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
       provenance: provenance,
       source: {
@@ -1934,6 +1985,8 @@
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
     auditCsvHeaders: auditCsvHeaders,
+    auditPositions: auditPositions,
+    POSITION_CODES: POSITION_CODES,
     suggestCsvHeader: suggestCsvHeader,
     CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
