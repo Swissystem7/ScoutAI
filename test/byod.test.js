@@ -556,6 +556,29 @@ test('positionGroup reads FIFA/Opta codes, Hebrew words and multi-role cells, no
   assert.ok(notes[0].includes('Pivot, Enganche'), 'each unknown label is listed once');
 });
 
+test('positionGroup reads Wyscout side-specific codes (RCMF, LDMF, RWF, RCB3) instead of parking them in OT', () => {
+  // Wyscout exports are the most common scouting sheet; its midfield and
+  // wing codes carry the side (R/L) and the digit of a back three / five.
+  assert.equal(positionGroup('RCMF'), 'MF');
+  assert.equal(positionGroup('LCMF'), 'MF');
+  assert.equal(positionGroup('RDMF'), 'MF');
+  assert.equal(positionGroup('LDMF'), 'MF');
+  assert.equal(positionGroup('RAMF'), 'MF');
+  assert.equal(positionGroup('LAMF'), 'MF');
+  assert.equal(positionGroup('RWF'), 'FW');
+  assert.equal(positionGroup('LWF'), 'FW');
+  assert.equal(positionGroup('RCB3'), 'DF');
+  assert.equal(positionGroup('LCB3'), 'DF');
+  assert.equal(positionGroup('RB5'), 'DF');
+  assert.equal(positionGroup('LB5'), 'DF');
+  // Wyscout lists every role the player filled; the first one wins.
+  assert.equal(positionGroup('RCMF, LCMF, DMF'), 'MF');
+  assert.equal(positionGroup('LWF, LAMF'), 'FW');
+  // Nothing to report for a Wyscout sheet, and the help text says so.
+  assert.deepEqual(auditPositions([{ position: 'RCMF' }, { position: 'LWF, LAMF' }, { position: 'RCB3' }, { position: 'GK' }]), []);
+  assert.ok(html.includes('RCMF'), 'the BYOD help text must mention the Wyscout codes');
+});
+
 test('CSV with coded positions normalises inside the right groups and reports the labels it cannot place', () => {
   const header = 'name,team,position,minutes,pressures,shotXgSum';
   const coded = [header, 'A,X,CB,900,90,0.1', 'B,X,RB,900,30,0.1', 'C,X,ST,900,10,3', 'D,X,CF,900,10,1'].join('\n');

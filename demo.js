@@ -119,14 +119,19 @@
   // Position labels a user file may carry. StatsBomb writes long English
   // names ("Center Defensive Midfield"); a club export or a hand-made sheet
   // usually writes the FIFA/Opta code ("CDM", "RB", "ST") or a Hebrew word.
+  // A Wyscout export writes its own side-specific codes (RCMF, LDMF, RWF,
+  // RCB3, LB5): the lettered ones are listed below, the digit suffix of a
+  // back-three / back-five code is dropped by the tokenizer. Before they
+  // were listed every Wyscout midfielder and winger landed in OT.
   // Anything unrecognised lands in OT, and with position normalisation on,
   // every OT player is then ranked only against the other unknowns, so a
   // file of CB/CM/ST rows used to collapse into one silent group.
   const POSITION_CODES = Object.freeze({
     GK: ['GK', 'G', 'GR', 'POR', 'TW'],
     DF: ['DF', 'D', 'DEF', 'CB', 'LB', 'RB', 'LCB', 'RCB', 'LWB', 'RWB', 'WB', 'FB', 'SW', 'DC', 'DL', 'DR'],
-    MF: ['MF', 'M', 'MID', 'CM', 'DM', 'CDM', 'DMF', 'AM', 'CAM', 'AMF', 'LM', 'RM', 'LCM', 'RCM', 'MC', 'ML', 'MR', 'DMC', 'AMC'],
-    FW: ['FW', 'F', 'FWD', 'ST', 'CF', 'LW', 'RW', 'LF', 'RF', 'SS', 'ATT', 'WF', 'AML', 'AMR', 'FC']
+    MF: ['MF', 'M', 'MID', 'CM', 'DM', 'CDM', 'DMF', 'AM', 'CAM', 'AMF', 'LM', 'RM', 'LCM', 'RCM', 'MC', 'ML', 'MR', 'DMC', 'AMC',
+      'RCMF', 'LCMF', 'RDMF', 'LDMF', 'RAMF', 'LAMF'],
+    FW: ['FW', 'F', 'FWD', 'ST', 'CF', 'LW', 'RW', 'LF', 'RF', 'SS', 'ATT', 'WF', 'AML', 'AMR', 'FC', 'RWF', 'LWF']
   });
   const POSITION_CODE_GROUP = (function () {
     const map = {};
