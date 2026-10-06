@@ -38,6 +38,8 @@ const {
   stripSummaryRows,
   SUMMARY_ROW_LABELS,
   playerKey,
+  isNinetiesHeader,
+  NINETIES_HEADERS,
   serializeMetricHash,
   parseMetricHash,
   DEFAULT_METRIC
@@ -802,4 +804,70 @@ test('FBref "Get table as CSV" layout: group-header line above the header and re
   const named = parseUserDataset('name,minutes\nPlayer,90\nMin,80\n', { attested: true });
   assert.deepEqual(named.players.map((p) => p.name), ['Player', 'Min']);
   assert.ok(html.includes('Get table as CSV'), 'the BYOD help text must mention the FBref layout');
+});
+
+test('FBref tables without Min: the 90s column gives minutes (×90), reported once; Min wins when both exist', () => {
+  assert.equal(isNinetiesHeader('90s'), true);
+  assert.equal(isNinetiesHeader(' 90s '), true);
+  assert.equal(isNinetiesHeader('Nineties'), true);
+  assert.equal(isNinetiesHeader('90'), false);
+  assert.equal(isNinetiesHeader('minutes'), false);
+  assert.equal(isNinetiesHeader(''), false);
+  NINETIES_HEADERS.forEach((h) => assert.equal(resolveCsvHeader(h), null, h + ' is not a plain alias: its value needs ×90'));
+
+  // An FBref Defensive Actions export: no Min column at all, 90s rounded to a tenth.
+  const csv = [
+    'Player,Nation,Pos,Squad,Age,Born,90s,Tkl,TklW,Int,Press',
+    'Alpha,ISR,DF,Home,27,1998,12.3,30,20,15,120',
+    'Beta,ISR,MF,Home,24,2001,0.5,2,1,1,10',
+    'Gamma,ISR,FW,Home,30,1995,-,0,0,0,0',
+    'Delta,ISR,FW,Home,30,1995,x,0,0,0,0'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha', 'Beta', 'Gamma']);
+  assert.equal(parsed.players[0].minutes, 1107, '12.3 × 90, rounded to a whole minute');
+  assert.equal(parsed.players[0].totalMinutesProxy, 1107);
+  assert.equal(parsed.players[1].minutes, 45);
+  assert.equal(parsed.players[2].minutes, undefined, '- in 90s is a missing value, not 0');
+  assert.deepEqual(parsed.errors, ['שורה 5: 90s=«x» אינו מספר — השחקן דולג']);
+  assert.ok(parsed.warnings.some((w) => w.startsWith('אין עמודת דקות (Min)') && w.includes('90s × 90')), parsed.warnings.join(' | '));
+  assert.ok(!parsed.warnings.some((w) => w.includes('אף שחקן בלי דקות')), parsed.warnings.join(' | '));
+  assert.ok(parsed.warnings.some((w) => w.startsWith('תאים עם סימון חסר') && w.includes('minutes ×1')), parsed.warnings.join(' | '));
+  const mapped = parsed.warnings.find((w) => w.startsWith('כותרות שהותאמו'));
+  assert.ok(mapped && mapped.includes('90s → minutes (×90)'), mapped);
+  assert.ok(!parsed.warnings.some((w) => w.startsWith('עמודות שלא זוהו') && w.includes('90s')), 'the 90s column is not reported as unknown');
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance });
+  const alpha = store.players.find((p) => p.name === 'Alpha');
+  assert.equal(alpha.minutes, 1107);
+  assert.ok(alpha.components.grit > 0, 'per-90 components are computed from the derived minutes');
+  const ranked = store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows;
+  assert.ok(ranked.some((row) => row.name === 'Alpha'), 'Alpha passes the minutes threshold');
+
+  // Both Min and 90s: Min is read, the 90s column is ignored and said so, and it is not a duplicate header.
+  const both = parseUserDataset('Player,Min,90s,Tkl\nA,900,10.0,5\nB,450,5.0,2\n', { attested: true });
+  assert.deepEqual(both.players.map((p) => p.minutes), [900, 450]);
+  assert.ok(both.warnings.some((w) => w.startsWith('עמודת 90s לא נקראה')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.includes('90s × 90')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.startsWith('כותרת כפולה')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.startsWith('עמודות שלא זוהו')), both.warnings.join(' | '));
+
+  // 90s before Min in the header still prefers Min.
+  const reversed = parseUserDataset('Player,90s,Min,Tkl\nA,10.0,900,5\nB,5.0,450,2\n', { attested: true });
+  assert.deepEqual(reversed.players.map((p) => p.minutes), [900, 450]);
+
+  // A negative 90s value is a negative minute count: dropped and reported per player like any sign error.
+  const neg = parseUserDataset('Player,90s,Tkl\nA,-1.0,5\nB,2.0,2\n', { attested: true });
+  assert.deepEqual(neg.players.map((p) => p.name), ['A', 'B']);
+  assert.equal(neg.players[0].minutes, undefined);
+  assert.equal(neg.players[1].minutes, 180);
+  assert.ok(neg.errors.some((e) => e.includes('A') && e.includes('minutes')), neg.errors.join(' | '));
+
+  // A ; file with a decimal comma in 90s.
+  const euro = parseUserDataset('sep=;\nPlayer;90s;Tkl\nA;12,3;5\n', { attested: true });
+  assert.equal(euro.players[0].minutes, 1107);
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('<code>90s</code>'), 'the BYOD help text must mention the 90s column');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('90s'), 'README must mention the 90s column');
 });

@@ -1868,6 +1868,20 @@
     return Object.prototype.hasOwnProperty.call(CSV_HEADER_ALIASES, plain) ? CSV_HEADER_ALIASES[plain] : null;
   }
 
+  // Most FBref tables (Defensive Actions, Possession, Passing, Shooting…)
+  // carry no Min column at all - only "90s", the minutes divided by 90 and
+  // rounded to a tenth. Read as a plain sheet such a file loaded with no
+  // minutes, every per-90 component was 0 and nobody passed the minutes
+  // threshold. 90s is not a header alias (its value needs ×90), so it is
+  // resolved separately: used as the minutes source only when the file has
+  // no minutes column, and always said so. The derived minutes are rounded
+  // to a whole minute and are approximate (a tenth of a 90 is 9 minutes).
+  const NINETIES_HEADERS = Object.freeze(['90s', 'nineties', '90splayed', 'ninetiesplayed']);
+
+  function isNinetiesHeader(header) {
+    return NINETIES_HEADERS.indexOf(plainCsvHeader(header)) >= 0;
+  }
+
   // Levenshtein distance, only used to suggest a known header for a typo.
   function editDistance(a, b) {
     const prev = [];
@@ -1913,9 +1927,14 @@
     const dupes = [];
     const unknown = [];
     const mapped = [];
+    const nineties = [];
     let stats = 0;
     rawHeaders.forEach(function (raw) {
       const header = String(raw || '');
+      if (isNinetiesHeader(header)) {
+        nineties.push(header);
+        return;
+      }
       const key = resolveCsvHeader(header);
       const id = key || header.toLowerCase();
       if (!id) return;
@@ -1934,6 +1953,13 @@
       if (aliased) mapped.push(header + ' → ' + key);
       if (COUNT_FIELDS.indexOf(key) >= 0) stats += 1;
     });
+    if (nineties.length) {
+      if (seen.minutes || seen.totalMinutesProxy) {
+        warnings.push('עמודת ' + nineties.join(', ') + ' לא נקראה — יש עמודת דקות (Min) והיא עדיפה');
+      } else {
+        mapped.push(nineties.join(', ') + ' → minutes (×90)');
+      }
+    }
     if (dupes.length) {
       warnings.push('כותרת כפולה: ' + dupes.join(', ') + ' — נקראת רק העמודה הראשונה');
     }
@@ -2015,6 +2041,14 @@
       };
     }
     const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalMinutesProxy');
+    // FBref tables without Min: see isNinetiesHeader. Only when no minutes
+    // column exists; the first 90s column is used.
+    let ninetiesIdx = -1;
+    if (minIdx < 0) {
+      for (let i = 0; i < header.length && ninetiesIdx < 0; i += 1) {
+        if (isNinetiesHeader(header[i])) ninetiesIdx = i;
+      }
+    }
     const col = {};
     USER_DATASET_COLUMNS.forEach(function (key) {
       col[key] = headers.indexOf(key);
@@ -2028,6 +2062,10 @@
         ' (כותרת-על של FBref או הערה): ' + lines.slice(0, headerIdx).map(previewCsvLine).join(' // '));
     }
     auditCsvHeaders(header).forEach(function (w) { warnings.push(w); });
+    if (ninetiesIdx >= 0) {
+      warnings.push('אין עמודת דקות (Min) — הדקות חושבו מעמודת ' + header[ninetiesIdx] +
+        ' של FBref: 90s × 90, מעוגל לדקה שלמה. FBref מעגל 90s לעשירית, כך שהדקות מקורבות (עד ±5)');
+    }
     const repeatedHeaderLines = [];
     // A row wider than the header is almost always a name with an unquoted
     // delimiter ("Silva, Thiago" saved from a text editor): every stat after
@@ -2059,16 +2097,17 @@
         errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
           ' כותרות — ' + header.slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
       }
-      const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
+      const minutesRaw = minIdx >= 0 ? cells[minIdx] : (ninetiesIdx >= 0 ? cells[ninetiesIdx] : '');
       if (csvMissingMarker(minutesRaw)) {
         // Kept as text so stripMissingMarkers counts it with the JSON path.
         row.minutes = minutesRaw;
       } else if (minutesRaw !== '' && minutesRaw != null) {
-        const minutes = csvNumber(minutesRaw, decimalComma);
-        if (minutes === null) {
-          errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
+        const parsedMinutes = csvNumber(minutesRaw, decimalComma);
+        if (parsedMinutes === null) {
+          errors.push('שורה ' + lineNo + ': ' + (ninetiesIdx >= 0 ? '90s' : 'minutes') + '=«' + minutesRaw + '» אינו מספר — השחקן דולג');
           return;
         }
+        const minutes = ninetiesIdx >= 0 ? Math.round(parsedMinutes * 90) : parsedMinutes;
         row.totalMinutesProxy = minutes;
         row.minutes = minutes;
       }
@@ -2240,6 +2279,8 @@
     suggestCsvHeader: suggestCsvHeader,
     resolveCsvHeader: resolveCsvHeader,
     CSV_HEADER_ALIASES: CSV_HEADER_ALIASES,
+    NINETIES_HEADERS: NINETIES_HEADERS,
+    isNinetiesHeader: isNinetiesHeader,
     CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
     csvNumber: csvNumber,
