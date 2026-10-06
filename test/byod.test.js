@@ -28,6 +28,7 @@ const {
   invalidNumericFields,
   csvNumber,
   csvMissingMarker,
+  auditMinutesAndSigns,
   stripMissingMarkers,
   MISSING_MARKERS,
   playerKey,
@@ -617,4 +618,61 @@ test('CSV header aliases: FBref codes, spaced or underscored names and Hebrew he
   assert.deepEqual(padded.errors, []);
   assert.deepEqual(padded.players, [{ name: 'Alpha', totalMinutesProxy: 270, minutes: 270, tackles: 4 }]);
   assert.ok(html.includes('Key Passes'), 'the BYOD help text must mention the accepted header spellings');
+});
+
+test('a file without readable minutes is loaded but says every per-90 score will be 0', () => {
+  const noColumn = parseUserDataset('name,team,position,pressures,tackles\nA,T,CB,10,3\nB,T,CB,20,6\n', { attested: true });
+  assert.equal(noColumn.ok, true);
+  assert.equal(noColumn.players.length, 2);
+  assert.ok(noColumn.warnings.some((w) => /אף שחקן בלי דקות/.test(w) && /סף הדקות/.test(w)), noColumn.warnings.join(' | '));
+  // The store built from it ranks nobody at the default 270 threshold: the warning is the only explanation the user gets.
+  const store = createStore({ players: noColumn.players }, { provenance: noColumn.provenance });
+  assert.equal(store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows.length, 0);
+
+  const blankColumn = parseUserDataset('name,minutes,pressures\nA,,10\nB,-,20\n', { attested: true });
+  assert.equal(blankColumn.ok, true);
+  assert.ok(blankColumn.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+
+  // One readable minutes value is enough to silence the file-level warning.
+  const oneValue = parseUserDataset('name,minutes,pressures\nA,300,10\nB,,20\n', { attested: true });
+  assert.ok(!oneValue.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+
+  // JSON path shares the audit, also through totalMinutesProxy.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', tackles: 3 }] }), { attested: true });
+  assert.ok(json.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+  const proxy = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', totalMinutesProxy: 300 }] }), { attested: true });
+  assert.ok(!proxy.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+});
+
+test('negative minutes and counts are dropped and reported per player, zero minutes are counted', () => {
+  const csv = 'name,team,position,minutes,pressures,tackles\nA,T,CB,0,10,3\nB,T,CB,-90,20,6\nC,T,CB,90,-5,2\n';
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.errors, [
+    'שחקן «B»: minutes=«-90» שלילי — נחשב כחסר',
+    'שחקן «C»: pressures=«-5» שלילי — נחשב כחסר'
+  ]);
+  const byName = Object.fromEntries(parsed.players.map((row) => [row.name, row]));
+  assert.equal(byName.A.minutes, 0);
+  assert.ok(!('minutes' in byName.B) && !('totalMinutesProxy' in byName.B), 'negative minutes removed from both keys');
+  assert.ok(!('pressures' in byName.C) && byName.C.tackles === 2, 'only the negative cell is dropped');
+  assert.ok(parsed.warnings.some((w) => /שחקן אחד עם 0 דקות/.test(w)), parsed.warnings.join(' | '));
+  // A dropped value must not come back as a measured 0 in the store.
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance });
+  const c = store.players.find((row) => row.name === 'C');
+  assert.equal(c.counts.pressures, 0);
+  assert.equal(c.components.raw.pressures90, 0);
+  assert.equal(c.components.raw.tacklesInt90, 2);
+
+  // Unicode minus is read as a sign first, so it lands in the same audit.
+  const unicode = parseUserDataset('name,minutes,tackles\nU,90,\u22123\n', { attested: true });
+  assert.deepEqual(unicode.errors, ['שחקן «U»: tackles=«-3» שלילי — נחשב כחסר']);
+
+  // JSON path: same rule, same message.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', minutes: -10, tackles: -1 }, { name: 'K', team: 'T', minutes: 200 }] }), { attested: true });
+  assert.deepEqual(json.errors, [
+    'שחקן «J»: minutes=«-10» שלילי — נחשב כחסר',
+    'שחקן «J»: tackles=«-1» שלילי — נחשב כחסר'
+  ]);
+  assert.deepEqual(auditMinutesAndSigns([{ name: 'ok', minutes: 90, pressures: 0 }]), { errors: [], warnings: [] });
 });
