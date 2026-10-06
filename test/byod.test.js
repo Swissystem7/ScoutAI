@@ -8,6 +8,9 @@ const {
   parseUserDataset,
   parseCsvRecords,
   detectCsvDelimiter,
+  findCsvHeaderRow,
+  isRepeatedHeaderRow,
+  CSV_HEADER_SCAN,
   auditCsvHeaders,
   auditPositions,
   positionGroup,
@@ -733,4 +736,70 @@ test('FBref-style Squad Total / Opponent Total rows are dropped and reported, ne
   });
   assert.deepEqual(stripSummaryRows([{ name: 'A' }]).warnings, []);
   assert.ok(html.includes('Squad Total'), 'the BYOD help text must mention the summary-row rule');
+});
+
+test('FBref "Get table as CSV" layout: group-header line above the header and repeated header rows are skipped and reported', () => {
+  // Verbatim shape of an FBref squad export: a group-header line, the real header,
+  // the header repeated after a page of players, then the totals.
+  const header = 'Rk,Player,Nation,Pos,Squad,Age,Born,MP,Starts,Min,90s,Gls,Ast,Tkl,Int,Matches';
+  const csv = [
+    ',,,,,,,Playing Time,Playing Time,Playing Time,Playing Time,Performance,Performance,Defense,Defense,',
+    header,
+    '1,Alpha,eng ENG,DF,Home,27,1998,30,30,"2,700",30.0,2,1,60,40,Matches',
+    '2,Beta,fr FRA,MF,Home,24,2001,28,20,"1,900",21.1,4,6,45,20,Matches',
+    header,
+    '3,Gamma,br BRA,FW,Home,22,2003,25,15,"1,400",15.6,9,3,10,5,Matches',
+    ',Squad Total,,,Home,,,30,330,"29,700",330.0,55,40,500,300,',
+    ''
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'fbref.csv' });
+  assert.equal(parsed.ok, true, parsed.errors.join(' | '));
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha', 'Beta', 'Gamma']);
+  // The repeated header is not reported as a player called "Player"; the only message is the
+  // real FBref quirk that the totals row leaves its Matches cell empty (named from the header, not the preamble).
+  assert.deepEqual(parsed.errors, ['שורה 7: 15 תאים מול 16 כותרות — Matches נחשבים ריקים']);
+  assert.deepEqual(parsed.players[0], {
+    name: 'Alpha', team: 'Home', position: 'DF', totalMinutesProxy: 2700, minutes: 2700, goals: 2, assists: 1, tackles: 60, interceptions: 40
+  });
+  assert.equal(parsed.players[2].minutes, 1400);
+  assert.ok(parsed.warnings.some((w) => w === 'הכותרת נמצאה בשורה 2; השורה שלפניה דולגה (כותרת-על של FBref או הערה): Playing Time | Playing Time | Playing Time | Playing Time | …'), parsed.warnings.join(' | '));
+  // File line 5 is the repeated header (line 1 preamble, line 2 header, lines 3-4 players).
+  assert.ok(parsed.warnings.some((w) => w === 'שורת הכותרת חוזרת בתוך הקובץ פעם אחת (שורה 5) כמו בייצוא FBref — העותקים דולגו'), parsed.warnings.join(' | '));
+  assert.ok(parsed.warnings.some((w) => /שורות סיכום/.test(w) && /Squad Total/.test(w)), parsed.warnings.join(' | '));
+  // Line numbers in other messages count the skipped preamble too.
+  const shifted = parseUserDataset(',,group\nname,minutes,tackles\nA,90,1\n,90,2\nB,x,3\n', { attested: true });
+  assert.deepEqual(shifted.errors, ['שורה 4: חסר שם', 'שורה 5: minutes=«x» אינו מספר — השחקן דולג']);
+  assert.deepEqual(shifted.players.map((p) => p.name), ['A']);
+
+  // Two or more repeats are counted together; a sep= line shifts the numbers once more.
+  const twice = parseUserDataset('sep=;\nname;minutes\nA;90\nname;minutes\nB;80\nNAME;MINUTES\nC;70\n', { attested: true });
+  assert.deepEqual(twice.players.map((p) => p.name), ['A', 'B', 'C']);
+  assert.ok(twice.warnings.some((w) => w === 'שורת הכותרת חוזרת בתוך הקובץ 2 פעמים (שורות 4, 6) כמו בייצוא FBref — העותקים דולגו'), twice.warnings.join(' | '));
+  assert.ok(!twice.warnings.some((w) => /הכותרת נמצאה/.test(w)), 'no preamble was skipped');
+
+  // A plain file is untouched: header on line 1, no new warnings.
+  const plain = parseUserDataset('name,minutes\nA,90\nB,80\n', { attested: true });
+  assert.deepEqual(plain.warnings.filter((w) => /כותרת/.test(w)), []);
+  assert.deepEqual(plain.errors, []);
+
+  // A file whose first lines have no name column still fails with the old message, naming line 1.
+  const noName = parseUserDataset('team,minutes\nHome,90\nAway,80\n', { attested: true });
+  assert.equal(noName.ok, false);
+  assert.match(noName.errors[0], /^חסרה עמודת name\. כותרות שנמצאו: team \| minutes/);
+
+  // The scan is bounded: a header buried deeper than CSV_HEADER_SCAN lines is not found.
+  const deep = Array(CSV_HEADER_SCAN).fill('x,y').concat(['name,minutes', 'A,90']).join('\n');
+  assert.equal(parseUserDataset(deep, { attested: true }).ok, false);
+  assert.equal(findCsvHeaderRow([['x', 'y'], ['', 'Playing Time'], ['Rk', 'Player', 'Min']]), 2);
+  assert.equal(findCsvHeaderRow([['x', 'y'], ['team', 'minutes']]), -1);
+  assert.equal(findCsvHeaderRow([]), -1);
+
+  // Repeated-header matching: case-insensitive, trailing blanks ignored, any differing cell is a player.
+  assert.equal(isRepeatedHeaderRow(['Player', 'Min', ''], ['player', 'min']), true);
+  assert.equal(isRepeatedHeaderRow(['Player', '90'], ['Player', 'Min']), false);
+  assert.equal(isRepeatedHeaderRow(['Player'], ['Player', 'Min']), false);
+  // A real player who happens to be named after a column is kept: the whole row has to match.
+  const named = parseUserDataset('name,minutes\nPlayer,90\nMin,80\n', { attested: true });
+  assert.deepEqual(named.players.map((p) => p.name), ['Player', 'Min']);
+  assert.ok(html.includes('Get table as CSV'), 'the BYOD help text must mention the FBref layout');
 });
