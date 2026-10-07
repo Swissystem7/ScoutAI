@@ -33,6 +33,25 @@ function isExternal(ref) {
   return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(ref);
 }
 
+function resolveLocalTarget(page, ref) {
+  const file = decodeURIComponent(ref.split(/[?#]/)[0]);
+  let resolved = path.resolve(root, path.dirname(page), file);
+  if (
+    file.endsWith('/') ||
+    (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory())
+  ) {
+    resolved = path.join(resolved, 'index.html');
+  }
+  return resolved;
+}
+
+const labIndex = path.join(root, 'index.html');
+
+function linksToLab(page, ref) {
+  if (!ref || ref.startsWith('#') || isExternal(ref) || ref.includes('${')) return false;
+  return resolveLocalTarget(page, ref) === labIndex;
+}
+
 test('every page in the link check exists', () => {
   for (const page of PAGES) assert.ok(fs.existsSync(path.join(root, page)), page);
 });
@@ -42,11 +61,7 @@ test('every relative href/src on every page points to a file in the repo', () =>
   for (const page of PAGES) {
     for (const ref of refs(read(page))) {
       if (!ref || ref.startsWith('#') || isExternal(ref) || ref.includes('${')) continue;
-      const target = decodeURIComponent(ref.split(/[?#]/)[0]);
-      let resolved = path.resolve(root, path.dirname(page), target);
-      if (target.endsWith('/') || (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory())) {
-        resolved = path.join(resolved, 'index.html');
-      }
+      const resolved = resolveLocalTarget(page, ref);
       if (!fs.existsSync(resolved)) broken.push(`${page} -> ${ref}`);
     }
   }
@@ -82,12 +97,20 @@ test('cross-page #anchors name an id on the target page', () => {
 });
 
 test('every page links back to the lab and to the licence page', () => {
+  const licencePath = path.join(root, 'licence.html');
   for (const page of PAGES) {
-    const local = refs(read(page)).filter((ref) => !isExternal(ref)).map((ref) => ref.split('#')[0]);
-    const resolved = local.map((ref) => path.relative(root, path.resolve(root, path.dirname(page), ref || page)));
+    const pageRefs = refs(read(page));
     if (page !== 'index.html') {
-      assert.ok(resolved.includes('index.html') || resolved.includes(''), `${page} has no link to the lab`);
+      assert.ok(
+        pageRefs.some((ref) => linksToLab(page, ref)),
+        `${page} has no link to the lab`,
+      );
     }
-    if (page !== 'licence.html') assert.ok(resolved.includes('licence.html'), `${page} has no link to licence.html`);
+    if (page !== 'licence.html') {
+      assert.ok(
+        pageRefs.some((ref) => !isExternal(ref) && resolveLocalTarget(page, ref) === licencePath),
+        `${page} has no link to licence.html`,
+      );
+    }
   }
 });
