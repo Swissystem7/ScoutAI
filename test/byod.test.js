@@ -36,6 +36,7 @@ const {
   MISSING_MARKERS,
   isSummaryRowName,
   stripSummaryRows,
+  auditDuplicateNames,
   SUMMARY_ROW_LABELS,
   playerKey,
   isNinetiesHeader,
@@ -870,4 +871,71 @@ test('FBref tables without Min: the 90s column gives minutes (×90), reported on
   // Help text and README mention the rule.
   assert.ok(html.includes('<code>90s</code>'), 'the BYOD help text must mention the 90s column');
   assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('90s'), 'README must mention the 90s column');
+});
+
+test('the same player name twice is reported once by name - identical copy, same team, or two teams - and nothing is merged', () => {
+  assert.deepEqual(auditDuplicateNames([]), []);
+  assert.deepEqual(auditDuplicateNames(null), []);
+  assert.deepEqual(auditDuplicateNames([{ name: 'A', team: 'X' }, { name: 'B', team: 'X' }]), []);
+  assert.deepEqual(auditDuplicateNames([{ name: '' }, { name: '' }, { name: null }]), [], 'blank names are not duplicates');
+  // Case and spacing do not make two players.
+  const loose = auditDuplicateNames([{ name: 'Cohen', team: 'A', minutes: 90 }, { name: ' cohen  ', team: 'A', minutes: 80 }]);
+  assert.equal(loose.length, 1);
+  assert.ok(loose[0].startsWith('שם שחקן חוזר באותה קבוצה') && loose[0].includes('Cohen ×2'), loose[0]);
+
+  // A sheet pasted twice: identical rows, called a copy; nothing is dropped.
+  const copy = parseUserDataset('name,team,minutes,tackles\nCohen,A,900,10\nCohen,A,900,10\nLevi,A,800,5\n', { attested: true });
+  assert.equal(copy.ok, true);
+  assert.equal(copy.players.length, 3, 'nothing is dropped');
+  assert.deepEqual(copy.errors, []);
+  const copyWarn = copy.warnings.filter((w) => w.startsWith('שורות זהות'));
+  assert.equal(copyWarn.length, 1, copy.warnings.join(' | '));
+  assert.ok(copyWarn[0].includes('Cohen ×2'), copyWarn[0]);
+  assert.ok(!copy.warnings.some((w) => w.startsWith('שם שחקן חוזר')), copy.warnings.join(' | '));
+
+  // Same team, different values: two rows, two ids, one warning that names the #2 id.
+  const same = parseUserDataset('name,team,position,minutes,tackles\nCohen,A,CB,900,10\nCohen,A,ST,300,1\nLevi,A,CM,800,5\n', { attested: true });
+  const sameWarn = same.warnings.filter((w) => w.startsWith('שם שחקן חוזר באותה קבוצה'));
+  assert.equal(sameWarn.length, 1, same.warnings.join(' | '));
+  assert.ok(sameWarn[0].includes('Cohen ×2') && sameWarn[0].includes('#2'), sameWarn[0]);
+  assert.ok(!same.warnings.some((w) => w.startsWith('שורות זהות')), same.warnings.join(' | '));
+  const store = createStore({ players: same.players }, { provenance: same.provenance });
+  assert.deepEqual(store.players.map((p) => p.id), ['Cohen|A', 'Cohen|A#2', 'Levi|A']);
+
+  // No team column at all: still the same-team message.
+  const noTeam = parseUserDataset('name,minutes\nCohen,900\nCohen,300\n', { attested: true });
+  assert.ok(noTeam.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה') && w.includes('Cohen ×2')), noTeam.warnings.join(' | '));
+
+  // An FBref export of a mid-season transfer: one row per squad, listed by team.
+  const moved = parseUserDataset('Player,Squad,Min,Tkl\nCohen,A,900,10\nCohen,B,300,2\nLevi,B,800,5\n', { attested: true });
+  const movedWarn = moved.warnings.filter((w) => w.startsWith('שם שחקן חוזר בקבוצות שונות'));
+  assert.equal(movedWarn.length, 1, moved.warnings.join(' | '));
+  assert.ok(movedWarn[0].includes('Cohen (A, B)'), movedWarn[0]);
+  assert.equal(moved.players.length, 3, 'rows are not merged');
+  assert.ok(!moved.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה')), moved.warnings.join(' | '));
+
+  // Three names at once: each lands in its own message, in file order.
+  const mixed = auditDuplicateNames([
+    { name: 'A', team: 'X', minutes: 1 }, { name: 'B', team: 'X', minutes: 1 }, { name: 'C', team: 'X', minutes: 1 },
+    { name: 'A', team: 'X', minutes: 1 }, { name: 'B', team: 'X', minutes: 2 }, { name: 'C', team: 'Y', minutes: 1 },
+    { name: 'A', team: 'X', minutes: 1 }
+  ]);
+  assert.equal(mixed.length, 3, mixed.join(' | '));
+  assert.ok(mixed[0].startsWith('שורות זהות') && mixed[0].includes('A ×3'), mixed[0]);
+  assert.ok(mixed[1].startsWith('שם שחקן חוזר באותה קבוצה') && mixed[1].includes('B ×2'), mixed[1]);
+  assert.ok(mixed[2].startsWith('שם שחקן חוזר בקבוצות שונות') && mixed[2].includes('C (X, Y)'), mixed[2]);
+
+  // The JSON path shares the audit.
+  const json = parseUserDataset(JSON.stringify(twoCohens()), { attested: true });
+  assert.equal(json.ok, true);
+  assert.ok(json.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה') && w.includes('Cohen ×2')), json.warnings.join(' | '));
+
+  // Summary rows are stripped before the audit: two Squad Total rows are not a duplicate player.
+  const totals = parseUserDataset('name,team,minutes\nA,X,900\nB,X,800\nSquad Total,X,1700\nSquad Total,X,1700\n', { attested: true });
+  assert.equal(totals.ok, true);
+  assert.ok(!totals.warnings.some((w) => w.startsWith('שורות זהות') || w.startsWith('שם שחקן חוזר')), totals.warnings.join(' | '));
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('שם שחקן שחוזר'), 'the BYOD help text must mention repeated player names');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('שם שחקן שחוזר'), 'README must mention repeated player names');
 });
