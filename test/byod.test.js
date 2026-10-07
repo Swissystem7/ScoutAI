@@ -32,6 +32,9 @@ const {
   csvNumber,
   csvMissingMarker,
   auditMinutesAndSigns,
+  auditMinutesThreshold,
+  THRESHOLD_STEP,
+  THRESHOLD_FLOOR,
   stripMissingMarkers,
   MISSING_MARKERS,
   isSummaryRowName,
@@ -216,7 +219,11 @@ test('non-numeric stat cells are reported and never silently become 0', () => {
     'שורה 3: pressures=«12,5» אינו מספר — התא נשאר ריק'
   ]);
   // n/a is a missing-value marker, not a typo: blanked and counted once per column.
-  assert.deepEqual(parsed.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: tackles ×1']);
+  // Every player has 90 minutes - a one-match file - so the threshold audit speaks too.
+  assert.deepEqual(parsed.warnings, [
+    'תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: tackles ×1',
+    'אף שחקן לא עובר את סף הדקות (270): הדקות הגבוהות ביותר בקובץ הן 90 — הדירוג יהיה ריק; סף של 90 דקות היה מכניס 3 שחקנים — זכרו שמדגם קטן משקר'
+  ]);
   assert.equal(parsed.players[0].totalMinutesProxy, 90);
   assert.equal('pressures' in parsed.players[0], false);
   assert.equal(parsed.players[1].pressures, 7);
@@ -607,7 +614,8 @@ test('CSV header aliases: FBref codes, spaced or underscored names and Hebrew he
   assert.deepEqual(parsed.errors, []);
   assert.deepEqual(parsed.warnings, [
     'כותרת כפולה: shots_on_target (= shotsOnTarget) — נקראת רק העמודה הראשונה',
-    'כותרות שהותאמו: Player → name, Squad → team, Pos → position, Min → minutes, Tkl → tackles, Int → interceptions, KP → keyPasses, xG → shotXgSum, SoT → shotsOnTarget, Gls → goals, Ast → assists'
+    'כותרות שהותאמו: Player → name, Squad → team, Pos → position, Min → minutes, Tkl → tackles, Int → interceptions, KP → keyPasses, xG → shotXgSum, SoT → shotsOnTarget, Gls → goals, Ast → assists',
+    'שחקן אחד בלבד עובר את סף הדקות (270), השני בקובץ עם 180 דקות — הדירוג יהיה טריוויאלי; סף של 180 דקות היה מכניס 2 שחקנים — זכרו שמדגם קטן משקר'
   ]);
   assert.deepEqual(parsed.players[0], {
     name: 'Alpha', team: 'Home', position: 'CB', totalMinutesProxy: 270, minutes: 270,
@@ -624,7 +632,10 @@ test('CSV header aliases: FBref codes, spaced or underscored names and Hebrew he
   const he = parseUserDataset(hebrew, { attested: true });
   assert.equal(he.ok, true);
   assert.deepEqual(he.errors, []);
-  assert.deepEqual(he.warnings, ['כותרות שהותאמו: שם → name, קבוצה → team, עמדה → position, דקות → minutes']);
+  assert.deepEqual(he.warnings, [
+    'כותרות שהותאמו: שם → name, קבוצה → team, עמדה → position, דקות → minutes',
+    'שחקן אחד בלבד עובר את סף הדקות (270), השני בקובץ עם 180 דקות — הדירוג יהיה טריוויאלי; סף של 180 דקות היה מכניס 2 שחקנים — זכרו שמדגם קטן משקר'
+  ]);
   assert.deepEqual(he.players[0], { name: 'גמא', team: 'בית', position: 'בלם', totalMinutesProxy: 270, minutes: 270, tackles: 6 });
 
   // A header that differs only in case is not reported as a mapping, and a
@@ -1005,4 +1016,60 @@ test('players without a minutes cell in a file that has minutes are named: they 
   // Help text and README mention the rule.
   assert.ok(html.includes('שחקן בלי דקות בקובץ שכן יש בו דקות'), 'the BYOD help text must mention players without minutes');
   assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('שחקן בלי דקות בקובץ שכן יש בו דקות'), 'README must mention players without minutes');
+});
+
+test('a valid file whose players all fall under the minutes threshold says so at load time, with the slider value that would rank them', () => {
+  const under = (parsed) => parsed.warnings.filter((w) => w.includes('סף הדקות (') &&
+    (w.includes('הדירוג יהיה ריק') || w.includes('הדירוג יהיה טריוויאלי')));
+
+  // One-match export: every cell valid, top minutes 90. Nobody passes 270; the slider floor (90)
+  // admits the three who played the full match. Without this the status says "4 players" and the
+  // table says "no players above the threshold", and nothing connects the two.
+  const match = parseUserDataset('name,team,minutes,tackles\nA,T,90,3\nB,T,90,2\nC,T,90,1\nD,T,45,0\n', { attested: true });
+  assert.equal(match.ok, true);
+  assert.deepEqual(match.errors, []);
+  assert.deepEqual(under(match), ['אף שחקן לא עובר את סף הדקות (270): הדקות הגבוהות ביותר בקובץ הן 90 — הדירוג יהיה ריק; סף של 90 דקות היה מכניס 3 שחקנים — זכרו שמדגם קטן משקר']);
+  // The store confirms both numbers in the message.
+  const store = createStore({ players: match.players }, { provenance: match.provenance });
+  assert.equal(store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows.length, 0);
+  assert.equal(store.derive(Object.assign({}, DEFAULT_METRIC, { minMinutes: 90 }), DEFAULT_METRIC).rows.length, 3);
+
+  // Cup weekend: a ranking needs two players, so the runner-up (150) sets the suggestion, rounded down to a slider step.
+  const cup = parseUserDataset('name,minutes\nA,180\nB,140\nC,120\n', { attested: true });
+  assert.deepEqual(under(cup), ['אף שחקן לא עובר את סף הדקות (270): הדקות הגבוהות ביותר בקובץ הן 180 — הדירוג יהיה ריק; סף של 120 דקות היה מכניס 3 שחקנים — זכרו שמדגם קטן משקר']);
+
+  // One player passes: a trivial ranking, named as such, with the threshold that admits two.
+  const one = parseUserDataset('name,minutes\nA,300\nB,200\nC,100\n', { attested: true });
+  assert.deepEqual(under(one), ['שחקן אחד בלבד עובר את סף הדקות (270), השני בקובץ עם 200 דקות — הדירוג יהיה טריוויאלי; סף של 180 דקות היה מכניס 2 שחקנים — זכרו שמדגם קטן משקר']);
+
+  // Half a match: even the lowest slider value admits at most one player.
+  const half = parseUserDataset('name,minutes\nA,95\nB,45\nC,45\n', { attested: true });
+  assert.deepEqual(under(half), ['אף שחקן לא עובר את סף הדקות (270): הדקות הגבוהות ביותר בקובץ הן 95 — הדירוג יהיה ריק; גם הסף הנמוך ביותר במעבדה (90 דקות) היה מכניס לכל היותר שחקן אחד — הקובץ קצר מדי לדירוג']);
+
+  // The threshold set in the lab before loading is the one audited (index.html passes it, as the slider's string).
+  assert.deepEqual(under(parseUserDataset('name,minutes\nA,300\nB,200\nC,100\n', { attested: true, minMinutes: 180 })), []);
+  assert.equal(under(parseUserDataset('name,minutes\nA,300\nB,200\nC,100\n', { attested: true, minMinutes: '250' })).length, 1);
+  // A season file is silent; so are files that already carry their own message (no minutes, one player, one readable value).
+  assert.deepEqual(under(parseUserDataset('name,minutes\nA,900\nB,800\n', { attested: true })), []);
+  assert.deepEqual(under(parseUserDataset('name,tackles\nA,3\nB,2\n', { attested: true })), []);
+  assert.deepEqual(under(parseUserDataset('name,minutes\nA,90\n', { attested: true })), []);
+  assert.deepEqual(under(parseUserDataset('name,minutes\nA,90\nB,\n', { attested: true })), []);
+  // JSON path: minutes are read the way the ranking reads them (totalMinutesProxy first).
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', totalMinutesProxy: 90 }, { name: 'K', minutes: 90 }] }), { attested: true });
+  assert.equal(under(json).length, 1, json.warnings.join(' | '));
+
+  // Direct audit, and the slider in index.html mirrors the constants the suggestion is built from.
+  assert.deepEqual(auditMinutesThreshold([{ name: 'A', minutes: 300 }, { name: 'B', minutes: 280 }], 270), []);
+  assert.deepEqual(auditMinutesThreshold([{ name: 'A', minutes: 300 }, { name: 'B', minutes: 280 }], 290).length, 1);
+  assert.deepEqual(auditMinutesThreshold([], 270), []);
+  assert.equal(THRESHOLD_STEP, 30);
+  assert.equal(THRESHOLD_FLOOR, 90);
+  assert.ok(html.includes('id="minMinutes" type="range" min="' + THRESHOLD_FLOOR + '"'), 'the slider floor must match THRESHOLD_FLOOR');
+  assert.ok(html.includes('max="630" step="' + THRESHOLD_STEP + '"'), 'the slider step must match THRESHOLD_STEP');
+  assert.ok(html.includes("minMinutes: document.getElementById('minMinutes').value,") &&
+    html.indexOf('minMinutes: readSpecFromControls().minMinutes') > 0, 'the loader must pass the current threshold to parseUserDataset');
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('ערך הסף שהיה מכניס שחקנים לדירוג'), 'the BYOD help text must mention the threshold message');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('ערך הסף שהיה מכניס שחקנים לדירוג'), 'README must mention the threshold message');
 });

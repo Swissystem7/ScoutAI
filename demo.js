@@ -1811,6 +1811,53 @@
     return { errors: errors, warnings: warnings };
   }
 
+  // A file in which every cell is valid and every player has minutes can
+  // still rank nobody: a single-match export tops out at 90 minutes, a cup
+  // weekend at 180, and the threshold is 270. The status line then says
+  // "N players" with no note and the table says "no players above the
+  // minutes threshold" with no hint that the file, not the data, is short.
+  // Say at load time, when the threshold admits nobody or one player, what
+  // the file's highest minutes are and which slider value would admit how
+  // many players. The slider moves in steps of THRESHOLD_STEP and does not
+  // go below THRESHOLD_FLOOR (index.html mirrors both), so a file whose
+  // top player has fewer minutes than the floor cannot be ranked in the
+  // lab at all; say that too. Nothing is changed: the threshold stays the
+  // user's choice, and the lesson that a small sample lies still stands.
+  // Minutes are read the way preparePlayer reads them, so the count here is
+  // the count the ranking will use.
+  const THRESHOLD_STEP = 30;
+  const THRESHOLD_FLOOR = 90;
+
+  function rankedMinutes(row) {
+    const minutes = Number(row.totalMinutesProxy || row.minutes || 0);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+  }
+
+  function auditMinutesThreshold(players, minMinutes) {
+    const requested = Number(minMinutes);
+    const threshold = Number.isFinite(requested) && requested >= 0 ? requested : DEFAULT_METRIC.minMinutes;
+    const minutes = (players || []).filter(Boolean).map(rankedMinutes).filter(function (m) { return m > 0; })
+      .sort(function (a, b) { return b - a; });
+    // No minutes at all is auditMinutesAndSigns' message; one player is
+    // the trivial-ranking message.
+    if (minutes.length < 2) return [];
+    const passing = minutes.filter(function (m) { return m >= threshold; }).length;
+    if (passing >= 2) return [];
+    const top = minutes[0];
+    const head = passing === 0
+      ? 'אף שחקן לא עובר את סף הדקות (' + threshold + '): הדקות הגבוהות ביותר בקובץ הן ' + top + ' — הדירוג יהיה ריק'
+      : 'שחקן אחד בלבד עובר את סף הדקות (' + threshold + '), השני בקובץ עם ' + minutes[1] + ' דקות — הדירוג יהיה טריוויאלי';
+    // A ranking needs two players, so the suggested threshold is the one
+    // the runner-up in minutes passes, rounded down to a slider step.
+    const needed = minutes[1];
+    if (needed < THRESHOLD_FLOOR) {
+      return [head + '; גם הסף הנמוך ביותר במעבדה (' + THRESHOLD_FLOOR + ' דקות) היה מכניס לכל היותר שחקן אחד — הקובץ קצר מדי לדירוג'];
+    }
+    const suggested = Math.max(THRESHOLD_FLOOR, Math.floor(needed / THRESHOLD_STEP) * THRESHOLD_STEP);
+    const admitted = minutes.filter(function (m) { return m >= suggested; }).length;
+    return [head + '; סף של ' + suggested + ' דקות היה מכניס ' + admitted + ' שחקנים — זכרו שמדגם קטן משקר'];
+  }
+
   // Spreadsheet exports end with aggregate rows: FBref writes "Squad Total"
   // and "Opponent Total" under the Player column, Excel users add Total /
   // Average / סה"כ. Such a row carries the whole team's minutes and counts
@@ -2301,6 +2348,7 @@
       warnings: parseWarnings
         .concat(auditDuplicateNames(players))
         .concat(auditPositions(players))
+        .concat(auditMinutesThreshold(players, opts.minMinutes))
         .concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
       provenance: provenance,
@@ -2360,6 +2408,9 @@
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
     auditMinutesAndSigns: auditMinutesAndSigns,
+    auditMinutesThreshold: auditMinutesThreshold,
+    THRESHOLD_STEP: THRESHOLD_STEP,
+    THRESHOLD_FLOOR: THRESHOLD_FLOOR,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
     findCsvHeaderRow: findCsvHeaderRow,
