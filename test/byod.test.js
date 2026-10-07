@@ -235,7 +235,11 @@ test('non-numeric stat cells are reported and never silently become 0', () => {
     'שחקן «J»: minutes=«x» אינו מספר — נחשב כחסר',
     'שחקן «K»: pressures=«1» אינו מספר — נחשב כחסר'
   ]);
-  assert.deepEqual(json.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: pressures ×1']);
+  assert.deepEqual(json.warnings, [
+    'תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: pressures ×1',
+    // J's minutes were a typo: dropped above, so J is named as a player that will not rank.
+    'שחקן אחד בלי דקות (תא ריק): J — נטענים עם 0 דקות: 0 בכל רכיב ולא עוברים את סף הדקות, לכן לא יופיעו בדירוג'
+  ]);
   assert.deepEqual(json.players[0], { name: 'J', team: 'T', tackles: 3 });
   assert.deepEqual(invalidNumericFields({ name: 'ok', minutes: 90, pressures: '7', shotXgSum: 0.4 }), []);
   assert.deepEqual(invalidNumericFields({ name: 'bad', minutes: Infinity }), [{ key: 'minutes', value: Infinity }]);
@@ -299,7 +303,10 @@ test('spreadsheet number formats load as numbers; "-" / N/A cells are blanked an
   assert.equal('minutes' in noMinutes.players[0], false);
   assert.equal('totalMinutesProxy' in noMinutes.players[0], false);
   assert.equal(noMinutes.players[0].tackles, 3);
-  assert.deepEqual(noMinutes.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: minutes ×1']);
+  assert.deepEqual(noMinutes.warnings, [
+    'תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: minutes ×1',
+    'שחקן אחד בלי דקות (תא ריק): A — נטענים עם 0 דקות: 0 בכל רכיב ולא עוברים את סף הדקות, לכן לא יופיעו בדירוג'
+  ]);
 
   // Same helper on JSON rows: markers go, real values and typos stay.
   const rows = [{ name: 'A', minutes: '-', tackles: 'N/A', pressures: 4 }, { name: 'B', minutes: 90, tackles: 'x' }];
@@ -938,4 +945,64 @@ test('the same player name twice is reported once by name - identical copy, same
   // Help text and README mention the rule.
   assert.ok(html.includes('שם שחקן שחוזר'), 'the BYOD help text must mention repeated player names');
   assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('שם שחקן שחוזר'), 'README must mention repeated player names');
+});
+
+test('players without a minutes cell in a file that has minutes are named: they load with 0 minutes and never rank', () => {
+  const missing = (parsed) => parsed.warnings.filter((w) => /בלי דקות \(תא ריק\)/.test(w));
+
+  // Two blank Min cells among readable ones: one warning, both names, no error (nothing is malformed).
+  const blank = parseUserDataset('name,team,minutes,tackles\nA,T,900,10\nB,T,,4\nC,T,800,6\nD,T,,2\n', { attested: true });
+  assert.equal(blank.ok, true);
+  assert.deepEqual(blank.errors, []);
+  assert.equal(blank.players.length, 4, 'nothing is dropped');
+  const warn = missing(blank);
+  assert.equal(warn.length, 1, blank.warnings.join(' | '));
+  assert.ok(warn[0].startsWith('2 שחקנים בלי דקות (תא ריק): B, D') && /סף הדקות/.test(warn[0]), warn[0]);
+  assert.ok(!blank.warnings.some((w) => /אף שחקן בלי דקות/.test(w)), 'the file-level warning is for a file with no minutes at all');
+  // The store confirms the claim: B and D are below any threshold and absent from the ranking.
+  const store = createStore({ players: blank.players }, { provenance: blank.provenance });
+  const ranked = store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows.map((row) => row.name);
+  assert.deepEqual(ranked.sort(), ['A', 'C']);
+
+  // Singular form, and a "-" marker blanked per column lands in the same list.
+  const dash = parseUserDataset('Player,Squad,Min,Tkl\nA,T,900,10\nB,T,-,4\n', { attested: true });
+  const dashWarn = missing(dash);
+  assert.equal(dashWarn.length, 1, dash.warnings.join(' | '));
+  assert.ok(dashWarn[0].startsWith('שחקן אחד בלי דקות (תא ריק): B'), dashWarn[0]);
+  assert.ok(dash.warnings.some((w) => /סימון חסר/.test(w) && /minutes ×1/.test(w)), dash.warnings.join(' | '));
+
+  // More than five names: the first five are listed, the rest counted.
+  const many = parseUserDataset('name,minutes\nOK,900\n' + 'P1,\nP2,\nP3,\nP4,\nP5,\nP6,\nP7,\n', { attested: true });
+  const manyWarn = missing(many);
+  assert.equal(manyWarn.length, 1, many.warnings.join(' | '));
+  assert.ok(manyWarn[0].startsWith('7 שחקנים בלי דקות (תא ריק): P1, P2, P3, P4, P5 ועוד 2'), manyWarn[0]);
+
+  // A negative value is dropped as missing (reported as an error) and then also named here, since it will not rank.
+  const negative = parseUserDataset('name,minutes\nA,900\nB,-90\n', { attested: true });
+  assert.deepEqual(negative.errors, ['שחקן «B»: minutes=«-90» שלילי — נחשב כחסר']);
+  assert.ok(missing(negative).length === 1 && missing(negative)[0].includes('B'), negative.warnings.join(' | '));
+
+  // Zero minutes is a value, not a blank: it keeps its own message and is not listed as missing.
+  const zero = parseUserDataset('name,minutes\nA,900\nB,0\n', { attested: true });
+  assert.equal(missing(zero).length, 0, zero.warnings.join(' | '));
+  assert.ok(zero.warnings.some((w) => /שחקן אחד עם 0 דקות/.test(w)), zero.warnings.join(' | '));
+
+  // Every row readable: silence.
+  assert.equal(missing(parseUserDataset('name,minutes\nA,900\nB,800\n', { attested: true })).length, 0);
+
+  // JSON path: a player without the key, or with totalMinutesProxy only, follows the same rule.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', minutes: 300 }, { name: 'K', team: 'T', tackles: 3 }, { name: 'L', team: 'T', totalMinutesProxy: 100 }] }), { attested: true });
+  const jsonWarn = missing(json);
+  assert.equal(jsonWarn.length, 1, json.warnings.join(' | '));
+  assert.ok(jsonWarn[0].startsWith('שחקן אחד בלי דקות (תא ריק): K'), jsonWarn[0]);
+
+  // Direct audit: order of the file is kept, a nameless row is still counted.
+  const direct = auditMinutesAndSigns([{ name: 'Z', minutes: 90 }, { name: 'Y' }, { name: '' }, { name: 'X', minutes: '' }]);
+  assert.deepEqual(direct.errors, []);
+  assert.equal(direct.warnings.length, 1, direct.warnings.join(' | '));
+  assert.ok(direct.warnings[0].startsWith('3 שחקנים בלי דקות (תא ריק): Y, (בלי שם), X'), direct.warnings[0]);
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('שחקן בלי דקות בקובץ שכן יש בו דקות'), 'the BYOD help text must mention players without minutes');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('שחקן בלי דקות בקובץ שכן יש בו דקות'), 'README must mention players without minutes');
 });
