@@ -13,6 +13,8 @@ const {
   positionGroup,
   POSITION_CODES,
   suggestCsvHeader,
+  resolveCsvHeader,
+  CSV_HEADER_ALIASES,
   CSV_DELIMITERS,
   looksLikeOpenDataPayload,
   createStore,
@@ -391,10 +393,11 @@ test('CSV headers the lab does not read are reported with a suggestion, duplicat
   assert.deepEqual(parsed.errors, []);
   assert.deepEqual(parsed.warnings, [
     'כותרת כפולה: name — נקראת רק העמודה הראשונה',
-    'עמודות שלא זוהו ולא נטענו: tackle (אולי tackles?), Key Passes (אולי keyPasses?), xG'
+    'עמודות שלא זוהו ולא נטענו: tackle (אולי tackles?)',
+    'כותרות שהותאמו: Key Passes → keyPasses, xG → shotXgSum'
   ]);
-  // Case-insensitive match still works and the unknown columns never reach the player.
-  assert.deepEqual(parsed.players[0], { name: 'Alpha', team: 'Home', totalMinutesProxy: 270, minutes: 270, pressures: 10 });
+  // Case-insensitive match still works, a spaced or coded header loads, the unknown column never reaches the player.
+  assert.deepEqual(parsed.players[0], { name: 'Alpha', team: 'Home', totalMinutesProxy: 270, minutes: 270, pressures: 10, keyPasses: 2, shotXgSum: 0.4 });
 
   assert.equal(suggestCsvHeader('tackle'), 'tackles');
   assert.equal(suggestCsvHeader('key_passes'), 'keyPasses');
@@ -409,18 +412,18 @@ test('CSV headers the lab does not read are reported with a suggestion, duplicat
 });
 
 test('CSV without any recognised stat column warns that every score will be 0', () => {
-  const csv = 'name,minutes,tkl,int\nAlpha,270,5,3\nBeta,270,2,1\n';
+  const csv = 'name,minutes,born,nation\nAlpha,270,25,ISR\nBeta,270,31,ESP\n';
   const parsed = parseUserDataset(csv, { attested: true });
   assert.equal(parsed.ok, true);
   assert.equal(parsed.warnings.length, 2);
-  assert.equal(parsed.warnings[0], 'עמודות שלא זוהו ולא נטענו: tkl, int');
+  assert.equal(parsed.warnings[0], 'עמודות שלא זוהו ולא נטענו: born, nation');
   assert.ok(parsed.warnings[1].startsWith('אף עמודת ספירה מוכרת לא נמצאה — כל השחקנים יקבלו 0'));
   assert.ok(parsed.warnings[1].includes('pressures, tackles'));
   const store = createStore({ players: parsed.players }, { provenance: USER_DATA_PROVENANCE });
   assert.ok(store.derive({ minMinutes: 90 }).rows.every((row) => row.score === 0), 'the warning tells the truth');
 
   // Header-only warnings also travel with a rejected file (no players survived).
-  const rejected = parseUserDataset('name,minutes,tkl\nAlpha,abc,5\n', { attested: true });
+  const rejected = parseUserDataset('name,minutes,age\nAlpha,abc,5\n', { attested: true });
   assert.equal(rejected.ok, false);
   assert.ok(html.includes('שלא זוהתה'), 'the BYOD help text must mention unknown-column reporting');
 });
@@ -485,4 +488,60 @@ test('CSV with coded positions normalises inside the right groups and reports th
   assert.equal(json.warnings.length, 1);
   assert.ok(json.warnings[0].includes('Pivot'));
   assert.ok(html.includes('CDM') && html.includes('OT'), 'the BYOD help text must list accepted position codes');
+});
+
+test('CSV header aliases: FBref codes, spaced or underscored names and Hebrew headers load into the right columns', () => {
+  assert.equal(resolveCsvHeader('Key Passes'), 'keyPasses');
+  assert.equal(resolveCsvHeader('KEY_PASSES'), 'keyPasses');
+  assert.equal(resolveCsvHeader('shots-on-target'), 'shotsOnTarget');
+  assert.equal(resolveCsvHeader('Total Minutes Proxy'), 'totalMinutesProxy');
+  assert.equal(resolveCsvHeader('xG'), 'shotXgSum');
+  assert.equal(resolveCsvHeader('Club'), 'team');
+  assert.equal(resolveCsvHeader('דקות'), 'minutes');
+  assert.equal(resolveCsvHeader('age'), null);
+  assert.equal(resolveCsvHeader('passes'), null, 'attempted vs completed is ambiguous, so it stays unknown');
+  assert.equal(resolveCsvHeader(''), null);
+  Object.keys(CSV_HEADER_ALIASES).forEach((alias) => {
+    assert.ok(USER_DATASET_COLUMNS.includes(CSV_HEADER_ALIASES[alias]), alias + ' maps to a column the lab reads');
+    assert.equal(alias, alias.toLowerCase().replace(/[ _.-]+/g, ''), alias + ' is stored in its plain form');
+  });
+
+  // An FBref-style export: short codes, Title Case, one column spelled twice.
+  const fbref = [
+    'Player,Squad,Pos,Min,Tkl,Int,KP,xG,SoT,Gls,Ast,shots_on_target',
+    'Alpha,Home,CB,270,5,3,2,0.4,1,0,1,9',
+    'Beta,Away,ST,180,1,0,3,1.1,4,2,0,9'
+  ].join('\n');
+  const parsed = parseUserDataset(fbref, { attested: true, fileName: 'fbref.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.errors, []);
+  assert.deepEqual(parsed.warnings, [
+    'כותרת כפולה: shots_on_target (= shotsOnTarget) — נקראת רק העמודה הראשונה',
+    'כותרות שהותאמו: Player → name, Squad → team, Pos → position, Min → minutes, Tkl → tackles, Int → interceptions, KP → keyPasses, xG → shotXgSum, SoT → shotsOnTarget, Gls → goals, Ast → assists'
+  ]);
+  assert.deepEqual(parsed.players[0], {
+    name: 'Alpha', team: 'Home', position: 'CB', totalMinutesProxy: 270, minutes: 270,
+    tackles: 5, interceptions: 3, keyPasses: 2, shotXgSum: 0.4, shotsOnTarget: 1, goals: 0, assists: 1
+  });
+  const store = createStore({ players: parsed.players }, { provenance: USER_DATA_PROVENANCE });
+  const alpha = store.players.find((row) => row.name === 'Alpha');
+  assert.equal(alpha.counts.tackles, 5, 'Tkl reached the counts the formula reads');
+  assert.equal(alpha.positionGroup, 'DF');
+  assert.ok(alpha.components.grit > 0, 'the aliased defensive columns feed Grit');
+
+  // A sheet typed in Hebrew and saved by a European Excel.
+  const hebrew = 'sep=;\nשם;קבוצה;עמדה;דקות;tackles\nגמא;בית;בלם;270;6\nדלתא;חוץ;חלוץ;180;1\n';
+  const he = parseUserDataset(hebrew, { attested: true });
+  assert.equal(he.ok, true);
+  assert.deepEqual(he.errors, []);
+  assert.deepEqual(he.warnings, ['כותרות שהותאמו: שם → name, קבוצה → team, עמדה → position, דקות → minutes']);
+  assert.deepEqual(he.players[0], { name: 'גמא', team: 'בית', position: 'בלם', totalMinutesProxy: 270, minutes: 270, tackles: 6 });
+
+  // A header that differs only in case is not reported as a mapping, and a
+  // trailing empty header cell still does not count towards the row width.
+  assert.deepEqual(auditCsvHeaders(['Name', 'TEAM', 'Minutes', 'Tackles']), []);
+  const padded = parseUserDataset('name,minutes,Tkl,,' + '\n' + 'Alpha,270,4' + '\n', { attested: true });
+  assert.deepEqual(padded.errors, []);
+  assert.deepEqual(padded.players, [{ name: 'Alpha', totalMinutesProxy: 270, minutes: 270, tackles: 4 }]);
+  assert.ok(html.includes('Key Passes'), 'the BYOD help text must mention the accepted header spellings');
 });

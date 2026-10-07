@@ -1704,10 +1704,40 @@
     return bad;
   }
 
-  // Header names the CSV path reads, lower-cased (matching is case-insensitive).
-  const CSV_KNOWN_HEADERS = Object.freeze(
-    USER_DATASET_COLUMNS.map(function (key) { return key.toLowerCase(); }).concat(['totalminutesproxy'])
-  );
+  // Header spellings a user sheet may carry for a column the lab reads.
+  // Matching ignores case, spaces, underscores, hyphens and dots, so
+  // Key Passes, key_passes and KEY-PASSES all load as keyPasses. The short
+  // codes follow the FBref / Opta export vocabulary; the Hebrew words cover
+  // a sheet typed locally. Every match that is not a plain case difference
+  // is reported once in the status line, so the user sees how the file was
+  // read and can object. Abbreviations that are genuinely ambiguous (passes
+  // attempted vs completed, shots vs shots on target) are left out on purpose.
+  const CSV_HEADER_ALIASES = Object.freeze({
+    player: 'name', playername: 'name', fullname: 'name', 'שם': 'name', 'שחקן': 'name',
+    club: 'team', squad: 'team', 'קבוצה': 'team', 'מועדון': 'team',
+    pos: 'position', 'עמדה': 'position',
+    min: 'minutes', mins: 'minutes', minutesplayed: 'minutes', minsplayed: 'minutes', 'דקות': 'minutes',
+    press: 'pressures', tkl: 'tackles', int: 'interceptions', kp: 'keyPasses', cmp: 'passesCompleted',
+    xg: 'shotXgSum', expectedgoals: 'shotXgSum',
+    sot: 'shotsOnTarget', sh: 'shots', gls: 'goals', ast: 'assists', drb: 'dribbles'
+  });
+
+  function plainCsvHeader(header) {
+    return String(header || '').toLowerCase().replace(/[ _.-]+/g, '');
+  }
+
+  // The column key a raw CSV header stands for, or null when the lab does
+  // not read it. Exact (case-insensitive) names win, then the plain form,
+  // then the alias table.
+  function resolveCsvHeader(header) {
+    const plain = plainCsvHeader(header);
+    if (!plain) return null;
+    for (let i = 0; i < USER_DATASET_COLUMNS.length; i += 1) {
+      if (USER_DATASET_COLUMNS[i].toLowerCase() === plain) return USER_DATASET_COLUMNS[i];
+    }
+    if (plain === 'totalminutesproxy') return 'totalMinutesProxy';
+    return Object.prototype.hasOwnProperty.call(CSV_HEADER_ALIASES, plain) ? CSV_HEADER_ALIASES[plain] : null;
+  }
 
   // Levenshtein distance, only used to suggest a known header for a typo.
   function editDistance(a, b) {
@@ -1742,37 +1772,47 @@
   }
 
   // A header the lab does not read is not an error, but it must not pass in
-  // silence: a sheet with "tackle", "Key Passes" or "xG" loads fine and
-  // every player then scores 0 on stats the file actually carries. Say which
-  // columns were ignored, suggest the nearest known name, and flag a header
-  // that appears twice (only the first copy is read).
+  // silence: a sheet with "tackle" or "age" loads fine and every player
+  // then scores 0 on stats the file actually carries. Say which columns were
+  // ignored, suggest the nearest known name, flag a header that appears twice
+  // (only the first copy is read, also when the two copies are spelled
+  // differently, e.g. SoT and shots_on_target), and list the headers that
+  // were read through an alias so the mapping is visible.
   function auditCsvHeaders(rawHeaders) {
     const warnings = [];
     const seen = {};
     const dupes = [];
     const unknown = [];
+    const mapped = [];
     let stats = 0;
     rawHeaders.forEach(function (raw) {
       const header = String(raw || '');
-      const lower = header.toLowerCase();
-      if (!lower) return;
-      if (seen[lower]) {
-        if (dupes.indexOf(header) < 0) dupes.push(header);
+      const key = resolveCsvHeader(header);
+      const id = key || header.toLowerCase();
+      if (!id) return;
+      const aliased = key !== null && header.toLowerCase() !== key.toLowerCase();
+      if (seen[id]) {
+        const label = aliased ? header + ' (= ' + key + ')' : header;
+        if (dupes.indexOf(label) < 0) dupes.push(label);
         return;
       }
-      seen[lower] = true;
-      if (CSV_KNOWN_HEADERS.indexOf(lower) < 0) {
+      seen[id] = true;
+      if (key === null) {
         const hint = suggestCsvHeader(header);
         unknown.push(hint ? header + ' (אולי ' + hint + '?)' : header);
-      } else if (COUNT_FIELDS.some(function (key) { return key.toLowerCase() === lower; })) {
-        stats += 1;
+        return;
       }
+      if (aliased) mapped.push(header + ' → ' + key);
+      if (COUNT_FIELDS.indexOf(key) >= 0) stats += 1;
     });
     if (dupes.length) {
       warnings.push('כותרת כפולה: ' + dupes.join(', ') + ' — נקראת רק העמודה הראשונה');
     }
     if (unknown.length) {
       warnings.push('עמודות שלא זוהו ולא נטענו: ' + unknown.join(', '));
+    }
+    if (mapped.length) {
+      warnings.push('כותרות שהותאמו: ' + mapped.join(', '));
     }
     if (!stats) {
       warnings.push('אף עמודת ספירה מוכרת לא נמצאה — כל השחקנים יקבלו 0 בכל רכיב. עמודות מוכרות: ' + COUNT_FIELDS.join(', '));
@@ -1789,7 +1829,8 @@
     const firstDataLine = detected.offset ? 3 : 2;
     const lines = parseCsvRecords(text, { delimiter: delimiter });
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
-    const headers = lines[0].map(function (h) { return h.toLowerCase(); });
+    // Column keys per header cell (null = not read); see resolveCsvHeader.
+    const headers = lines[0].map(resolveCsvHeader);
     const nameIdx = headers.indexOf('name');
     if (nameIdx < 0) {
       return {
@@ -1798,10 +1839,10 @@
         players: []
       };
     }
-    const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalminutesproxy');
+    const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalMinutesProxy');
     const col = {};
     USER_DATASET_COLUMNS.forEach(function (key) {
-      col[key] = headers.indexOf(key.toLowerCase());
+      col[key] = headers.indexOf(key);
     });
     const players = [];
     const errors = [];
@@ -1811,7 +1852,7 @@
     // it lands one column to the right, so the player would be scored on
     // the wrong numbers. Skip and say so. Trailing empty cells (Excel pads
     // "name,minutes,,,") are not a shift and are ignored on both sides.
-    const headerWidth = usedWidth(headers);
+    const headerWidth = usedWidth(lines[0]);
     lines.slice(1).forEach(function (cells, i) {
       const width = usedWidth(cells);
       if (width > headerWidth) {
@@ -1988,6 +2029,8 @@
     auditPositions: auditPositions,
     POSITION_CODES: POSITION_CODES,
     suggestCsvHeader: suggestCsvHeader,
+    resolveCsvHeader: resolveCsvHeader,
+    CSV_HEADER_ALIASES: CSV_HEADER_ALIASES,
     CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
