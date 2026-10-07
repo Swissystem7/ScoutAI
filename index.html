@@ -84,6 +84,7 @@
       <a href="#lab">בנה מדד</a>
       <a href="#explorer">חוקר ספירות</a>
       <a href="#validate">אימות</a>
+      <a href="#fragility">שבריריות</a>
       <a href="#glossary">מילון</a>
       <a href="#byod">נתונים שלכם</a>
       <a href="trap/">מלכודת הפיצ'רים המשכנעים</a>
@@ -752,7 +753,7 @@
     });
     selectedSwing.textContent = current.selected
       ? (current.selected.name + (notes.length ? ' — ' + notes.join(' · ') : ' — השחקן לא זז בטופ־5 של אף דחיפה +10.'))
-      : '';
+      : 'בחרו שחקן בטבלה כדי לעקוב אחריו כאן.';
     fragilityRoot.innerHTML = (current.fragility || []).map(function (variant) {
       const items = variant.swings.length
         ? '<ol>' + variant.swings.map(function (row) {
