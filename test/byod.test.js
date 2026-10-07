@@ -26,6 +26,10 @@ const {
   USER_DATASET_COLUMNS,
   NUMERIC_USER_FIELDS,
   invalidNumericFields,
+  csvNumber,
+  csvMissingMarker,
+  stripMissingMarkers,
+  MISSING_MARKERS,
   playerKey,
   serializeMetricHash,
   parseMetricHash,
@@ -199,9 +203,10 @@ test('non-numeric stat cells are reported and never silently become 0', () => {
   assert.deepEqual(parsed.players.map((p) => p.name), ['Beta', 'Gamma', 'Delta']);
   assert.deepEqual(parsed.errors, [
     'שורה 2: minutes=«abc» אינו מספר — השחקן דולג',
-    'שורה 3: pressures=«12,5» אינו מספר — התא נשאר ריק',
-    'שורה 4: tackles=«n/a» אינו מספר — התא נשאר ריק'
+    'שורה 3: pressures=«12,5» אינו מספר — התא נשאר ריק'
   ]);
+  // n/a is a missing-value marker, not a typo: blanked and counted once per column.
+  assert.deepEqual(parsed.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: tackles ×1']);
   assert.equal(parsed.players[0].totalMinutesProxy, 90);
   assert.equal('pressures' in parsed.players[0], false);
   assert.equal(parsed.players[1].pressures, 7);
@@ -218,12 +223,80 @@ test('non-numeric stat cells are reported and never silently become 0', () => {
   assert.equal(json.ok, true);
   assert.deepEqual(json.errors, [
     'שחקן «J»: minutes=«x» אינו מספר — נחשב כחסר',
-    'שחקן «J»: pressures=«n/a» אינו מספר — נחשב כחסר',
     'שחקן «K»: pressures=«1» אינו מספר — נחשב כחסר'
   ]);
+  assert.deepEqual(json.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: pressures ×1']);
   assert.deepEqual(json.players[0], { name: 'J', team: 'T', tackles: 3 });
   assert.deepEqual(invalidNumericFields({ name: 'ok', minutes: 90, pressures: '7', shotXgSum: 0.4 }), []);
   assert.deepEqual(invalidNumericFields({ name: 'bad', minutes: Infinity }), [{ key: 'minutes', value: Infinity }]);
+});
+
+test('spreadsheet number formats load as numbers; "-" / N/A cells are blanked and counted per column', () => {
+  const NBSP = String.fromCharCode(0xA0);
+  const NNBSP = String.fromCharCode(0x202F);
+  const MINUS = String.fromCharCode(0x2212);
+  // Comma file: a comma inside a quoted cell can only be a thousands mark.
+  assert.equal(csvNumber('1,234', false), 1234);
+  assert.equal(csvNumber('1,234,567.5', false), 1234567.5);
+  assert.equal(csvNumber('12,5', false), null, 'two digits after the comma is not a thousands group');
+  assert.equal(csvNumber('1,23', false), null);
+  assert.equal(csvNumber('1,2,3', false), null);
+  // Space / NBSP / narrow NBSP / apostrophe groups from French and Swiss Excel.
+  assert.equal(csvNumber('1 234', false), 1234);
+  assert.equal(csvNumber('1' + NBSP + '234', false), 1234);
+  assert.equal(csvNumber('1' + NNBSP + '234,5', true), 1234.5);
+  assert.equal(csvNumber("1'234", true), 1234);
+  // `;` file: comma is the decimal mark, two or more dot groups are thousands.
+  assert.equal(csvNumber('12,5', true), 12.5);
+  assert.equal(csvNumber('1.234', true), 1.234, 'one dot group alone stays a decimal');
+  assert.equal(csvNumber('1.234.567', true), 1234567);
+  assert.equal(csvNumber('1.234.567,5', true), 1234567.5);
+  // Unicode minus pasted from a spreadsheet, explicit plus, whitespace.
+  assert.equal(csvNumber(MINUS + '5', false), -5);
+  assert.equal(csvNumber(' +7 ', false), 7);
+  assert.equal(csvNumber('abc', false), null);
+  assert.equal(csvNumber('', false), null);
+  assert.equal(csvNumber(null, false), null);
+
+  ['-', '--', 'N/A', 'n/a', '#N/A', 'NA', 'null', 'NaN', 'None', '?', ' - '].forEach((marker) => {
+    assert.equal(csvMissingMarker(marker), true, marker);
+  });
+  ['0', '-1', 'x', '', 'N/A%'].forEach((value) => assert.equal(csvMissingMarker(value), false, value));
+  assert.ok(MISSING_MARKERS.includes('n/a'));
+
+  // FBref-style export: "-" for stats a goalkeeper has none of, thousands
+  // in minutes, and one real typo that must still be an error.
+  const csv = [
+    'name,team,position,minutes,pressures,tackles,keyPasses',
+    'Keeper,Home,GK,"2,610",-,-,-',
+    'Mid,Home,CM,"1,980",312,45,N/A',
+    'Wing,Home,RW,900,abc,12,7'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'fbref.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Keeper', 'Mid', 'Wing']);
+  assert.equal(parsed.players[0].totalMinutesProxy, 2610);
+  assert.equal(parsed.players[1].totalMinutesProxy, 1980);
+  assert.deepEqual(Object.keys(parsed.players[0]).sort(), ['minutes', 'name', 'position', 'team', 'totalMinutesProxy']);
+  assert.equal('keyPasses' in parsed.players[1], false);
+  assert.equal(parsed.players[1].pressures, 312);
+  assert.deepEqual(parsed.errors, ['שורה 4: pressures=«abc» אינו מספר — התא נשאר ריק']);
+  assert.deepEqual(parsed.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: pressures ×1, tackles ×1, keyPasses ×2']);
+
+  // A "-" in minutes blanks the minutes, it does not skip the player.
+  const noMinutes = parseUserDataset('name,minutes,tackles\nA,-,3\nB,90,4\n', { attested: true });
+  assert.deepEqual(noMinutes.errors, []);
+  assert.equal('minutes' in noMinutes.players[0], false);
+  assert.equal('totalMinutesProxy' in noMinutes.players[0], false);
+  assert.equal(noMinutes.players[0].tackles, 3);
+  assert.deepEqual(noMinutes.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: minutes ×1']);
+
+  // Same helper on JSON rows: markers go, real values and typos stay.
+  const rows = [{ name: 'A', minutes: '-', tackles: 'N/A', pressures: 4 }, { name: 'B', minutes: 90, tackles: 'x' }];
+  assert.deepEqual(stripMissingMarkers(rows), ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: minutes ×1, tackles ×1']);
+  assert.deepEqual(rows, [{ name: 'A', pressures: 4 }, { name: 'B', minutes: 90, tackles: 'x' }]);
+  assert.deepEqual(stripMissingMarkers([{ name: 'C', minutes: 90 }]), []);
+  assert.ok(html.includes('1,234') || html.includes('1 234'), 'the BYOD help text must say thousands marks and N/A cells are understood');
 });
 
 test('CSV rows wider than the header are skipped, short rows name the missing columns', () => {

@@ -1678,10 +1678,41 @@
   // decimalComma: in a `;`-delimited file the comma cannot be a separator, so
   // "12,5" is unambiguously twelve and a half and is accepted. In a comma file
   // it stays an error (the tokenizer would have split it anyway).
+  // Group marks spreadsheets put between thousands: space, the no-break and
+  // narrow no-break spaces French/Swiss Excel writes, and the Swiss apostrophe.
+  const GROUP_MARKS = [' ', "'", String.fromCharCode(0xA0), String.fromCharCode(0x202F)];
+  const GROUP_CLASS = '[' + GROUP_MARKS.join('') + ']';
+  const GROUPED_RE = new RegExp('^[-+]?\\d{1,3}(?:' + GROUP_CLASS + '\\d{3})+(?:[.,]\\d+)?$');
+  const GROUP_STRIP_RE = new RegExp(GROUP_CLASS, 'g');
+  const UNICODE_MINUS = String.fromCharCode(0x2212);
+
+  // Cells a sheet uses for "no value": FBref writes "-" for a stat a player
+  // has no entry in, Excel writes #N/A, exports write NA / null / nan. They
+  // are missing values, not typos, so they are counted once per column
+  // (see stripMissingMarkers) instead of raising one error per row.
+  const MISSING_MARKERS = Object.freeze(['-', '--', String.fromCharCode(0x2013), String.fromCharCode(0x2014),
+    'n/a', 'na', '#n/a', 'null', 'nan', 'none', '?']);
+
+  function csvMissingMarker(raw) {
+    return MISSING_MARKERS.indexOf(String(raw == null ? '' : raw).trim().toLowerCase()) >= 0;
+  }
+
+  // "1,234" from a comma file, "1 234" / "1'234" / "1.234.567;" from a
+  // European one and the Unicode minus Excel pastes all mean plain numbers.
+  // "1,234" in a `;` file is a decimal; "12,5" in a comma file stays unknown
+  // (a comma there is a separator, see the messy.csv test).
   function csvNumber(raw, decimalComma) {
     let text = String(raw == null ? '' : raw).trim();
     if (text === '') return null;
-    if (decimalComma && /^-?\d+,\d+$/.test(text)) text = text.replace(',', '.');
+    if (text.charAt(0) === UNICODE_MINUS) text = '-' + text.slice(1);
+    if (GROUPED_RE.test(text)) {
+      text = text.replace(GROUP_STRIP_RE, '');
+    } else if (!decimalComma && /^[-+]?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(text)) {
+      text = text.replace(/,/g, '');
+    } else if (decimalComma && /^[-+]?\d{1,3}(?:\.\d{3}){2,}(?:,\d+)?$/.test(text)) {
+      text = text.replace(/\./g, '');
+    }
+    if (decimalComma && /^[-+]?\d+,\d+$/.test(text)) text = text.replace(',', '.');
     const n = Number(text);
     return Number.isFinite(n) ? n : null;
   }
@@ -1691,6 +1722,26 @@
     let n = cells.length;
     while (n > 0 && cells[n - 1] === '') n -= 1;
     return n;
+  }
+
+  // Remove "-" / N/A style cells from every player's numeric fields and say
+  // once, per column, how many were blanked. A blank is not a measured 0:
+  // the column audit and the per-row width message already explain that.
+  function stripMissingMarkers(players) {
+    const counts = {};
+    const order = [];
+    (players || []).forEach(function (row) {
+      if (!row) return;
+      NUMERIC_USER_FIELDS.forEach(function (key) {
+        if (typeof row[key] !== 'string' || !csvMissingMarker(row[key])) return;
+        delete row[key];
+        if (!counts[key]) { counts[key] = 0; order.push(key); }
+        counts[key] += 1;
+      });
+    });
+    if (!order.length) return [];
+    return ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: ' +
+      order.map(function (key) { return key + ' ×' + counts[key]; }).join(', ')];
   }
 
   // Shared with the JSON path: list the numeric fields of one player row
@@ -1874,7 +1925,10 @@
           ' כותרות — ' + lines[0].slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
       }
       const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
-      if (minutesRaw !== '' && minutesRaw != null) {
+      if (csvMissingMarker(minutesRaw)) {
+        // Kept as text so stripMissingMarkers counts it with the JSON path.
+        row.minutes = minutesRaw;
+      } else if (minutesRaw !== '' && minutesRaw != null) {
         const minutes = csvNumber(minutesRaw, decimalComma);
         if (minutes === null) {
           errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
@@ -1889,7 +1943,7 @@
         if (idx < 0) return;
         const raw = cells[idx];
         if (raw === '' || raw == null) return;
-        if (NUMERIC_USER_FIELDS.indexOf(key) < 0) {
+        if (NUMERIC_USER_FIELDS.indexOf(key) < 0 || csvMissingMarker(raw)) {
           row[key] = raw;
           return;
         }
@@ -1953,6 +2007,7 @@
     if (!players.length) {
       return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
     }
+    parseWarnings = parseWarnings.concat(stripMissingMarkers(players));
     players.forEach(function (row) {
       invalidNumericFields(row).forEach(function (bad) {
         parseErrors.push('שחקן «' + row.name + '»: ' + bad.key + '=«' + String(bad.value) + '» אינו מספר — נחשב כחסר');
@@ -2033,6 +2088,10 @@
     CSV_HEADER_ALIASES: CSV_HEADER_ALIASES,
     CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
+    csvNumber: csvNumber,
+    csvMissingMarker: csvMissingMarker,
+    stripMissingMarkers: stripMissingMarkers,
+    MISSING_MARKERS: MISSING_MARKERS,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
