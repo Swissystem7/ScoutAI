@@ -1755,6 +1755,42 @@
     return bad;
   }
 
+  // Minutes drive every per-90 component and the minutes threshold, so a
+  // file without a readable minutes value scores every player 0 and ranks
+  // nobody - with no error, because nothing is malformed. Say so. A
+  // negative minutes value or a negative count cannot be a measurement
+  // (a stray Unicode minus or a formula export), so it is dropped like a
+  // non-numeric cell and reported per player. Zero minutes is a legal
+  // value (an unused squad member) and is only counted, not removed.
+  function auditMinutesAndSigns(players) {
+    const errors = [];
+    const warnings = [];
+    let withMinutes = 0;
+    let zeroMinutes = 0;
+    (players || []).forEach(function (row) {
+      if (!row) return;
+      // CSV sets both minutes keys to the same value: report it once.
+      const sameMinutes = row.totalMinutesProxy != null && Number(row.totalMinutesProxy) === Number(row.minutes);
+      NUMERIC_USER_FIELDS.forEach(function (key) {
+        const n = Number(row[key]);
+        if (row[key] == null || row[key] === '' || !Number.isFinite(n) || n >= 0) return;
+        if (key !== 'totalMinutesProxy' || !sameMinutes) errors.push('שחקן «' + row.name + '»: ' + key + '=«' + String(row[key]) + '» שלילי — נחשב כחסר');
+        delete row[key];
+      });
+      const minutes = Number(row.totalMinutesProxy != null && row.totalMinutesProxy !== '' ? row.totalMinutesProxy : row.minutes);
+      if ((row.totalMinutesProxy == null || row.totalMinutesProxy === '') && (row.minutes == null || row.minutes === '')) return;
+      if (!Number.isFinite(minutes)) return;
+      withMinutes += 1;
+      if (minutes === 0) zeroMinutes += 1;
+    });
+    if (players && players.length && !withMinutes) {
+      warnings.push('אף שחקן בלי דקות (עמודת minutes / דקות / Min חסרה או ריקה) — כל הרכיבים ל-90 יהיו 0 ואף שחקן לא יעבור את סף הדקות');
+    } else if (zeroMinutes) {
+      warnings.push((zeroMinutes === 1 ? 'שחקן אחד' : zeroMinutes + ' שחקנים') + ' עם 0 דקות — מקבל 0 בכל רכיב ולא עובר את סף הדקות');
+    }
+    return { errors: errors, warnings: warnings };
+  }
+
   // Header spellings a user sheet may carry for a column the lab reads.
   // Matching ignores case, spaces, underscores, hyphens and dots, so
   // Key Passes, key_passes and KEY-PASSES all load as keyPasses. The short
@@ -2014,6 +2050,9 @@
         delete row[bad.key];
       });
     });
+    const signs = auditMinutesAndSigns(players);
+    parseErrors = parseErrors.concat(signs.errors);
+    parseWarnings = parseWarnings.concat(signs.warnings);
     const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
     return {
       ok: true,
@@ -2078,6 +2117,7 @@
     evaluateCurriculum: evaluateCurriculum,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
+    auditMinutesAndSigns: auditMinutesAndSigns,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
     auditCsvHeaders: auditCsvHeaders,
