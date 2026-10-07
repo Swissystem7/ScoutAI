@@ -95,7 +95,7 @@
   <section class="card" id="hero">
     <h1>ScoutAI — למדו לבנות מדד כדורגל שקוף</h1>
     <p>כלי לימוד בדפדפן על נתוני <span dir="ltr">StatsBomb Open Data</span> ממונדיאל 2018. <strong>לא</strong> סקאוטינג, <strong>לא</strong> AI, <strong>לא</strong> למכירה. הנוסחה גלויה כדי שאפשר להתווכח עליה:</p>
-    <p class="formula">Impact = 0.4×Grit + 0.3×Involvement + 0.3×Clutch</p>
+    <p class="formula" dir="ltr">Impact = 0.4×Grit + 0.3×Involvement + 0.3×Clutch</p>
     <p>התחילו בשיעור בן שמונה צעדים. כל ספירה, /90, תקרה וציון ניתנים למעקב עד השדה בקובץ המקומי. Open Data — לימוד/מחקר בלבד. <a href="licence.html">מה מותר ומה אסור</a> · <a href="offer.html">הצעת סדנה (אין הרשמה בדף)</a> · <a href="trap/">מלכודת הפיצ'רים המשכנעים</a> (כולל המקרה מ־<code>attic/proof-demo.js</code>, בלי ניתוח פנים).</p>
   </section>
 
@@ -133,7 +133,7 @@
       </div>
     </div>
     <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון בתוך GK/DF/MF/FW)</label>
-    <p id="formulaLine" class="formula"></p>
+    <p id="formulaLine" class="formula" dir="ltr"></p>
     <p class="muted">Δ מול מדד הבסיס 40/30/30 בלי נרמול עמדה. שיתוף: המצב נשמר ב־hash של הכתובת — העתיקו מהדפדפן או בלחיצה.</p>
     <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
     <p id="hashStatus" class="status" role="status" aria-live="polite"></p>
@@ -337,7 +337,7 @@
     if (value == null || value === 0) return '<span class="muted">0</span>';
     const cls = value > 0 ? 'up' : 'down';
     const sign = value > 0 ? '+' : '';
-    return '<span class="' + cls + '">' + sign + escapeHtml(value) + '</span>';
+    return '<span class="' + cls + '" dir="ltr">' + sign + escapeHtml(value) + '</span>';
   }
 
   function persistHash(spec) {
@@ -785,10 +785,40 @@
     persistHash(current.spec);
   }
 
+  function preserveFocus(fn) {
+    const active = document.activeElement;
+    const id = active && active.id;
+    const dataId = active && active.getAttribute('data-id');
+    const dataStep = active && active.getAttribute('data-step');
+    const dataCourse = active && active.getAttribute('data-course');
+    const dataField = active && active.getAttribute('data-field');
+    
+    fn();
+    
+    if (id) {
+      const el = document.getElementById(id);
+      if (el) el.focus();
+    } else if (dataId) {
+      const el = document.querySelector('[data-id="' + CSS.escape(dataId) + '"]');
+      if (el) el.focus();
+    } else if (dataStep) {
+      const el = document.querySelector('[data-step="' + CSS.escape(dataStep) + '"]');
+      if (el) el.focus();
+    } else if (dataCourse) {
+      const el = document.querySelector('[data-course="' + CSS.escape(dataCourse) + '"]');
+      if (el) el.focus();
+    } else if (dataField) {
+      const el = document.querySelector('[data-field="' + CSS.escape(dataField) + '"]');
+      if (el) el.focus();
+    }
+  }
+
   function recompute() {
     if (!store) return;
-    view = store.derive(readSpecFromControls(), ScoutAIDemo.DEFAULT_METRIC);
-    renderAll(view);
+    preserveFocus(function () {
+      view = store.derive(readSpecFromControls(), ScoutAIDemo.DEFAULT_METRIC);
+      renderAll(view);
+    });
   }
 
   ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
@@ -868,7 +898,9 @@
     if (token === 'next') lessonIndex = Math.min((view.lesson || []).length - 1, lessonIndex + 1);
     else if (token === 'prev') lessonIndex = Math.max(0, lessonIndex - 1);
     else lessonIndex = Number(token) || 0;
-    renderLesson(view);
+    preserveFocus(function () {
+      renderLesson(view);
+    });
   });
   document.getElementById('courseNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-course]');
@@ -888,7 +920,9 @@
   document.getElementById('courseRoot').addEventListener('change', function (event) {
     if (!event.target.closest('select')) return;
     readQuizAnswers();
-    if (view) renderCurriculum(view);
+    preserveFocus(function () {
+      if (view) renderCurriculum(view);
+    });
   });
   document.getElementById('courseRoot').addEventListener('click', function (event) {
     if (!event.target.closest('#courseHint') || !view) return;
