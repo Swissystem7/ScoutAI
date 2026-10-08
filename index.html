@@ -99,7 +99,7 @@
     <p>התחילו בשיעור בן שמונה צעדים. כל ספירה, /90, תקרה וציון ניתנים למעקב עד השדה בקובץ המקומי. Open Data — לימוד/מחקר בלבד. <a href="licence.html">מה מותר ומה אסור</a> · <a href="offer.html">הצעת סדנה (אין הרשמה בדף)</a> · <a href="trap/">מלכודת הפיצ'רים המשכנעים</a> (כולל המקרה מ־<code>attic/proof-demo.js</code>, בלי ניתוח פנים).</p>
   </section>
 
-  <section class="card" id="course">
+  <section class="card" id="course" tabindex="-1">
     <h2>שיעור מלא: מאירוע למדד מאומת</h2>
     <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
     <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
@@ -107,7 +107,7 @@
     <div id="courseRoot" class="lesson"></div>
   </section>
 
-  <section class="card" id="lab">
+  <section class="card" id="lab" tabindex="-1">
     <h2>בנה מדד בעצמך</h2>
     <p>שנו משקלות ביד. הדירוג מחושב מחדש מיד מ־<code>data/wc2018_event_aggregates.json</code> (מונדיאל 2018, מספרים גולמיים מקומיים). <span class="badge">STATSBOMB_OPEN_DATA</span> המשקלות שרירותיות בכוונה — זה השיעור.</p>
     <div class="sliders">
@@ -178,7 +178,7 @@
     </div>
   </section>
 
-  <section class="card" id="explorer">
+  <section class="card" id="explorer" tabindex="-1">
     <h2>חוקר ספירות האירועים</h2>
     <p>הקובץ המקומי הוא <strong>ספירות מצטברות</strong> מ-64 משחקים, לא יומן אירוע-אחר-אירוע. כאן רואים את השדות האמיתיים מאחורי הציון של השחקן הנבחר, וגם את מה שנאסף ולא נכנס לנוסחה.</p>
     <p id="explorerStatus" class="lab-note"></p>
@@ -186,7 +186,7 @@
     <div id="explorerTable" class="table-wrap"></div>
   </section>
 
-  <section class="card" id="validate">
+  <section class="card" id="validate" tabindex="-1">
     <h2>מעבדת אימות: האם המדד חוזה מדגם מוחזק?</h2>
     <p class="notice">אין בריפו עונה שנייה של אותן ספירות. ברירת המחדל מפצלת 32 נבחרות לבתים A–D (אימון) מול E–H (מבחן) בתוך מונדיאל 2018. זה מדגם מוחזק, לא «העונה הבאה».</p>
     <label for="outcomeSelect">יעד לחיזוי (שדה מהקובץ, לא הציון עצמו)</label>
@@ -227,13 +227,13 @@
     <pre id="exportJson" class="export-box" dir="ltr"></pre>
   </section>
 
-  <section class="card" id="glossary">
+  <section class="card" id="glossary" tabindex="-1">
     <h2>מילון סוגי אירועים של StatsBomb</h2>
     <p>כל מונח מקושר לשדה ב־<code>data/wc2018_event_aggregates.json</code> ולערך של השחקן הנבחר. מה שכתוב «לא בנוסחה» קיים בקובץ ולא נכנס לציון — זה חלק מהשיעור.</p>
     <dl id="glossaryRoot" class="glossary"></dl>
   </section>
 
-  <section class="card" id="byod">
+  <section class="card" id="byod" tabindex="-1">
     <h2>הביאו נתונים שרישיתם בעצמכם</h2>
     <p>הכלי רץ בדפדפן בלבד. הקובץ לא נשלח לשרת. מצב זה קיים כדי ללמוד את אותה נוסחה על נתונים שהמשתמש רשאי להריץ — לא כדי למכור את מונדיאל 2018. <a href="licence.html">רישיון Open Data</a> אוסר ניצול מסחרי של הנתונים הפתוחים ושל ניתוח שנגזר מהם.</p>
     <p class="notice">קבצים שנראים כמו StatsBomb Open Data (מקור «StatsBomb», או תחרות 43 / עונה 3) יידחו כאן. חזרו לדמו החינמי.</p>
