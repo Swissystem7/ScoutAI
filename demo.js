@@ -1686,6 +1686,18 @@
     return Number.isFinite(n) ? n : null;
   }
 
+  // Excel with "Use 1000 separator" and FBref's Min column write 2970 as
+  // "2,970", quoted in a comma file. Only strict groups of three after a
+  // non-zero lead count, so "12,5" stays an error and "0,456" (a decimal
+  // comma, not a thousand) is never read as 456. Not used in `;` files,
+  // where the comma is the decimal mark.
+  const THOUSANDS_GROUPED = /^-?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$/;
+
+  function groupedNumber(raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    return THOUSANDS_GROUPED.test(text) ? Number(text.replace(/,/g, '')) : null;
+  }
+
   // Number of cells up to the last non-empty one.
   function usedWidth(cells) {
     let n = cells.length;
@@ -1824,6 +1836,16 @@
     const detected = detectCsvDelimiter(text);
     const delimiter = detected.delimiter;
     const decimalComma = delimiter === ';';
+    const grouped = [];
+    // A cell that is not a plain number may still be a thousands-grouped one
+    // in a comma file; each such read is listed so the user can check it.
+    function cellNumber(raw, lineNo, key) {
+      const n = csvNumber(raw, decimalComma);
+      if (n !== null || delimiter !== ',') return n;
+      const g = groupedNumber(raw);
+      if (g !== null) grouped.push('שורה ' + lineNo + ' ' + key + '=«' + String(raw).trim() + '» → ' + g);
+      return g;
+    }
     // Line numbers in messages are file lines: a sep= hint line pushes the
     // header to line 2 and the first player to line 3.
     const firstDataLine = detected.offset ? 3 : 2;
@@ -1875,7 +1897,7 @@
       }
       const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
       if (minutesRaw !== '' && minutesRaw != null) {
-        const minutes = csvNumber(minutesRaw, decimalComma);
+        const minutes = cellNumber(minutesRaw, lineNo, 'minutes');
         if (minutes === null) {
           errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
           return;
@@ -1893,7 +1915,7 @@
           row[key] = raw;
           return;
         }
-        const n = csvNumber(raw, decimalComma);
+        const n = cellNumber(raw, lineNo, key);
         if (n === null) {
           errors.push('שורה ' + lineNo + ': ' + key + '=«' + raw + '» אינו מספר — התא נשאר ריק');
           return;
@@ -1902,6 +1924,10 @@
       });
       players.push(row);
     });
+    if (grouped.length) {
+      warnings.push('מספרים עם מפריד אלפים נקראו כשלמים: ' + grouped.slice(0, 3).join(', ') +
+        (grouped.length > 3 ? ' ועוד ' + (grouped.length - 3) : ''));
+    }
     if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [], warnings: warnings };
     return { ok: true, errors: errors, warnings: warnings, players: players };
   }
