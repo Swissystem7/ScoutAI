@@ -86,6 +86,25 @@ test('attic-style upside rewards low stats so the archived conclusion is almost 
   assert.ok(control.score < 40);
 });
 
+test('attic-style formula passes the proof for any feature values and says the formula did it', () => {
+  const neutral = Trap.evaluateAtticWalkthrough({ weight: 0, values: { kante: 50, vardy: 50, flashy: 50 }, mode: 'atticUpside' });
+  assert.equal(neutral.holds, true);
+  assert.equal(neutral.usedArchive, false);
+  assert.equal(neutral.formulaDriven, true);
+  assert.equal(neutral.circular, true);
+  assert.match(neutral.proofLine, /בכל ערך/);
+  assert.doesNotMatch(neutral.proofLine, /מספרים שכוונו/);
+
+  const rigged = Trap.evaluateAtticWalkthrough({ weight: 0, values: { kante: 0, vardy: 0, flashy: 100 }, mode: 'atticUpside' });
+  assert.equal(rigged.holds, true);
+  assert.equal(rigged.formulaDriven, true);
+
+  const linear = Trap.evaluateAtticWalkthrough(Trap.archivedAtticSpec({ weight: 80 }));
+  assert.equal(linear.holds, true);
+  assert.equal(linear.formulaDriven, false);
+  assert.match(linear.proofLine, /מספרים שכוונו/);
+});
+
 test('walkthrough steps reconstruct the repo history in order', () => {
   assert.equal(Trap.WALKTHROUGH_STEPS.length, 6);
   assert.equal(Trap.WALKTHROUGH_STEPS[0].id, 'conclusion-first');
