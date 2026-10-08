@@ -116,13 +116,62 @@
     return String(row && row.name || '') + '|' + String(row && row.team || '');
   }
 
+  // Position labels a user file may carry. StatsBomb writes long English
+  // names ("Center Defensive Midfield"); a club export or a hand-made sheet
+  // usually writes the FIFA/Opta code ("CDM", "RB", "ST") or a Hebrew word.
+  // Anything unrecognised lands in OT, and with position normalisation on,
+  // every OT player is then ranked only against the other unknowns, so a
+  // file of CB/CM/ST rows used to collapse into one silent group.
+  const POSITION_CODES = Object.freeze({
+    GK: ['GK', 'G', 'GR', 'POR', 'TW'],
+    DF: ['DF', 'D', 'DEF', 'CB', 'LB', 'RB', 'LCB', 'RCB', 'LWB', 'RWB', 'WB', 'FB', 'SW', 'DC', 'DL', 'DR'],
+    MF: ['MF', 'M', 'MID', 'CM', 'DM', 'CDM', 'DMF', 'AM', 'CAM', 'AMF', 'LM', 'RM', 'LCM', 'RCM', 'MC', 'ML', 'MR', 'DMC', 'AMC'],
+    FW: ['FW', 'F', 'FWD', 'ST', 'CF', 'LW', 'RW', 'LF', 'RF', 'SS', 'ATT', 'WF', 'AML', 'AMR', 'FC']
+  });
+  const POSITION_CODE_GROUP = (function () {
+    const map = {};
+    Object.keys(POSITION_CODES).forEach(function (group) {
+      POSITION_CODES[group].forEach(function (code) { map[code] = group; });
+    });
+    return map;
+  }());
+  // Order matters: "Right Wing Back" is a defender, "Attacking Midfield" a
+  // midfielder, so the back/defence and midfield tests run before wing/attack.
+  const POSITION_WORDS = Object.freeze([
+    { group: 'GK', re: /goalkeeper|keeper|portero|torwart|שוער/i },
+    { group: 'MF', re: /midfield|mediocampista|mittelfeld|קשר/i },
+    { group: 'DF', re: /back|defen|defensa|verteidiger|libero|sweeper|מגן|בלם/i },
+    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i }
+  ]);
+
   function positionGroup(position) {
-    const text = String(position || '');
-    if (/goalkeeper/i.test(text)) return 'GK';
-    if (/midfield/i.test(text)) return 'MF';
-    if (/back|defen/i.test(text)) return 'DF';
-    if (/forward|wing|striker/i.test(text)) return 'FW';
+    const text = String(position || '').trim();
+    if (!text) return 'OT';
+    for (let i = 0; i < POSITION_WORDS.length; i += 1) {
+      if (POSITION_WORDS[i].re.test(text)) return POSITION_WORDS[i].group;
+    }
+    // Codes: the first recognised token wins, so "CB/RB" and "ST, CF" read
+    // as the player's primary role.
+    const tokens = text.toUpperCase().split(/[^A-Z]+/);
+    for (let j = 0; j < tokens.length; j += 1) {
+      if (Object.prototype.hasOwnProperty.call(POSITION_CODE_GROUP, tokens[j])) return POSITION_CODE_GROUP[tokens[j]];
+    }
     return 'OT';
+  }
+
+  // Distinct position labels of a player list that positionGroup cannot
+  // place. Reported once per file so the OT bucket is never a surprise.
+  function auditPositions(players) {
+    const unknown = [];
+    (players || []).forEach(function (row) {
+      const text = String(row && row.position || '').trim();
+      if (!text || positionGroup(text) !== 'OT' || unknown.indexOf(text) >= 0) return;
+      unknown.push(text);
+    });
+    if (!unknown.length) return [];
+    const shown = unknown.slice(0, 8).join(', ') + (unknown.length > 8 ? ' ועוד ' + (unknown.length - 8) : '');
+    return ['עמדות שלא זוהו ונחשבות OT (ינורמלו רק זו מול זו): ' + shown +
+      ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית'];
   }
 
   function per90(value, minutes) {
@@ -398,8 +447,21 @@
           ? 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
           : 'Synthetic teaching file shipped with ScoutAI — not match data'
       });
+    // Two rows with the same name|team (e.g. two «Cohen» in one club file)
+    // must stay separately selectable: the first keeps its id, later
+    // collisions get '#2', '#3', … so unique ids are never changed.
+    const seenIds = new Set();
     const players = flagImpossibleMinutes(eventPlayers(rawPlayers).map(function (row) {
-      return preparePlayer(row, { provenance: provenance });
+      const prepared = preparePlayer(row, { provenance: provenance });
+      let id = prepared.id;
+      if (seenIds.has(id)) {
+        let n = 2;
+        while (seenIds.has(prepared.id + '#' + n)) n += 1;
+        id = prepared.id + '#' + n;
+        prepared.id = id;
+      }
+      seenIds.add(id);
+      return prepared;
     }));
     function derive(spec, baselineSpec) {
       const metric = normalizeMetricSpec(spec);
@@ -1563,62 +1625,323 @@
     return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
 
-  function splitCsvLine(line) {
-    const out = [];
+  // Excel in a locale whose decimal mark is the comma (most of Europe) writes
+  // `;` between cells and often a first line `sep=;`. Without this, such a
+  // file collapses into one column and the user is told the name column is
+  // missing, which is false. Pick the delimiter the header line uses most
+  // (outside quotes), honouring an explicit sep= hint when present.
+  const CSV_DELIMITERS = Object.freeze([',', ';', '\t']);
+
+  function detectCsvDelimiter(text) {
+    const src = String(text || '').replace(/^\uFEFF/, '');
+    const hint = /^sep=(.)(?:\r\n|\r|\n)/i.exec(src);
+    if (hint && CSV_DELIMITERS.indexOf(hint[1]) >= 0) {
+      return { delimiter: hint[1], offset: hint[0].length };
+    }
+    const headerEnd = src.search(/\r|\n/);
+    const header = headerEnd < 0 ? src : src.slice(0, headerEnd);
+    const counts = {};
+    CSV_DELIMITERS.forEach(function (d) { counts[d] = 0; });
+    let quoted = false;
+    for (let i = 0; i < header.length; i += 1) {
+      const ch = header[i];
+      if (ch === '"') quoted = !quoted;
+      else if (!quoted && Object.prototype.hasOwnProperty.call(counts, ch)) counts[ch] += 1;
+    }
+    let best = ',';
+    CSV_DELIMITERS.forEach(function (d) {
+      if (counts[d] > counts[best]) best = d;
+    });
+    return { delimiter: best, offset: 0 };
+  }
+
+  // RFC 4180 style tokenizer. A quoted field may hold the delimiter, a doubled
+  // quote ("") and even a line break; Excel writes all three when it exports a
+  // sheet, so a one-line splitter silently mangles names like "Silva, Thiago".
+  // The delimiter is detected from the header unless options.delimiter is set.
+  function parseCsvRecords(text, options) {
+    const opts = options || {};
+    const detected = detectCsvDelimiter(text);
+    const delimiter = CSV_DELIMITERS.indexOf(opts.delimiter) >= 0 ? opts.delimiter : detected.delimiter;
+    const src = String(text || '').replace(/^\uFEFF/, '').slice(detected.offset);
+    const records = [];
+    let row = [];
     let cur = '';
     let quoted = false;
-    const text = String(line || '');
-    for (let i = 0; i < text.length; i += 1) {
-      const ch = text[i];
-      if (ch === '"') {
-        quoted = !quoted;
-      } else if ((ch === ',' || ch === '\t') && !quoted) {
-        out.push(cur.trim());
+    let fieldStart = true;
+    for (let i = 0; i < src.length; i += 1) {
+      const ch = src[i];
+      if (quoted) {
+        if (ch !== '"') {
+          cur += ch;
+        } else if (src[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else {
+          quoted = false;
+        }
+        continue;
+      }
+      if (ch === '"' && fieldStart) {
+        quoted = true;
+        fieldStart = false;
+      } else if (ch === delimiter) {
+        row.push(cur.trim());
         cur = '';
+        fieldStart = true;
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && src[i + 1] === '\n') i += 1;
+        row.push(cur.trim());
+        records.push(row);
+        row = [];
+        cur = '';
+        fieldStart = true;
       } else {
         cur += ch;
+        fieldStart = false;
       }
     }
-    out.push(cur.trim());
-    return out;
+    row.push(cur.trim());
+    records.push(row);
+    return records.filter(function (cells) {
+      return cells.some(function (cell) { return cell !== ''; });
+    });
+  }
+
+  // Numeric columns a user file may carry. A cell that is not a plain number
+  // (e.g. "12,5", "abc", "n/a") is reported, never silently turned into 0:
+  // a zero that was never in the file would still look like a measurement.
+  const NUMERIC_USER_FIELDS = Object.freeze(['minutes', 'totalMinutesProxy'].concat(COUNT_FIELDS));
+
+  // decimalComma: in a `;`-delimited file the comma cannot be a separator, so
+  // "12,5" is unambiguously twelve and a half and is accepted. In a comma file
+  // it stays an error (the tokenizer would have split it anyway).
+  function csvNumber(raw, decimalComma) {
+    let text = String(raw == null ? '' : raw).trim();
+    if (text === '') return null;
+    if (decimalComma && /^-?\d+,\d+$/.test(text)) text = text.replace(',', '.');
+    const n = Number(text);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Number of cells up to the last non-empty one.
+  function usedWidth(cells) {
+    let n = cells.length;
+    while (n > 0 && cells[n - 1] === '') n -= 1;
+    return n;
+  }
+
+  // Shared with the JSON path: list the numeric fields of one player row
+  // whose value is present but not a finite number.
+  function invalidNumericFields(row) {
+    const bad = [];
+    NUMERIC_USER_FIELDS.forEach(function (key) {
+      if (!row || row[key] == null || row[key] === '') return;
+      if (typeof row[key] === 'object' || csvNumber(row[key]) === null) bad.push({ key: key, value: row[key] });
+    });
+    return bad;
+  }
+
+  // Header spellings a user sheet may carry for a column the lab reads.
+  // Matching ignores case, spaces, underscores, hyphens and dots, so
+  // Key Passes, key_passes and KEY-PASSES all load as keyPasses. The short
+  // codes follow the FBref / Opta export vocabulary; the Hebrew words cover
+  // a sheet typed locally. Every match that is not a plain case difference
+  // is reported once in the status line, so the user sees how the file was
+  // read and can object. Abbreviations that are genuinely ambiguous (passes
+  // attempted vs completed, shots vs shots on target) are left out on purpose.
+  const CSV_HEADER_ALIASES = Object.freeze({
+    player: 'name', playername: 'name', fullname: 'name', 'שם': 'name', 'שחקן': 'name',
+    club: 'team', squad: 'team', 'קבוצה': 'team', 'מועדון': 'team',
+    pos: 'position', 'עמדה': 'position',
+    min: 'minutes', mins: 'minutes', minutesplayed: 'minutes', minsplayed: 'minutes', 'דקות': 'minutes',
+    press: 'pressures', tkl: 'tackles', int: 'interceptions', kp: 'keyPasses', cmp: 'passesCompleted',
+    xg: 'shotXgSum', expectedgoals: 'shotXgSum',
+    sot: 'shotsOnTarget', sh: 'shots', gls: 'goals', ast: 'assists', drb: 'dribbles'
+  });
+
+  function plainCsvHeader(header) {
+    return String(header || '').toLowerCase().replace(/[ _.-]+/g, '');
+  }
+
+  // The column key a raw CSV header stands for, or null when the lab does
+  // not read it. Exact (case-insensitive) names win, then the plain form,
+  // then the alias table.
+  function resolveCsvHeader(header) {
+    const plain = plainCsvHeader(header);
+    if (!plain) return null;
+    for (let i = 0; i < USER_DATASET_COLUMNS.length; i += 1) {
+      if (USER_DATASET_COLUMNS[i].toLowerCase() === plain) return USER_DATASET_COLUMNS[i];
+    }
+    if (plain === 'totalminutesproxy') return 'totalMinutesProxy';
+    return Object.prototype.hasOwnProperty.call(CSV_HEADER_ALIASES, plain) ? CSV_HEADER_ALIASES[plain] : null;
+  }
+
+  // Levenshtein distance, only used to suggest a known header for a typo.
+  function editDistance(a, b) {
+    const prev = [];
+    for (let j = 0; j <= b.length; j += 1) prev[j] = j;
+    for (let i = 1; i <= a.length; i += 1) {
+      let diag = prev[0];
+      prev[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const tmp = prev[j];
+        prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+        diag = tmp;
+      }
+    }
+    return prev[b.length];
+  }
+
+  // The known header closest to an unknown one, or null when nothing is near.
+  // "tackle" → tackles, "Key_Passes" → keyPasses, "xg" → null.
+  function suggestCsvHeader(header) {
+    const plain = String(header || '').toLowerCase().replace(/[\s_\-]+/g, '');
+    if (!plain) return null;
+    let best = null;
+    let bestDist = Infinity;
+    USER_DATASET_COLUMNS.forEach(function (key) {
+      const known = key.toLowerCase();
+      const dist = known === plain ? 0 : editDistance(plain, known);
+      if (dist < bestDist) { bestDist = dist; best = key; }
+    });
+    const limit = plain.length >= 8 ? 3 : 2;
+    return bestDist <= limit ? best : null;
+  }
+
+  // A header the lab does not read is not an error, but it must not pass in
+  // silence: a sheet with "tackle" or "age" loads fine and every player
+  // then scores 0 on stats the file actually carries. Say which columns were
+  // ignored, suggest the nearest known name, flag a header that appears twice
+  // (only the first copy is read, also when the two copies are spelled
+  // differently, e.g. SoT and shots_on_target), and list the headers that
+  // were read through an alias so the mapping is visible.
+  function auditCsvHeaders(rawHeaders) {
+    const warnings = [];
+    const seen = {};
+    const dupes = [];
+    const unknown = [];
+    const mapped = [];
+    let stats = 0;
+    rawHeaders.forEach(function (raw) {
+      const header = String(raw || '');
+      const key = resolveCsvHeader(header);
+      const id = key || header.toLowerCase();
+      if (!id) return;
+      const aliased = key !== null && header.toLowerCase() !== key.toLowerCase();
+      if (seen[id]) {
+        const label = aliased ? header + ' (= ' + key + ')' : header;
+        if (dupes.indexOf(label) < 0) dupes.push(label);
+        return;
+      }
+      seen[id] = true;
+      if (key === null) {
+        const hint = suggestCsvHeader(header);
+        unknown.push(hint ? header + ' (אולי ' + hint + '?)' : header);
+        return;
+      }
+      if (aliased) mapped.push(header + ' → ' + key);
+      if (COUNT_FIELDS.indexOf(key) >= 0) stats += 1;
+    });
+    if (dupes.length) {
+      warnings.push('כותרת כפולה: ' + dupes.join(', ') + ' — נקראת רק העמודה הראשונה');
+    }
+    if (unknown.length) {
+      warnings.push('עמודות שלא זוהו ולא נטענו: ' + unknown.join(', '));
+    }
+    if (mapped.length) {
+      warnings.push('כותרות שהותאמו: ' + mapped.join(', '));
+    }
+    if (!stats) {
+      warnings.push('אף עמודת ספירה מוכרת לא נמצאה — כל השחקנים יקבלו 0 בכל רכיב. עמודות מוכרות: ' + COUNT_FIELDS.join(', '));
+    }
+    return warnings;
   }
 
   function parseUserCsv(text) {
-    const lines = String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (line) {
-      return line.trim();
-    });
+    const detected = detectCsvDelimiter(text);
+    const delimiter = detected.delimiter;
+    const decimalComma = delimiter === ';';
+    // Line numbers in messages are file lines: a sep= hint line pushes the
+    // header to line 2 and the first player to line 3.
+    const firstDataLine = detected.offset ? 3 : 2;
+    const lines = parseCsvRecords(text, { delimiter: delimiter });
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
-    const headers = splitCsvLine(lines[0]).map(function (h) { return h.toLowerCase(); });
+    // Column keys per header cell (null = not read); see resolveCsvHeader.
+    const headers = lines[0].map(resolveCsvHeader);
     const nameIdx = headers.indexOf('name');
-    if (nameIdx < 0) return { ok: false, errors: ['חסרה עמודת name'], players: [] };
-    const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalminutesproxy');
+    if (nameIdx < 0) {
+      return {
+        ok: false,
+        errors: ['חסרה עמודת name. כותרות שנמצאו: ' + lines[0].slice(0, 6).join(' | ') + (lines[0].length > 6 ? ' | …' : '')],
+        players: []
+      };
+    }
+    const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalMinutesProxy');
     const col = {};
     USER_DATASET_COLUMNS.forEach(function (key) {
-      col[key] = headers.indexOf(key.toLowerCase());
+      col[key] = headers.indexOf(key);
     });
     const players = [];
     const errors = [];
-    lines.slice(1).forEach(function (line, i) {
-      const cells = splitCsvLine(line);
+    const warnings = auditCsvHeaders(lines[0]);
+    // A row wider than the header is almost always a name with an unquoted
+    // delimiter ("Silva, Thiago" saved from a text editor): every stat after
+    // it lands one column to the right, so the player would be scored on
+    // the wrong numbers. Skip and say so. Trailing empty cells (Excel pads
+    // "name,minutes,,,") are not a shift and are ignored on both sides.
+    const headerWidth = usedWidth(lines[0]);
+    lines.slice(1).forEach(function (cells, i) {
+      const width = usedWidth(cells);
+      if (width > headerWidth) {
+        errors.push('שורה ' + (i + firstDataLine) + ': ' + width + ' תאים מול ' + headerWidth +
+          ' כותרות — כנראה מפריד לא מצוטט בתוך שם; השורה דולגה');
+        return;
+      }
       const name = cells[nameIdx];
       if (!name) {
-        errors.push('שורה ' + (i + 2) + ': חסר שם');
+        errors.push('שורה ' + (i + firstDataLine) + ': חסר שם');
         return;
       }
       const row = { name: name };
+      const lineNo = i + firstDataLine;
+      if (width < headerWidth) {
+        // Short row: keep the player, but say which columns never arrived so
+        // a blank stat is not mistaken for a measured zero.
+        errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
+          ' כותרות — ' + lines[0].slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
+      }
+      const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
+      if (minutesRaw !== '' && minutesRaw != null) {
+        const minutes = csvNumber(minutesRaw, decimalComma);
+        if (minutes === null) {
+          errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
+          return;
+        }
+        row.totalMinutesProxy = minutes;
+        row.minutes = minutes;
+      }
       USER_DATASET_COLUMNS.forEach(function (key) {
-        if (key === 'name') return;
+        if (key === 'name' || key === 'minutes') return;
         const idx = col[key];
         if (idx < 0) return;
         const raw = cells[idx];
         if (raw === '' || raw == null) return;
-        row[key] = key === 'team' || key === 'position' ? raw : raw;
+        if (NUMERIC_USER_FIELDS.indexOf(key) < 0) {
+          row[key] = raw;
+          return;
+        }
+        const n = csvNumber(raw, decimalComma);
+        if (n === null) {
+          errors.push('שורה ' + lineNo + ': ' + key + '=«' + raw + '» אינו מספר — התא נשאר ריק');
+          return;
+        }
+        row[key] = n;
       });
-      if (minIdx >= 0 && cells[minIdx] !== '') row.totalMinutesProxy = Number(cells[minIdx]);
       players.push(row);
     });
-    if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [] };
-    return { ok: true, errors: errors, players: players };
+    if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [], warnings: warnings };
+    return { ok: true, errors: errors, warnings: warnings, players: players };
   }
 
   // Content check behind the metadata check: a row counts as Open Data when
@@ -1667,6 +1990,7 @@
     }
     let dataset = null;
     let parseErrors = [];
+    let parseWarnings = [];
     if (raw.charAt(0) === '{' || raw.charAt(0) === '[') {
       try {
         dataset = JSON.parse(raw);
@@ -1678,6 +2002,7 @@
       if (!csv.ok) return { ok: false, errors: csv.errors, players: [], provenance: null };
       dataset = { players: csv.players };
       parseErrors = csv.errors || [];
+      parseWarnings = csv.warnings || [];
     }
     if (looksLikeOpenDataPayload(dataset)) {
       return {
@@ -1704,7 +2029,13 @@
     if (!players.length) {
       return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
     }
-    const warnings = players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : [];
+    players.forEach(function (row) {
+      invalidNumericFields(row).forEach(function (bad) {
+        parseErrors.push('שחקן «' + row.name + '»: ' + bad.key + '=«' + String(bad.value) + '» אינו מספר — נחשב כחסר');
+        delete row[bad.key];
+      });
+    });
+    const warnings = [];
     if (Array.isArray(opts.openDataPlayers) && opts.openDataPlayers.length) {
       const matches = openDataContentMatches(players, opts.openDataPlayers);
       if (matches > 0 && matches >= Math.min(20, Math.ceil(players.length * 0.3))) {
@@ -1724,7 +2055,10 @@
     return {
       ok: true,
       errors: parseErrors,
-      warnings: warnings,
+      warnings: parseWarnings
+        .concat(warnings)
+        .concat(auditPositions(players))
+        .concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
       provenance: provenance,
       source: {
@@ -1783,6 +2117,17 @@
     evaluateCurriculum: evaluateCurriculum,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
+    parseCsvRecords: parseCsvRecords,
+    detectCsvDelimiter: detectCsvDelimiter,
+    auditCsvHeaders: auditCsvHeaders,
+    auditPositions: auditPositions,
+    POSITION_CODES: POSITION_CODES,
+    suggestCsvHeader: suggestCsvHeader,
+    resolveCsvHeader: resolveCsvHeader,
+    CSV_HEADER_ALIASES: CSV_HEADER_ALIASES,
+    CSV_DELIMITERS: CSV_DELIMITERS,
+    invalidNumericFields: invalidNumericFields,
+    NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
     OPEN_DATA_PROVENANCE: OPEN_DATA_PROVENANCE,

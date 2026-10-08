@@ -336,6 +336,20 @@
     const usedArchive = ATTIC_PLAYERS.every(function (player) {
       return Math.abs(inventedOf(player, metric) - player.archivedInvented) <= 1;
     });
+    // The attic-style formula rewards low stats on its own: check whether the
+    // conclusion survives invented values rigged against it (grinders 0, control 100).
+    const againstValues = {};
+    ATTIC_PLAYERS.forEach(function (player) {
+      againstValues[player.id] = player.role === 'grinder' ? 0 : 100;
+    });
+    const formulaDriven = holds && metric.mode === 'atticUpside' &&
+      atticConclusionHolds(deriveRanking(ATTIC_PLAYERS, Object.assign({}, metric, { values: againstValues })).rows);
+    let proofLine = 'תוצאת ההוכחה: נכשל — הסטטיסטיקה עדיין מדרגת את הביקורת מעל הגריינדרים. המסקנה טרם «הופיעה».';
+    if (formulaDriven) {
+      proofLine = 'תוצאת ההוכחה: עבר — ויעבור בכל ערך פיצ\'ר, גם 0 לגריינדרים ו־100 לביקורת. הנוסחה עצמה מתגמלת סטט נמוך כ«פוטנציאל נסתר» ומוסיפה מומנטום שהוקלד ביד: המסקנה כתובה בנוסחה, לא בפיצ\'ר.';
+    } else if (holds) {
+      proofLine = 'תוצאת ההוכחה: עבר — הגריינדרים מעל הביקורת. זה אותו תנאי כמו בארכיון, על מספרים שכוונו כדי לקיים אותו.';
+    }
     return {
       spec: metric,
       rows: view.rows,
@@ -343,11 +357,10 @@
       formula: view.formula,
       holds: holds,
       usedArchive: usedArchive,
-      circular: holds && (usedArchive || metric.weight >= 50),
+      formulaDriven: formulaDriven,
+      circular: holds && (usedArchive || formulaDriven || metric.weight >= 50),
       assertion: ATTIC_SOURCE.assertion,
-      proofLine: holds
-        ? 'תוצאת ההוכחה: עבר — הגריינדרים מעל הביקורת. זה אותו תנאי כמו בארכיון, על מספרים שכוונו כדי לקיים אותו.'
-        : 'תוצאת ההוכחה: נכשל — הסטטיסטיקה עדיין מדרגת את הביקורת מעל הגריינדרים. המסקנה טרם «הופיעה».'
+      proofLine: proofLine
     };
   }
 

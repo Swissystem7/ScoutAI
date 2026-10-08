@@ -25,5 +25,5 @@ The suite covers:
 - Spearman holdout is a group split in the same tournament, not a later season
 - curriculum graduates only on honest answers
 - trap lesson uses archived hand-typed numbers, not a face model
-- no `.github/workflows/`, no product-root `lib/`, no broken `proof-*.js` at the root
+- `.github/workflows/` holds only `validate.yml`, which runs the suite and never merges, force-pushes or deploys; no product-root `lib/`, no broken `proof-*.js` at the root
 - Hebrew RTL, skip links, slider `aria-valuetext`, no `http(s)` in the product runtime
