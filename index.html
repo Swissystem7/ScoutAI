@@ -13,13 +13,13 @@
     label{display:block;margin:14px 0 6px;font-weight:700}input,button,select{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
     input[type=file],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.actions button{margin-inline-end:8px}.status{min-height:1.5em;font-weight:700}
-    .formula{font-size:.95rem;color:#0f3d26;margin:12px 0;font-weight:700}
+    .formula{font-size:.95rem;color:#0f3d26;margin:12px 0;font-weight:700;direction:ltr;text-align:right}
     .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}caption{text-align:start;font-weight:700;padding:8px 0;color:#17211b}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
     th{font-size:.85rem;color:#2d3a32}tr:hover td,tr:hover th{background:#eef4ee}.muted{color:#3d4a42;font-size:.85rem}
     .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
     .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0;accent-color:#145c3d}
     .toggle{display:flex;gap:10px;align-items:center;font-weight:700;margin:10px 0}
-    .toggle input{width:auto}.up{color:#0f3d26;font-weight:700}.down{color:#8a1f1f;font-weight:700}
+    .toggle input{width:auto}.up{color:#0f3d26;font-weight:700;direction:ltr;display:inline-block}.down{color:#8a1f1f;font-weight:700;direction:ltr;display:inline-block}
     .lesson{display:grid;gap:12px}.lesson-step{background:#f3f6f1;border-radius:12px;padding:14px}
     .lesson-step h3{margin:0 0 6px;font-size:1rem}.lesson-nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
     .lesson-nav button{margin-top:0;padding:8px 12px}.lesson-nav button[aria-current="step"]{outline:3px solid #10281d}
@@ -334,10 +334,10 @@
   }
 
   function deltaCell(value) {
-    if (value == null || value === 0) return '<span class="muted">0</span>';
+    if (value == null || value === 0) return '<span class="muted" dir="ltr">0</span>';
     const cls = value > 0 ? 'up' : 'down';
     const sign = value > 0 ? '+' : '';
-    return '<span class="' + cls + '">' + sign + escapeHtml(value) + '</span>';
+    return '<span class="' + cls + '" dir="ltr">' + sign + escapeHtml(value) + '</span>';
   }
 
   function persistHash(spec) {
