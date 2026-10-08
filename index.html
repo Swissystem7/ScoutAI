@@ -167,7 +167,7 @@
     <p>אותם תשעת הגורמים שנכנסים לנוסחה, אחרי אותן תקרות ל-90 דקות. לא מודל חיצוני ולא רדאר Wyscout.</p>
     <label for="compareSelect">השוו את השחקן הנבחר מול</label>
     <select id="compareSelect"></select>
-    <p id="radarStatus" class="lab-note"></p>
+    <p id="radarStatus" class="lab-note" role="status" aria-live="polite"></p>
     <div class="legend">
       <span><span class="swatch" style="background:#145c3d"></span>נבחר</span>
       <span><span class="swatch" style="background:#8a5a00"></span>השוואה (קו מקווקו)</span>
@@ -181,7 +181,7 @@
   <section class="card" id="explorer">
     <h2>חוקר ספירות האירועים</h2>
     <p>הקובץ המקומי הוא <strong>ספירות מצטברות</strong> מ-64 משחקים, לא יומן אירוע-אחר-אירוע. כאן רואים את השדות האמיתיים מאחורי הציון של השחקן הנבחר, וגם את מה שנאסף ולא נכנס לנוסחה.</p>
-    <p id="explorerStatus" class="lab-note"></p>
+    <p id="explorerStatus" class="lab-note" role="status" aria-live="polite"></p>
     <ol id="explorerReceipt" class="receipt"></ol>
     <div id="explorerTable" class="table-wrap"></div>
   </section>
@@ -203,7 +203,7 @@
       <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
     </select>
     <p id="validateStatus" class="status" role="status"></p>
-    <p id="validateVerdict" class="lab-note"></p>
+    <p id="validateVerdict" class="lab-note" role="status" aria-live="polite"></p>
     <div id="validateStats" class="stats-grid"></div>
     <div id="validateTables" class="table-wrap"></div>
   </section>
@@ -211,7 +211,7 @@
   <section class="card" id="fragility">
     <h2>מעבדת שבריריות משקלות</h2>
     <p>אותה שכבת נתונים, אותו שחקן נבחר. מוסיפים 10 נקודות למשקל אחד — מי קופץ, ומה קורה לשחקן שבחרתם.</p>
-    <p id="selectedSwing" class="lab-note"></p>
+    <p id="selectedSwing" class="lab-note" role="status" aria-live="polite"></p>
     <div id="fragilityRoot" class="lesson"></div>
   </section>
 
