@@ -228,13 +228,18 @@
     };
   }
 
+  // Mid-rank percentile: the lowest value is 0, the highest 100, and tied
+  // values share the middle of their ranks. Counting ties as "below" gave a
+  // group of 38 keepers with zero clutch a 95th percentile each.
   function percentile(value, peers) {
-    if (!peers.length) return 50;
+    if (peers.length < 2) return 50;
     let below = 0;
+    let equal = 0;
     for (let i = 0; i < peers.length; i += 1) {
-      if (peers[i] <= value) below += 1;
+      if (peers[i] < value) below += 1;
+      else if (peers[i] === value) equal += 1;
     }
-    return round1(below / peers.length * 100);
+    return round1((below + Math.max(equal - 1, 0) / 2) / (peers.length - 1) * 100);
   }
 
   function normalizeByPosition(rows) {
