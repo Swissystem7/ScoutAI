@@ -14,6 +14,7 @@
     input[type=text]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
     button.secondary{background:#fff;color:#145c3d;border:2px solid #145c3d;margin-inline-end:8px}
+    button:disabled,select:disabled{opacity:0.5;cursor:not-allowed}
     .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700}
     .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
     .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0;accent-color:#145c3d}
@@ -245,8 +246,8 @@
       return '<button type="button" data-step="' + i + '"' +
         (i === walkIndex ? ' aria-current="step"' : '') + '>' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next">הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' + (walkIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' + (walkIndex === steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const step = steps[walkIndex];
     document.getElementById('walkRoot').innerHTML =
       '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' +

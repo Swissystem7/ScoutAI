@@ -27,6 +27,7 @@
     .bar-track{background:#d5ddd4;border-radius:999px;height:12px;overflow:hidden}
     .bar-fill{background:#145c3d;height:100%;border-radius:999px}
     tr.selected td,tr.selected th{outline:3px solid #145c3d;background:#e6f3ea}button.secondary{background:#fff;color:#145c3d;border:2px solid #145c3d}
+    button:disabled,select:disabled{opacity:0.5;cursor:not-allowed}
     :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
     input[type=range]:focus-visible{outline:3px solid #0b3d28;outline-offset:4px}
     .lab-note{font-size:.9rem;color:#3d4a42}footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
@@ -394,8 +395,8 @@
     lessonNav.innerHTML = steps.map(function (step, i) {
       return '<button type="button" data-step="' + i + '"' + (i === lessonIndex ? ' aria-current="step"' : '') + ' aria-label="שלב ' + (i + 1) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next">הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' + (lessonIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' + (lessonIndex === steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const step = steps[lessonIndex];
     if (!step) {
       lessonRoot.innerHTML = '';
@@ -439,6 +440,7 @@
     }).join('');
     const keep = spec.compareId || previous;
     if (keep && rows.some(function (row) { return row.id === keep; })) compareSelect.value = keep;
+    compareSelect.disabled = !radar || !radar.a;
     if (!radar || !radar.a) {
       document.getElementById('radarRoot').innerHTML = '';
       document.getElementById('radarTable').innerHTML = '';
@@ -718,8 +720,8 @@
         (lesson.passed ? ' class="done"' : '') +
         ' aria-label="' + escapeHtml(lesson.title) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-course="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-course="next">הבא</button>';
+      '<button type="button" class="secondary" data-course="prev"' + (idx === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-course="next"' + (idx === lessons.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const lesson = lessons[idx];
     if (!lesson) {
       document.getElementById('courseRoot').innerHTML = '';
