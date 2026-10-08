@@ -347,6 +347,26 @@
     writingHash = false;
   }
 
+  function preserveFocus(fn) {
+    const active = document.activeElement;
+    let restoreId = null, restoreDataId = null, restoreDataStep = null, restoreDataCourse = null;
+    if (active) {
+      if (active.id) restoreId = active.id;
+      else if (active.tagName === 'TR') restoreDataId = active.getAttribute('data-id');
+      else if (active.tagName === 'BUTTON') {
+        restoreDataStep = active.getAttribute('data-step');
+        restoreDataCourse = active.getAttribute('data-course');
+      }
+    }
+    fn();
+    let restore = null;
+    if (restoreId) restore = document.getElementById(restoreId);
+    if (!restore && restoreDataId) restore = document.querySelector('tr[data-id="' + restoreDataId.replace(/"/g, '\\"') + '"]');
+    if (!restore && restoreDataStep != null) restore = document.querySelector('button[data-step="' + restoreDataStep.replace(/"/g, '\\"') + '"]');
+    if (!restore && restoreDataCourse != null) restore = document.querySelector('button[data-course="' + restoreDataCourse.replace(/"/g, '\\"') + '"]');
+    if (restore && typeof restore.focus === 'function') restore.focus();
+  }
+
   function renderTable(current) {
     formulaLine.textContent = current.formula;
     const rows = current.rows;
@@ -787,8 +807,10 @@
 
   function recompute() {
     if (!store) return;
-    view = store.derive(readSpecFromControls(), ScoutAIDemo.DEFAULT_METRIC);
-    renderAll(view);
+    preserveFocus(function() {
+      view = store.derive(readSpecFromControls(), ScoutAIDemo.DEFAULT_METRIC);
+      renderAll(view);
+    });
   }
 
   ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
@@ -868,7 +890,7 @@
     if (token === 'next') lessonIndex = Math.min((view.lesson || []).length - 1, lessonIndex + 1);
     else if (token === 'prev') lessonIndex = Math.max(0, lessonIndex - 1);
     else lessonIndex = Number(token) || 0;
-    renderLesson(view);
+    preserveFocus(function() { renderLesson(view); });
   });
   document.getElementById('courseNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-course]');
@@ -888,7 +910,7 @@
   document.getElementById('courseRoot').addEventListener('change', function (event) {
     if (!event.target.closest('select')) return;
     readQuizAnswers();
-    if (view) renderCurriculum(view);
+    if (view) preserveFocus(function() { renderCurriculum(view); });
   });
   document.getElementById('courseRoot').addEventListener('click', function (event) {
     if (!event.target.closest('#courseHint') || !view) return;
