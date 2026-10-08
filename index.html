@@ -337,7 +337,7 @@
     if (value == null || value === 0) return '<span class="muted">0</span>';
     const cls = value > 0 ? 'up' : 'down';
     const sign = value > 0 ? '+' : '';
-    return '<span class="' + cls + '">' + sign + escapeHtml(value) + '</span>';
+    return '<span class="' + cls + '" dir="ltr">' + sign + escapeHtml(value) + '</span>';
   }
 
   function persistHash(spec) {
@@ -553,19 +553,19 @@
   function renderValidation(current) {
     const report = current.validation;
     if (!report) return;
-    document.getElementById('validateStatus').textContent =
-      (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
-      ' · אימון n=' + report.train.n + ' ρ=' + report.train.rho +
-      ' · מבחן n=' + report.test.n + ' ρ=' + report.test.rho +
-      (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop);
+    document.getElementById('validateStatus').innerHTML =
+      (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + escapeHtml(report.splitLabel) +
+      ' · אימון n=' + escapeHtml(report.train.n) + ' ρ=<bdi dir="ltr">' + escapeHtml(report.train.rho) + '</bdi>' +
+      ' · מבחן n=' + escapeHtml(report.test.n) + ' ρ=<bdi dir="ltr">' + escapeHtml(report.test.rho) + '</bdi>' +
+      (report.rhoDrop == null ? '' : ' · Δρ=<bdi dir="ltr">' + escapeHtml(report.rhoDrop) + '</bdi>');
     document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
     function rhoLine(label, stats) {
       const cr = stats.componentRho || {};
       return '<article class="lesson-step"><h3>' + label + '</h3>' +
-        '<p>n=' + escapeHtml(stats.n) + ' · Spearman ρ=' + escapeHtml(stats.rho) + '</p>' +
-        '<p class="muted">ρ רכיבים מול היעד: Grit ' + escapeHtml(cr.grit) +
-        ' · Involvement ' + escapeHtml(cr.involvement) +
-        ' · Clutch ' + escapeHtml(cr.clutch) + '</p></article>';
+        '<p>n=' + escapeHtml(stats.n) + ' · Spearman ρ=<bdi dir="ltr">' + escapeHtml(stats.rho) + '</bdi></p>' +
+        '<p class="muted">ρ רכיבים מול היעד: Grit <bdi dir="ltr">' + escapeHtml(cr.grit) + '</bdi>' +
+        ' · Involvement <bdi dir="ltr">' + escapeHtml(cr.involvement) + '</bdi>' +
+        ' · Clutch <bdi dir="ltr">' + escapeHtml(cr.clutch) + '</bdi></p></article>';
     }
     document.getElementById('validateStats').innerHTML =
       rhoLine('אימון', report.train) + rhoLine('מבחן', report.test);
@@ -758,8 +758,8 @@
         ? '<ol>' + variant.swings.map(function (row) {
           const mark = row.id === selectedId ? ' ← הנבחר' : '';
           return '<li>' + escapeHtml(row.name) + ' (' + escapeHtml(row.team || '') + '): #' +
-            escapeHtml(row.from) + ' → #' + escapeHtml(row.to) + ' (' +
-            (row.deltaRank > 0 ? '+' : '') + escapeHtml(row.deltaRank) + ')' + mark + '</li>';
+            escapeHtml(row.from) + ' → #' + escapeHtml(row.to) + ' (<bdi dir="ltr">' +
+            (row.deltaRank > 0 ? '+' : '') + escapeHtml(row.deltaRank) + '</bdi>)' + mark + '</li>';
         }).join('') + '</ol>'
         : '<p class="muted">אין תזוזת דירוג ב־+10 הזה — נסו סף דקות אחר.</p>';
       return '<article class="lesson-step"><h3>' + escapeHtml(variant.label) + '</h3>' + items + '</article>';
