@@ -699,3 +699,19 @@ test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', ()
   assert.match(html, /aria-label="צעדי השיעור המלא"/);
   assert.doesNotMatch(html + '\n' + runtime, /https?:\/\//);
 });
+
+test('a partial or malformed shared link keeps the default weights instead of zeroing them or throwing', () => {
+  const partial = parseMetricHash('#sel=Kane');
+  assert.equal(partial.grit, DEFAULT_METRIC.grit);
+  assert.equal(partial.involvement, DEFAULT_METRIC.involvement);
+  assert.equal(partial.clutch, DEFAULT_METRIC.clutch);
+  assert.equal(partial.minMinutes, DEFAULT_METRIC.minMinutes);
+  assert.equal(partial.selectedId, 'Kane');
+  const explicitZero = parseMetricHash('#g=0&i=100&c=0&min=0');
+  assert.equal(explicitZero.grit, 0);
+  assert.equal(explicitZero.involvement, 100);
+  assert.equal(explicitZero.minMinutes, 0);
+  const truncated = parseMetricHash('#g=60&sel=M%FC');
+  assert.equal(truncated.grit, 60);
+  assert.equal(truncated.selectedId, 'M%FC');
+});
