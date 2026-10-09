@@ -545,3 +545,29 @@ test('CSV header aliases: FBref codes, spaced or underscored names and Hebrew he
   assert.deepEqual(padded.players, [{ name: 'Alpha', totalMinutesProxy: 270, minutes: 270, tackles: 4 }]);
   assert.ok(html.includes('Key Passes'), 'the BYOD help text must mention the accepted header spellings');
 });
+
+test('CSV with an unclosed quote: the swallowed tail is dropped and the opening line is named', () => {
+  const records = parseCsvRecords('name,minutes\r\nA,90\r\n"Broken,600\r\nC,500\r\n');
+  assert.deepEqual(records, [['name', 'minutes'], ['A', '90']].concat([records[2]]));
+  assert.equal(records.unclosedQuote.line, 3);
+  assert.equal(records.unclosedQuote.record, records[2]);
+  // Closed quotes leave no marker, and the marker stays out of deepEqual.
+  assert.equal(parseCsvRecords('a,b\n"x, y",1').unclosedQuote, undefined);
+  assert.deepEqual(Object.keys(records), ['0', '1', '2']);
+
+  const parsed = parseUserDataset('name,minutes,goals\nAlpha,300,1\n"Beta,200,0\nGamma,100,2\n', { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha']);
+  assert.equal(parsed.errors.length, 1);
+  assert.match(parsed.errors[0], /^שורה 3: מירכאה/);
+
+  // The sep= hint line counts as a file line.
+  const hinted = parseUserDataset('sep=;\nname;minutes\nAlpha;300\nBeta;200\n"Gamma;100', { attested: true });
+  assert.deepEqual(hinted.players.map((p) => p.name), ['Alpha', 'Beta']);
+  assert.match(hinted.errors[0], /^שורה 5: מירכאה/);
+
+  // Quote on the first player line: nothing left to score, the reason is the quote.
+  const none = parseUserDataset('name,minutes\n"Alpha,300\nBeta,200', { attested: true });
+  assert.equal(none.ok, false);
+  assert.match(none.errors[0], /^שורה 2: מירכאה/);
+});

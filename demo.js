@@ -1621,6 +1621,9 @@
   // quote ("") and even a line break; Excel writes all three when it exports a
   // sheet, so a one-line splitter silently mangles names like "Silva, Thiago".
   // The delimiter is detected from the header unless options.delimiter is set.
+  // A quote that never closes swallows the rest of the file into one cell; the
+  // result then carries a non-enumerable `unclosedQuote` ({ line, record })
+  // naming the file line where that quote opened.
   function parseCsvRecords(text, options) {
     const opts = options || {};
     const detected = detectCsvDelimiter(text);
@@ -1631,6 +1634,7 @@
     let cur = '';
     let quoted = false;
     let fieldStart = true;
+    let quoteStart = -1;
     for (let i = 0; i < src.length; i += 1) {
       const ch = src[i];
       if (quoted) {
@@ -1646,6 +1650,7 @@
       }
       if (ch === '"' && fieldStart) {
         quoted = true;
+        quoteStart = i;
         fieldStart = false;
       } else if (ch === delimiter) {
         row.push(cur.trim());
@@ -1665,9 +1670,16 @@
     }
     row.push(cur.trim());
     records.push(row);
-    return records.filter(function (cells) {
+    const kept = records.filter(function (cells) {
       return cells.some(function (cell) { return cell !== ''; });
     });
+    if (quoted) {
+      const breaks = src.slice(0, quoteStart).match(/\r\n|\r|\n/g) || [];
+      Object.defineProperty(kept, 'unclosedQuote', {
+        value: { line: breaks.length + (detected.offset ? 2 : 1), record: row }
+      });
+    }
+    return kept;
   }
 
   // Numeric columns a user file may carry. A cell that is not a plain number
@@ -1827,7 +1839,17 @@
     // Line numbers in messages are file lines: a sep= hint line pushes the
     // header to line 2 and the first player to line 3.
     const firstDataLine = detected.offset ? 3 : 2;
-    const lines = parseCsvRecords(text, { delimiter: delimiter });
+    let lines = parseCsvRecords(text, { delimiter: delimiter });
+    // An unclosed quote turns the rest of the file into one cell, so every
+    // player after it would vanish into a single bogus name. Drop that
+    // record and say where the quote opened.
+    const unclosed = lines.unclosedQuote;
+    const quoteErrors = [];
+    if (unclosed) {
+      lines = lines.filter(function (cells) { return cells !== unclosed.record; });
+      quoteErrors.push('שורה ' + unclosed.line + ': מירכאה (") נפתחה ולא נסגרה — כל מה שאחריה נבלע בתא אחד ודולג; סגרו אותה וטענו שוב');
+      if (lines.length < 2) return { ok: false, errors: quoteErrors, players: [] };
+    }
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
     // Column keys per header cell (null = not read); see resolveCsvHeader.
     const headers = lines[0].map(resolveCsvHeader);
@@ -1845,7 +1867,7 @@
       col[key] = headers.indexOf(key);
     });
     const players = [];
-    const errors = [];
+    const errors = quoteErrors;
     const warnings = auditCsvHeaders(lines[0]);
     // A row wider than the header is almost always a name with an unquoted
     // delimiter ("Silva, Thiago" saved from a text editor): every stat after
