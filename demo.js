@@ -1820,6 +1820,45 @@
     return warnings;
   }
 
+  const PROVENANCE_LEDGER_COLUMNS = Object.freeze([
+    'fieldKey', 'label', 'value', 'filePath', 'provenance', 'dataset'
+  ]);
+
+  function csvEscapeCell(value) {
+    const text = String(value == null ? '' : value);
+    if (/[",\r\n]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+    return text;
+  }
+
+  function csvRow(cells) {
+    return cells.map(csvEscapeCell).join(',');
+  }
+
+  function createCsvReportWithProvenance(player, meta) {
+    const explorer = buildEventExplorer(player, meta);
+    const lines = [csvRow(PROVENANCE_LEDGER_COLUMNS)];
+    if (!player || !explorer.player) return lines.join('\n') + '\n';
+    lines.push(csvRow([
+      'minutes',
+      'דקות פרוקסי',
+      explorer.player.minutes,
+      'players[].totalMinutesProxy',
+      explorer.provenance,
+      explorer.dataset
+    ]));
+    explorer.rows.forEach(function (row) {
+      lines.push(csvRow([
+        row.key,
+        row.label,
+        row.total,
+        row.filePath,
+        explorer.provenance,
+        explorer.dataset
+      ]));
+    });
+    return lines.join('\n') + '\n';
+  }
+
   function parseUserCsv(text) {
     const detected = detectCsvDelimiter(text);
     const delimiter = detected.delimiter;
@@ -2009,6 +2048,8 @@
     radarValues: radarValues,
     methodologyParagraph: methodologyParagraph,
     exportMetricBundle: exportMetricBundle,
+    createCsvReportWithProvenance: createCsvReportWithProvenance,
+    PROVENANCE_LEDGER_COLUMNS: PROVENANCE_LEDGER_COLUMNS,
     EVENT_COLUMNS: EVENT_COLUMNS,
     OUTCOMES: OUTCOMES,
     WC2018_GROUPS: WC2018_GROUPS,
