@@ -87,6 +87,7 @@
       <a href="#glossary">מילון</a>
       <a href="#byod">נתונים שלכם</a>
       <a href="trap/">מלכודת הפיצ'רים המשכנעים</a>
+      <a href="mentality/">מדד מנטליות</a>
       <a href="licence.html">רישיון</a>
       <a href="offer.html">סדנה</a>
     </nav>
@@ -96,7 +97,7 @@
     <h1>ScoutAI — למדו לבנות מדד כדורגל שקוף</h1>
     <p>כלי לימוד בדפדפן על נתוני <span dir="ltr">StatsBomb Open Data</span> ממונדיאל 2018. <strong>לא</strong> סקאוטינג, <strong>לא</strong> AI, <strong>לא</strong> למכירה. הנוסחה גלויה כדי שאפשר להתווכח עליה:</p>
     <p class="formula">Impact = 0.4×Grit + 0.3×Involvement + 0.3×Clutch</p>
-    <p>התחילו בשיעור בן שמונה צעדים. כל ספירה, /90, תקרה וציון ניתנים למעקב עד השדה בקובץ המקומי. Open Data — לימוד/מחקר בלבד. <a href="licence.html">מה מותר ומה אסור</a> · <a href="offer.html">הצעת סדנה (אין הרשמה בדף)</a> · <a href="trap/">מלכודת הפיצ'רים המשכנעים</a> (כולל המקרה מ־<code>attic/proof-demo.js</code>, בלי ניתוח פנים).</p>
+    <p>התחילו בשיעור בן שמונה צעדים. כל ספירה, /90, תקרה וציון ניתנים למעקב עד השדה בקובץ המקומי. Open Data — לימוד/מחקר בלבד. <a href="licence.html">מה מותר ומה אסור</a> · <a href="offer.html">הצעת סדנה (אין הרשמה בדף)</a> · <a href="trap/">מלכודת הפיצ'רים המשכנעים</a> (כולל המקרה מ־<code>attic/proof-demo.js</code>, בלי ניתוח פנים) · <a href="mentality/">מדד מנטליות</a> (התנהגות על המגרש, לא פנים — ומבחן כן אם יש בו אות).</p>
   </section>
 
   <section class="card" id="course">
@@ -193,7 +194,7 @@
     <select id="outcomeSelect">
       <option value="assists">בישולים — לא בנוסחה</option>
       <option value="dribbles">כדרורים — לא בנוסחה</option>
-      <option value="duelsWon">דו-קרבות שנרכשו — לא בנוסחה</option>
+      <option value="duelsWon">דו-קרבות שנרכשו — דליפה: עותק של tackles</option>
       <option value="goals">שערים — דליפה דרך Clutch/xG</option>
       <option value="box">שערים+בישולים — דליפה</option>
     </select>
@@ -204,6 +205,7 @@
     </select>
     <p id="validateStatus" class="status" role="status"></p>
     <p id="validateVerdict" class="lab-note"></p>
+    <p id="validateBaseline" class="lab-note"></p>
     <div id="validateStats" class="stats-grid"></div>
     <div id="validateTables" class="table-wrap"></div>
   </section>
@@ -253,7 +255,7 @@
     <h2>פרטיות ותנאי שימוש בזמן הריצה</h2>
     <p>הדמו הוא קבצים סטטיים בלי backend. קובץ שאתם בוחרים במצב «הביאו נתונים» נקרא בדפדפן בלבד — אינו מועלה, נשמר או משותף. אין חשבונות, תשלומים, אימייל, תמיכה תפעולית או שירות AI. מצב המדד נשמר ב־hash המקומי של הדף (לא נשלח לשרת). Open Data מותר למחקר/לימוד בלבד, לא למסחר.</p>
   </section>
-  <footer>ScoutAI local deterministic demo · לא שירות ניתוח מאומת · <a href="licence.html">רישיון</a> · <a href="offer.html">סדנה</a></footer>
+  <footer>ScoutAI · מעבדה מקומית ודטרמיניסטית: אותו קלט, אותו ציון · לא שירות ניתוח מאומת · <a href="licence.html">רישיון</a> · <a href="offer.html">סדנה</a></footer>
 </main>
 <script src="demo.js"></script>
 <script>
@@ -766,6 +768,13 @@
     }).join('');
   }
 
+  function renderBaseline(current) {
+    const target = document.getElementById('validateBaseline');
+    if (!target || !store) return;
+    const base = ScoutAIDemo.minutesBaseline(store.players, current.spec);
+    target.textContent = 'קו בסיס: ' + base.verdict;
+  }
+
   function renderAll(current) {
     syncSlider('wGrit', current.spec.grit, 'Grit, ' + Math.round(current.spec.grit) + ' אחוז');
     syncSlider('wInv', current.spec.involvement, 'Involvement, ' + Math.round(current.spec.involvement) + ' אחוז');
@@ -778,6 +787,7 @@
     renderRadar(current);
     renderExplorer(current);
     renderValidation(current);
+    renderBaseline(current);
     renderFragility(current);
     renderExport(current);
     renderGlossary(current);
@@ -957,11 +967,19 @@
     }
     const reader = new FileReader();
     reader.onload = function () {
-      const parsed = ScoutAIDemo.parseUserDataset(String(reader.result || ''), {
-        attested: attested,
-        fileName: file.name
+      const text = String(reader.result || '');
+      ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
+        return lab.store.players;
+      }, function () {
+        return null;
+      }).then(function (roster) {
+        const parsed = ScoutAIDemo.parseUserDataset(text, {
+          attested: attested,
+          fileName: file.name,
+          openDataPlayers: roster
+        });
+        applyParsedDataset(parsed);
       });
-      applyParsedDataset(parsed);
     };
     reader.onerror = function () {
       byodStatus.textContent = 'קריאת הקובץ המקומי נכשלה. דבר לא נשלח.';

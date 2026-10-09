@@ -1,0 +1,55 @@
+name: פנייה לסדנה או לייעוץ
+description: בקשה לסדנת «מדד שקוף» (490 ₪ לאדם, הצעה בלבד) או לייעוץ על נתונים שרישיינתם בעצמכם.
+title: "פנייה לסדנה: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **שימו לב: ה-issue הזה ציבורי.** כל אחד יכול לקרוא אותו.
+        אל תכתבו טלפון, מייל או כתובת, ואל תצרפו נתוני שחקנים או קבצים.
+        התשובה תגיע כאן, כתגובה ב-issue. אם יש התאמה, נתאם ערוץ פרטי ונשלח הצעת מחיר מחוץ לאתר.
+        אין כאן הרשמה ואין תשלום. פרטים: [דף ההצעה](https://swissystem7.github.io/ScoutAI/offer.html).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: מה מעניין אתכם?
+      options:
+        - סדנה קבוצתית (כ-3 שעות, עד 8 משתתפים)
+        - ייעוץ חד-פעמי על נתונים שלנו
+        - עוד לא בטוח, רוצה לשאול שאלה
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: רקע קצר
+      description: למשל בוגר ספורט פאנל, אנליסט ב-myscout, מאמן נוער, סטודנט. בלי פרטים מזהים.
+    validations:
+      required: true
+  - type: dropdown
+    id: data
+    attributes:
+      label: יש לכם קובץ נתונים שמותר לכם להריץ?
+      description: נתוני StatsBomb Open Data לא נמכרים בסדנה, ראו דף הרישיון.
+      options:
+        - כן, ייצוא שרכשנו (Wyscout או ספק אחר)
+        - כן, ספירות שאספנו בעצמנו
+        - לא, נשמח לעבוד על הדוגמה הסינתטית
+        - לא יודע
+    validations:
+      required: true
+  - type: dropdown
+    id: format
+    attributes:
+      label: איך נוח לכם?
+      options:
+        - מקוון
+        - פרונטלי במרכז
+        - פרונטלי בצפון
+        - פרונטלי בדרום
+        - לא משנה
+  - type: textarea
+    id: notes
+    attributes:
+      label: עוד משהו?
+      description: מועדים נוחים, גודל קבוצה, שאלות. בלי טלפון ובלי מייל.
