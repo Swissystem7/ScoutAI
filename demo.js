@@ -1583,6 +1583,53 @@
     return next;
   }
 
+  function isDerivedLabView(value) {
+    return !!(value && typeof value === 'object' && value.spec && value.exercise &&
+      Array.isArray(value.curriculum));
+  }
+
+  function exercisesFromLessons(lessons, liveExercise) {
+    const exercises = (lessons || [])
+      .filter(function (lesson) { return lesson && lesson.exercise; })
+      .map(function (lesson) {
+        return {
+          lessonId: lesson.id,
+          title: lesson.title,
+          prompt: lesson.exercise
+        };
+      });
+    if (!exercises.length && liveExercise) {
+      exercises.push({
+        lessonId: liveExercise.id,
+        title: liveExercise.title,
+        prompt: liveExercise.prompt
+      });
+    }
+    return exercises;
+  }
+
+  function buildStructuredCourse(input, spec) {
+    const view = isDerivedLabView(input)
+      ? input
+      : createStore(input).derive(normalizeMetricSpec(spec || DEFAULT_METRIC));
+    const lessons = view.curriculum || evaluateCurriculum({
+      spec: view.spec,
+      selected: view.selected,
+      explorer: view.explorer,
+      validation: view.validation,
+      exercise: view.exercise,
+      answers: {}
+    });
+    return {
+      course: {
+        id: 'lesson-first',
+        lessons: lessons,
+        exercises: exercisesFromLessons(lessons, view.exercise)
+      },
+      sharedExercise: view.exercise
+    };
+  }
+
   function fragilityReport(dataset, spec, delta) {
     return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
@@ -2062,6 +2109,7 @@
     glossaryForPlayer: glossaryForPlayer,
     validateMetric: validateMetric,
     evaluateCurriculum: evaluateCurriculum,
+    buildStructuredCourse: buildStructuredCourse,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
     parseCsvRecords: parseCsvRecords,
