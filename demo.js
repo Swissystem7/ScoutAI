@@ -1906,6 +1906,39 @@
     return { ok: true, errors: errors, warnings: warnings, players: players };
   }
 
+  // FileReader.readAsText assumes UTF-8, but a Hebrew Excel saves "CSV" in
+  // windows-1255 and "Unicode Text" in UTF-16 with a BOM. Read as UTF-8
+  // that turns every Hebrew header and name into U+FFFD, so «שם» never
+  // matches and players arrive nameless. Decode the raw bytes instead: a BOM
+  // wins, then strict UTF-8, then a legacy codepage. Hebrew words are runs
+  // of high bytes (0xE0–0xFA); a Western file has lone accented letters
+  // (Müller, Mbappé), so a run of two picks windows-1255 over windows-1252.
+  function decodeUserFile(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const decode = function (label, from) {
+      return new TextDecoder(label).decode(b.subarray(from || 0));
+    };
+    if (b[0] === 0xFF && b[1] === 0xFE) return { text: decode('utf-16le', 2), encoding: 'utf-16le', warnings: [] };
+    if (b[0] === 0xFE && b[1] === 0xFF) return { text: decode('utf-16be', 2), encoding: 'utf-16be', warnings: [] };
+    if (b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) return { text: decode('utf-8', 3), encoding: 'utf-8', warnings: [] };
+    try {
+      return { text: new TextDecoder('utf-8', { fatal: true }).decode(b), encoding: 'utf-8', warnings: [] };
+    } catch (err) {
+      let hebrew = false;
+      for (let i = 1; i < b.length && !hebrew; i++) {
+        hebrew = b[i] >= 0xE0 && b[i] <= 0xFA && b[i - 1] >= 0xE0 && b[i - 1] <= 0xFA;
+      }
+      const encoding = hebrew ? 'windows-1255' : 'windows-1252';
+      return {
+        text: decode(encoding),
+        encoding: encoding,
+        warnings: ['הקובץ אינו UTF-8 ונקרא כ-' + encoding +
+          (hebrew ? ' (עברית של Excel)' : ' (Excel מערבי)') +
+          '. אם שמות נראים משובשים, שמרו מחדש כ-«CSV UTF-8».']
+      };
+    }
+  }
+
   function parseUserDataset(text, options) {
     const opts = options || {};
     const raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').trim();
@@ -2023,6 +2056,7 @@
     evaluateCurriculum: evaluateCurriculum,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
+    decodeUserFile: decodeUserFile,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
     auditCsvHeaders: auditCsvHeaders,
