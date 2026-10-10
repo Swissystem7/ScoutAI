@@ -174,6 +174,30 @@
       ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית'];
   }
 
+  const POSITION_FILTER_GROUPS = Object.freeze(['GK', 'DF', 'MF', 'FW', 'OT']);
+
+  function rowPositionGroup(row) {
+    return (row && row.positionGroup) || positionGroup(row && row.position);
+  }
+
+  function filterByPosition(players, selectedPosition) {
+    const list = Array.isArray(players) ? players : [];
+    const sel = String(selectedPosition == null ? '' : selectedPosition).trim();
+    if (!sel) return list.slice();
+    const upper = sel.toUpperCase();
+    if (POSITION_FILTER_GROUPS.indexOf(upper) >= 0) {
+      return list.filter(function (row) { return row && rowPositionGroup(row) === upper; });
+    }
+    return list.filter(function (row) {
+      if (!row) return false;
+      const pos = String(row.position || '').trim();
+      if (!pos) return false;
+      if (pos.toUpperCase() === upper) return true;
+      const tokens = pos.toUpperCase().split(/[^A-Z]+/);
+      return tokens.indexOf(upper) >= 0;
+    });
+  }
+
   function per90(value, minutes) {
     const mins = Number(minutes) || 0;
     if (mins <= 0) return 0;
@@ -2025,6 +2049,7 @@
     SEASON_MISLABELED: SEASON_MISLABELED,
     DEFAULT_METRIC: DEFAULT_METRIC,
     positionGroup: positionGroup,
+    filterByPosition: filterByPosition,
     componentsFromEvents: componentsFromEvents,
     compositeScore: compositeScore,
     applyMetric: applyMetric,
