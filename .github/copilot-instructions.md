@@ -41,3 +41,22 @@ When asked to review a pull request, check in this order: (1) does the new test 
 after the change, (2) does the whole suite pass, (3) were only the named files touched, (4) is any exported
 behaviour changed beyond the task, (5) is the PR summary accurate. Report findings as a short list; say "no
 blocking finding" when there is none.
+
+
+<!-- added by copilot-setup -->
+# Copilot instructions for ScoutAI
+
+## Stack
+Primary language: JavaScript. Top-level files: .github, .gitignore, .honesty-ignore, LICENSE, MONETIZATION.md, README.md, TEST_EVIDENCE.md, attic, data, demo.js, index.html, licence.html, offer.html, package.json, test, trap.js, trap. Dependencies: .
+
+## Build / test / lint
+- Install: `npm ci` (or `npm install`)
+- `npm run test` -> node --test
+Always run the relevant checks above before opening a PR and report results in the PR body.
+
+## Conventions
+- Keep changes small and focused: one issue = one Draft PR.
+- Branch prefix: `copilot/`. Never push to `master` and never merge.
+- Follow existing code style and folder structure; don't add new dependencies without explaining why.
+- Never commit secrets, tokens, or .env files.
+- Write or update tests when changing logic; update README when behavior changes.
