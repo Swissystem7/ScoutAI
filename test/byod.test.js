@@ -164,6 +164,23 @@ test('European Excel CSV: `;` delimiter, sep= hint and decimal comma are underst
   assert.equal('pressures' in commaFile.players[0], false);
   assert.equal(commaFile.errors.length, 1);
 
+  // Excel's "1000 separator" format and FBref's Min column quote 2970 as
+  // "2,970". Strict groups of three load as a whole number and are listed;
+  // "0,456" is a decimal comma, not 456, and stays an error.
+  const grouped = parseUserDataset(
+    'name,minutes,pressures,shotXgSum\nA,"2,970","1,204.5",1\nB,"1,080",3,"0,456"\n',
+    { attested: true }
+  );
+  assert.equal(grouped.ok, true);
+  assert.equal(grouped.players[0].minutes, 2970);
+  assert.equal(grouped.players[0].pressures, 1204.5);
+  assert.equal(grouped.players[1].minutes, 1080);
+  assert.equal('shotXgSum' in grouped.players[1], false);
+  assert.deepEqual(grouped.errors, ['שורה 3: shotXgSum=«0,456» אינו מספר — התא נשאר ריק']);
+  assert.ok(grouped.warnings.some((w) => w.includes('מפריד אלפים') && w.includes('minutes=«2,970» → 2970')));
+  // In a `;` file the comma is the decimal mark, never a thousands group.
+  assert.equal(parseUserDataset('name;minutes;shotXgSum\nA;90;1,250\n', { attested: true }).players[0].shotXgSum, 1.25);
+
   // The wrong-column error now shows what was actually read, so a user whose
   // file collapsed into one column can see why.
   const noName = parseUserDataset('player|minutes\nA|90\n', { attested: true });
