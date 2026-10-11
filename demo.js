@@ -555,6 +555,15 @@
     return parts.join('&');
   }
 
+  // A hand-trimmed or truncated link ("#sel=M%FC") must not throw and blank the page.
+  function safeDecode(text) {
+    try {
+      return decodeURIComponent(text);
+    } catch (err) {
+      return text;
+    }
+  }
+
   function parseMetricHash(hash) {
     const text = String(hash || '').replace(/^#/, '');
     if (!text) return normalizeMetricSpec(DEFAULT_METRIC);
@@ -562,13 +571,17 @@
     text.split('&').forEach(function (pair) {
       const parts = pair.split('=');
       if (parts.length < 2) return;
-      params[decodeURIComponent(parts[0])] = decodeURIComponent(parts.slice(1).join('='));
+      params[safeDecode(parts[0])] = safeDecode(parts.slice(1).join('='));
     });
+    // A key the link leaves out keeps its default, so "#sel=Kane" does not zero every weight.
+    function pick(key, fallback) {
+      return params[key] === undefined || params[key] === '' ? fallback : params[key];
+    }
     return normalizeMetricSpec({
-      grit: params.g,
-      involvement: params.i,
-      clutch: params.c,
-      minMinutes: params.min,
+      grit: pick('g', DEFAULT_METRIC.grit),
+      involvement: pick('i', DEFAULT_METRIC.involvement),
+      clutch: pick('c', DEFAULT_METRIC.clutch),
+      minMinutes: pick('min', DEFAULT_METRIC.minMinutes),
       normalizePosition: params.npos === '1' || params.npos === 'true',
       selectedId: params.sel || '',
       compareId: params.cmp || '',
