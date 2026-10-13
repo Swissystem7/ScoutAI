@@ -35,6 +35,11 @@ test('filterByPosition matches a specific position code within a group', () => {
   assert.ok(filterByPosition(sample, 'LW').every((row) => row.position === 'LW'));
 });
 
+test('positionGroup maps standard and technical position labels', () => {
+  assert.equal(positionGroup('Central Midfielder'), 'MF');
+  assert.equal(positionGroup('Technical Role'), 'UT');
+});
+
 test('filterByPosition works on prepared players from the store', () => {
   const store = createStore({ players: sample });
   const gk = filterByPosition(store.players, 'GK');
