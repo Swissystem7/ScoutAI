@@ -12,6 +12,10 @@ const engine = fs.readFileSync(path.join(root, 'trap.js'), 'utf8');
 const home = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const attic = fs.readFileSync(path.join(root, 'attic', 'proof-demo.js'), 'utf8');
 
+test('defaultValues attic mode uses 50 regardless of fill', () => {
+  assert.deepEqual(Trap.defaultValues([{ id: 'kante' }], 75, 'attic'), { kante: 50 });
+});
+
 test('sandbox ranking follows statScore when invented weight is zero', () => {
   const view = Trap.deriveRanking(Trap.SANDBOX_PLAYERS, { name: 'קסם', weight: 0, values: { flash: 0, hold: 100 } });
   assert.equal(view.rows[0].name, 'כנף מבריקה');
