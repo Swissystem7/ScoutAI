@@ -141,7 +141,8 @@
     { group: 'GK', re: /goalkeeper|keeper|portero|torwart|שוער/i },
     { group: 'MF', re: /midfield|mediocampista|mittelfeld|קשר/i },
     { group: 'DF', re: /back|defen|defensa|verteidiger|libero|sweeper|מגן|בלם/i },
-    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i }
+    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i },
+    { group: 'UT', re: /technical|unknown/i }
   ]);
 
   function positionGroup(position) {
