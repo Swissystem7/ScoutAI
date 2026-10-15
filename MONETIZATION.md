@@ -7,6 +7,16 @@ _נבדק לאחרונה: 13.8.2026._
 
 ---
 
+## 0. עדכון 28.9.2026 (עוגני מחיר)
+
+- **וינגייט:** דף התוכנית הלאומית לאנליסטים עדיין מציג 9,482 ₪ + 440 ₪, אבל כתוב בו «קורס זה לא יפתח בשלב זה» ([wingate.org.il](https://wingate.org.il/trainers_school/sports-analytics/), נבדק 28.9.2026). הוצא מ־`offer.html` כעוגן.
+- **ספורט פאנל:** 22 מפגשים, הנחה של 500 ₪ למאמנים, מחיר מלא לא מפורסם. הדף מציין היום גם סטטיסטיקה, «דאטה אנליסט» ו־xG ([sportpanel.co.il/scouting](https://www.sportpanel.co.il/scouting), נבדק 28.9.2026).
+- **Hudl Statsbomb, Introduction to Football Analytics:** ‏£60 כולל מס, 5 מודולים, «No student discounts or refunds» (נבדק 28.9.2026).
+- **Barça Innovation Hub, Introduction to Sports Analytics:** ‏€675, ארבעה חודשים, מקוון ([barcainnovationhub.fcbarcelona.com](https://barcainnovationhub.fcbarcelona.com/education/introduction-to-sports-analytics/), נבדק 28.9.2026).
+- **ביקוש:** 0 פניות לסדנה מאז 13.8.2026 (רשימת ה-issues בריפו, 28.9.2026). מחיר 490 ₪ הוא הצעה שלא נבדקה מול קונה.
+
+---
+
 ## 1. רישיון StatsBomb Open Data — מה כתוב במדויק
 
 **מקור הרישיון:** [LICENSE.pdf ב־hudl/open-data](https://github.com/hudl/open-data/blob/master/LICENSE.pdf)  

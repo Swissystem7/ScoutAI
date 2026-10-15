@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>מדד מנטליות — ScoutAI</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
+    body{margin:0;background:#f3f6f1}.skip{position:absolute;inset-inline-start:-999px;top:8px;background:#fff;color:#10281d;padding:8px 12px;border-radius:8px;z-index:5}
+    .skip:focus{inset-inline-start:8px}.shell{max-width:980px;margin:auto;padding:24px}
+    .banner{background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code{display:inline-block;margin:2px;background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700;display:inline-flex;align-items:center;min-height:44px}
+    .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}
+    h1,h2{margin-top:0}p,li{line-height:1.65}
+    code{overflow-wrap:anywhere}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}
+    .danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
+    .ok{border-inline-start:4px solid #145c3d;background:#e6f3ea;padding:12px;color:#0f3d26}
+    .verdict{font-size:1.15rem;font-weight:700;padding:14px;border-radius:12px;margin:12px 0}
+    .verdict.none{background:#f8ecec;color:#3d1010;border:2px solid #8a1f1f}
+    .verdict.found{background:#e6f3ea;color:#0f3d26;border:2px solid #145c3d}
+    label{display:block;margin:12px 0 6px;font-weight:700}
+    select{font:inherit;padding:10px;border-radius:10px;border:1px solid #8a9a8e;min-height:44px;max-width:100%;width:100%}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .table-wrap{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;font-size:.92rem}
+    caption{text-align:start;font-weight:700;padding:8px 0}th,td{text-align:start;padding:8px 6px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    th{font-size:.82rem;color:#2d3a32}td.num{direction:ltr;text-align:end;white-space:nowrap}
+    tr.index-row td{background:#eef4ee;font-weight:700}
+    .muted{color:#3d4a42;font-size:.88rem}
+    .defs{display:grid;gap:10px;padding:0;list-style:none}.defs li{background:#f3f6f1;border-radius:12px;padding:12px}
+    .defs code{font-size:.8rem}
+    .bars{display:grid;gap:8px;margin-top:10px}.bar{display:grid;grid-template-columns:130px 1fr 44px;gap:8px;align-items:center}
+    .bar .track{background:#e3ebe4;border-radius:999px;height:14px;overflow:hidden}.bar .fill{background:#145c3d;height:100%}
+    .bar strong{direction:ltr;text-align:end}
+    .status{min-height:1.5em;font-weight:700}
+    :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
+    footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
+    @media(max-width:650px){.shell{padding:12px}.card{padding:16px}.controls{grid-template-columns:1fr}.bar{grid-template-columns:96px 1fr 40px}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#validation">דלגו לתוצאת האימות</a>
+<main class="shell">
+  <aside class="banner" aria-label="סיווג הדף">
+    <code>STATSBOMB_OPEN_DATA</code> אירועי מונדיאל 2018, 64 משחקים — לימוד/מחקר בלבד.
+    <code>NO_FACE_MODEL</code> אין ניתוח פנים, אין תמונות, אין וידאו.
+    <code>NO_PERSONALITY_CLAIM</code> המדד סופר התנהגות על המגרש. הוא לא «קורא אישיות».
+    <div class="nav">
+      <a href="../">חזרה למעבדת המדד</a>
+      <a href="../trap/">מלכודת הפיצ'רים</a>
+      <a href="../licence.html">רישיון</a>
+      <a href="../offer.html">סדנה</a>
+    </div>
+  </aside>
+
+  <section class="card" id="hero">
+    <h1>מדד מנטליות — התנהגות, לא פרצוף</h1>
+    <p>החזון של ScoutAI היה למצוא שחקנים עם מנטליות נדירה: לא מוותרים, מתאוששים מטעות, סוחבים קבוצה כשהיא בפיגור — מה שסטטיסטיקה שטחית מפספסת (הדוגמה: ג'יימי וארדי). הדף הזה בונה את הגרסה הקרובה ביותר שאפשר להגן עליה מדעית: <strong>מדד התנהגותי מנתוני אירועים</strong> — ובודק ביושר אם הוא רואה משהו שדקות משחק ו-Impact לא רואים.</p>
+    <div id="headline" class="verdict none" role="status" aria-live="polite">מחשב את תוצאת האימות…</div>
+  </section>
+
+  <section class="card" id="why-not-faces">
+    <h2>למה לא פנים</h2>
+    <p><strong>אין ראיה שמבנה פנים מנבא חוסן או מנהיגות.</strong> סקירה של יותר מאלף מחקרים מצאה שאפילו רגש רגעי לא נקרא באופן אמין מתנועות פנים (<a href="https://journals.sagepub.com/doi/full/10.1177/1529100619832930" rel="noopener">Barrett ועמיתים, 2019</a>). הטענה החזקה ביותר «בעד» — רשת נוירונים על סלפי — מצאה מתאם ממוצע של 0.24 לאישיות מדווחת-עצמית, אפקט קטן ברמת אוכלוסייה שמושפע מטיפוח ובחירת התמונה (<a href="https://www.nature.com/articles/s41598-020-65358-6" rel="noopener">Kachur ועמיתים, 2020</a>). פיזיונומיה ממוחשבת נוטה ללמוד הטיות של איסוף התמונות (<a href="https://medium.com/@blaisea/physiognomys-new-clothes-f2d4b59fdd6a" rel="noopener">Agüera y Arcas, Mitchell, Todorov, 2017</a>).</p>
+    <p><strong>וגם החוק.</strong> חוק ה-AI האירופי אוסר מאז 2.2.2025 להסיק רגשות של עובדים מנתונים ביומטריים — ושחקן מקצועי הוא עובד (<a href="https://fpf.org/blog/red-lines-under-eu-ai-act-unpacking-the-prohibition-of-emotion-recognition-in-the-workplace-and-education-institutions/" rel="noopener">FPF, 2026</a>). בישראל, תיקון 13 לחוק הגנת הפרטיות (בתוקף מאוגוסט 2025) מגדיר גם מזהה ביומטרי וגם הערכת אישיות כמידע בעל רגישות מיוחדת (<a href="https://natlawreview.com/article/israels-gdpr-legislation-set-take-effect-2025" rel="noopener">NatLawReview, 2025</a>).</p>
+    <p class="muted">הדף הזה לא מכיל תמונות של אנשים ולא מנתח אותן. המקרה ההיסטורי של «אנרגיית פנים» בריפו מוסבר ב<a href="../trap/">מלכודת הפיצ'רים</a>.</p>
+  </section>
+
+  <section class="card" id="components">
+    <h2>מה המדד מודד — חמישה רכיבים</h2>
+    <p>כל רכיב מחושב בנפרד מנתוני אירועים של שחקן-משחק (<code>data/wc2018_mentality_matches.json</code>, נבנה ב־<code>tools/build-mentality.js</code>). כל אחד מנורמל ל-90 דקות ובתוך קבוצת עמדה (הגנה / קישור / התקפה). המדד = ממוצע ציוני z במשקל שווה, מוצג כאחוזון בתוך העמדה. השוערים לא נכללים.</p>
+    <ul id="componentList" class="defs"></ul>
+    <p class="notice">«פעולה» = מסירה, הובלה, כדרור, בעיטה, לחץ, דו-קרב, חטיפה, השבת כדור, חסימה, הרחקה, 50/50 או עבירה. רכיבים שנמדדים «מול הקבוצה» מחסרים את אותו יחס אצל כל הקבוצה, כי קבוצה בפיגור מחזיקה יותר בכדור — זה לא אופי של שחקן.</p>
+  </section>
+
+  <section class="card" id="validation">
+    <h2>האם יש כאן אות? אימות מוחזק</h2>
+    <p>המדד וקווי הבסיס מחושבים <strong>רק ממשחקי האימון</strong>. היעד נמדד <strong>רק במשחקי המבחן</strong> של אותם שחקנים. הרכיבים, המשקלות, הספים, שני הפיצולים, שני היעדים וכלל ההכרעה נקבעו מראש בקוד — לפני שראינו תוצאה.</p>
+    <div class="controls">
+      <div>
+        <label for="splitSelect">פיצול</label>
+        <select id="splitSelect"></select>
+      </div>
+      <div>
+        <label for="outcomeSelect">יעד (מה המדד אמור לנבא)</label>
+        <select id="outcomeSelect"></select>
+      </div>
+    </div>
+    <p id="outcomeWhy" class="muted"></p>
+    <div id="verdict" class="verdict none" role="status" aria-live="polite">מחשב…</div>
+    <div class="table-wrap" id="validationTable"></div>
+    <div class="table-wrap" id="deltaTable"></div>
+    <p class="muted">ρ = מתאם Spearman עם היעד. AUC = יכולת להפריד בין מי שמעל החציון ביעד למי שמתחתיו (0.5 = מטבע). בסוגריים: רווח סמך 95% מ-bootstrap של 1,000 דגימות שחקנים. כלל ההכרעה: «נמצא אות» רק אם הגבול התחתון של ρ למדד מעל 0 <strong>וגם</strong> היתרון שלו על כל אחד משלושת קווי הבסיס מובהק (גבול תחתון מעל 0), עם 30 שחקנים לפחות.</p>
+    <h3>האם הרכיבים בכלל חוזרים על עצמם?</h3>
+    <p>תכונה צריכה לפחות לחזור בין משחקים לפני שהיא מנבאת משהו. כאן: ρ בין ערך הרכיב במשחקי האימון לערכו במשחקי המבחן, לאותם שחקנים (90+ דקות בכל חצי).</p>
+    <div class="table-wrap" id="reliabilityTable"></div>
+    <p id="reliabilityNote" class="muted"></p>
+  </section>
+
+  <section class="card" id="ranking">
+    <h2>דירוג הטורניר — תיאורי בלבד</h2>
+    <p class="danger">הדירוג מתאר מה קרה במונדיאל 2018. האימות למעלה קובע אם מותר להסיק ממנו על העתיד. אל תקראו אותו כ«מי חזק מנטלית».</p>
+    <div class="controls">
+      <div>
+        <label for="groupSelect">עמדה</label>
+        <select id="groupSelect">
+          <option value="ALL">כל העמדות</option>
+          <option value="DF">הגנה</option>
+          <option value="MF">קישור</option>
+          <option value="FW">התקפה</option>
+        </select>
+      </div>
+      <div>
+        <label for="minSelect">סף דקות בטורניר</label>
+        <select id="minSelect">
+          <option value="90">90+</option>
+          <option value="180">180+</option>
+          <option value="270" selected>270+</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap" id="rankTable"></div>
+    <label for="playerSelect">שחקן לפירוק (קבוצת השוואה: כל השחקנים עם 90+ דקות באותה עמדה)</label>
+    <select id="playerSelect"></select>
+    <div id="playerCard"></div>
+  </section>
+
+  <section class="card" id="vardy">
+    <h2>וארדי — מה ידוע, עם מקור</h2>
+    <ul>
+      <li>שוחרר מאקדמיית שפילד וונסדיי בגיל 16, שיחק בליגות נמוכות, והצטרף ללסטר ב-2012 בגיל 25. ב-2015/16 כבש 24 שערי ליגה, כולל שערים ב-11 משחקי ליגה ברצף (<a href="https://en.wikipedia.org/wiki/Jamie_Vardy" rel="noopener">ויקיפדיה</a>).</li>
+      <li>התנהגויות נצפות: ריצות לעומק בין הבלם הרחוק למגן, האצה חדה בצעדים הראשונים, וירידה לכדור כאופציה קצרה (<a href="https://learning.coachesvoice.com/cv/jamie-vardy-leicester-city-fleetwood/" rel="noopener">Coaches' Voice, 2021</a>).</li>
+      <li>לא מצאנו מקור אמין ל«שערים מאוחרים» כדפוס סטטיסטי אצלו, ולכן לא טוענים זאת.</li>
+    </ul>
+    <p id="vardyLine" class="muted"></p>
+  </section>
+
+  <footer>
+    נתונים: <span dir="ltr">StatsBomb Open Data</span> (<a href="https://github.com/hudl/open-data" rel="noopener">hudl/open-data</a>) — מחקר ושיתוף ציבורי עם קרדיט; שימוש מסחרי אסור. המדד הוא כלי לימוד ומבחן השערה, לא הערכה פסיכולוגית ולא שירות סקאוטינג.
+  </footer>
+</main>
+<script src="../demo.js"></script>
+<script src="../mentality.js"></script>
+<script>
+(function () {
+  'use strict';
+  const M = window.ScoutAIMentality;
+  const GROUP_LABEL = { DF: 'הגנה', MF: 'קישור', FW: 'התקפה' };
+  const state = { data: null, tournament: null, cohort90: null, cache: {} };
+
+  function el(id) { return document.getElementById(id); }
+  function esc(text) {
+    return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fmt(x) { return x == null ? '—' : String(x); }
+  function fmtCi(ci) { return ci && ci[0] != null ? '[' + ci[0] + ', ' + ci[1] + ']' : '—'; }
+
+  function renderComponents() {
+    el('componentList').innerHTML = M.COMPONENTS.map(function (c) {
+      return '<li><strong>' + esc(c.label) + '</strong> — ' + esc(c.definition) +
+        '<br><span class="muted">שדות: <code dir="ltr">' + esc(c.fields) + '</code></span></li>';
+    }).join('');
+  }
+
+  function fillSelects() {
+    el('splitSelect').innerHTML = Object.keys(M.SPLITS).map(function (id) {
+      return '<option value="' + id + '">' + esc(M.SPLITS[id].label) + '</option>';
+    }).join('');
+    el('outcomeSelect').innerHTML = Object.keys(M.OUTCOMES).map(function (id) {
+      return '<option value="' + id + '">' + esc(M.OUTCOMES[id].label) + '</option>';
+    }).join('');
+  }
+
+  function validation(splitId, outcomeId) {
+    const key = splitId + '|' + outcomeId;
+    if (!state.cache[key]) state.cache[key] = M.validate(state.data, { splitId: splitId, outcomeId: outcomeId });
+    return state.cache[key];
+  }
+
+  function renderValidation() {
+    const v = validation(el('splitSelect').value, el('outcomeSelect').value);
+    el('outcomeWhy').textContent = v.outcomeWhy + ' ' + v.n + ' שחקנים עומדים בתנאי המבחן (מתוך ' + v.nTrainPlayers + ' עם 90+ דקות אימון).';
+    const box = el('verdict');
+    box.className = 'verdict ' + (v.signal ? 'found' : 'none');
+    box.textContent = v.verdict;
+    el('validationTable').innerHTML = '<table><caption>מנבאים מול היעד במשחקי המבחן</caption><thead><tr><th scope="col">מנבא</th><th scope="col">ρ</th><th scope="col">95% CI</th><th scope="col">AUC</th><th scope="col">95% CI</th></tr></thead><tbody>' +
+      v.predictors.map(function (p) {
+        return '<tr class="' + (p.id === 'index' ? 'index-row' : '') + '"><th scope="row">' + esc(p.label) + (p.kind === 'baseline' ? ' <span class="muted">(קו בסיס)</span>' : '') + '</th>' +
+          '<td class="num">' + fmt(p.rho) + '</td><td class="num">' + fmtCi(p.rhoCi) + '</td>' +
+          '<td class="num">' + fmt(p.auc) + '</td><td class="num">' + fmtCi(p.aucCi) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    el('deltaTable').innerHTML = '<table><caption>יתרון המדד על כל קו בסיס (ρ מדד פחות ρ בסיס)</caption><thead><tr><th scope="col">מול</th><th scope="col">Δρ</th><th scope="col">95% CI</th><th scope="col">מובהק?</th></tr></thead><tbody>' +
+      v.deltas.map(function (d) {
+        const sig = d.ci[0] != null && d.ci[0] > 0;
+        return '<tr><th scope="row">' + esc(d.label) + '</th><td class="num">' + fmt(d.delta) + '</td><td class="num">' + fmtCi(d.ci) + '</td><td>' + (sig ? 'כן' : 'לא') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function renderHeadline() {
+    const all = [];
+    Object.keys(M.SPLITS).forEach(function (s) {
+      Object.keys(M.OUTCOMES).forEach(function (o) { all.push(validation(s, o)); });
+    });
+    const found = all.filter(function (v) { return v.signal; }).length;
+    const box = el('headline');
+    box.className = 'verdict ' + (found ? 'found' : 'none');
+    box.textContent = found
+      ? 'נמצא אות ב-' + found + ' מתוך ' + all.length + ' מבחנים מוחזקים. פרטים ורווחי סמך למטה — זה עדיין טורניר אחד.'
+      : 'לא נמצא אות: בכל ' + all.length + ' המבחנים המוחזקים (2 פיצולים × 2 יעדים) המדד לא ניבא יותר מדקות משחק, Impact או פעולות ל-90. התוצאה מוצגת כמו שהיא.';
+  }
+
+  function renderReliability() {
+    const r = M.componentReliability(state.data, el('splitSelect').value);
+    el('reliabilityTable').innerHTML = '<table><caption>חזרתיות רכיבים — ' + esc(r.splitLabel) + ' (' + r.n + ' שחקנים)</caption><thead><tr><th scope="col">רכיב</th><th scope="col">ρ אימון↔מבחן</th></tr></thead><tbody>' +
+      r.items.map(function (it) {
+        return '<tr><th scope="row">' + esc(it.label) + '</th><td class="num">' + fmt(it.rho) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    const stable = r.items.filter(function (it) { return it.id !== 'actions90' && it.rho != null && it.rho >= 0.3; })
+      .map(function (it) { return it.label; });
+    el('reliabilityNote').textContent = stable.length
+      ? 'רכיבים שחוזרים (ρ ≥ 0.3): ' + stable.join(', ') + '. שימו לב: נפח פעולות גולמי חוזר לפחות באותה מידה — כלומר מה שיציב הוא בעיקר קצב עבודה, לא תגובה למצוקה.'
+      : 'אף רכיב לא חוזר ב-ρ ≥ 0.3 בין חצאי המדגם.';
+  }
+
+  function renderRanking() {
+    const group = el('groupSelect').value;
+    const minMinutes = Number(el('minSelect').value);
+    const rows = M.buildTournament(state.data, { minMinutes: minMinutes })
+      .filter(function (p) { return group === 'ALL' || p.positionGroup === group; })
+      .slice(0, 20);
+    el('rankTable').innerHTML = '<table><caption>20 הראשונים (אחוזון בתוך העמדה)</caption><thead><tr><th scope="col">#</th><th scope="col">שחקן</th><th scope="col">עמדה</th><th scope="col">דקות</th><th scope="col">מדד</th>' +
+      M.COMPONENTS.map(function (c) { return '<th scope="col">' + esc(c.short) + '</th>'; }).join('') + '<th scope="col">Impact</th></tr></thead><tbody>' +
+      rows.map(function (p, i) {
+        return '<tr><td class="num">' + (i + 1) + '</td><th scope="row">' + esc(p.name) + '<br><span class="muted">' + esc(p.team) + '</span></th><td>' + esc(GROUP_LABEL[p.positionGroup] || p.positionGroup) + '</td>' +
+          '<td class="num">' + Math.round(p.minutes) + '</td><td class="num"><strong>' + p.index + '</strong></td>' +
+          M.COMPONENT_IDS.map(function (id) { return '<td class="num">' + p.componentPct[id] + '</td>'; }).join('') +
+          '<td class="num">' + p.impact + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function renderPlayer() {
+    const id = el('playerSelect').value;
+    const p = state.cohort90.find(function (row) { return row.id === id; });
+    if (!p) { el('playerCard').innerHTML = ''; return; }
+    el('playerCard').innerHTML = '<p><strong>' + esc(p.name) + '</strong> (' + esc(p.team) + ', ' + esc(GROUP_LABEL[p.positionGroup]) + ') — ' +
+      Math.round(p.minutes) + ' דקות ב-' + p.matches.length + ' משחקים. מדד: <strong>' + p.index + '</strong> (אחוזון בעמדה). Impact: ' + p.impact + '.</p>' +
+      '<div class="bars">' + M.COMPONENTS.map(function (c) {
+        const v = p.componentPct[c.id];
+        return '<div class="bar"><span>' + esc(c.label) + '</span><span class="track" role="img" aria-label="' + esc(c.label) + ' אחוזון ' + v + '"><span class="fill" style="width:' + v + '%;display:block"></span></span><strong>' + v + '</strong></div>';
+      }).join('') + '</div>' +
+      '<p class="muted">דקות בפיגור: ' + Math.round(p.minTrailing) + ' · דקות 75+: ' + Math.round(p.minLate) + ' · איבודי כדור עצמיים: ' + p.mistakes + ' (תגובה תוך 5 שנ׳: ' + p.mistakesReacted + ') · לחץ-נגד: ' + p.counterpress + '. מעט דקות = הרכיב מכווץ לכיוון הממוצע.</p>';
+  }
+
+  function renderVardy() {
+    const p = state.cohort90.find(function (row) { return /Vardy/.test(row.name); });
+    if (!p) return;
+    el('vardyLine').textContent = 'בנתוני הריפו: ' + p.matches.length + ' משחקים, ' + Math.round(p.minutes) + ' דקות במונדיאל 2018. המדד שלו באחוזון ' + p.index +
+      ' בין החלוצים — טורניר קצר עם תפקיד מחליף לא «רואה» את הקריירה שלו, ומדד שלא עבר אימות לא היה מזהה אותו מראש.';
+  }
+
+  function init(data) {
+    state.data = data;
+    state.cohort90 = M.buildTournament(data, { minMinutes: 90 });
+    renderComponents();
+    fillSelects();
+    const players = state.cohort90.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    el('playerSelect').innerHTML = players.map(function (p) {
+      return '<option value="' + esc(p.id) + '">' + esc(p.name) + ' — ' + esc(p.team) + '</option>';
+    }).join('');
+    const vardy = players.find(function (p) { return /Vardy/.test(p.name); });
+    if (vardy) el('playerSelect').value = vardy.id;
+    renderRanking();
+    renderPlayer();
+    renderVardy();
+    renderValidation();
+    renderReliability();
+    setTimeout(renderHeadline, 0);
+    el('splitSelect').addEventListener('change', function () { renderValidation(); renderReliability(); });
+    el('outcomeSelect').addEventListener('change', renderValidation);
+    el('groupSelect').addEventListener('change', renderRanking);
+    el('minSelect').addEventListener('change', renderRanking);
+    el('playerSelect').addEventListener('change', renderPlayer);
+  }
+
+  M.loadData(function (path) { return fetch('../' + path); })
+    .then(init)
+    .catch(function (err) {
+      el('headline').textContent = 'טעינת הנתונים נכשלה (' + err.message + '). פתחו את הדף דרך GitHub Pages או שרת סטטי.';
+    });
+}());
+</script>
+</body>
+</html>

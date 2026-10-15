@@ -15,7 +15,7 @@
     .danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
     .ok{border-inline-start:4px solid #145c3d;background:#e6f3ea;padding:12px;color:#0f3d26}
     blockquote{margin:12px 0;padding:12px 16px;background:#f3f6f1;border-radius:12px;font-family:Georgia,serif}
-    table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    .table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
     footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
     :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
   </style>
@@ -31,7 +31,7 @@
       <a href="index.html">המעבדה</a>
       <a href="offer.html">הצעת סדנה</a>
       <a href="trap/">מלכודת פיצ'רים</a>
-      <a href="MONETIZATION.md">מחקר מלא</a>
+      <a href="https://github.com/Swissystem7/ScoutAI/blob/master/MONETIZATION.md">מחקר מלא</a>
     </nav>
   </aside>
 
@@ -80,6 +80,7 @@
 
   <section class="card">
     <h2>שתי שכבות רישיון</h2>
+    <div class="table-wrap" role="region" aria-label="טבלת שכבות הרישיון" tabindex="0">
     <table>
       <caption>מה חל על מה</caption>
       <thead><tr><th scope="col">שכבה</th><th scope="col">רישיון</th><th scope="col">מסחר</th></tr></thead>
@@ -90,12 +91,13 @@
         <tr><td><code>SYNTHETIC_EXAMPLE</code></td><td>קובץ הוראה שסופק כאן</td><td>לא נתוני משחק; לא Open Data</td></tr>
       </tbody>
     </table>
+    </div>
   </section>
 
   <section class="card">
     <h2>איך הכלי נאכף בדמו</h2>
-    <p>טעינת קובץ שנראה כמו Open Data (מקור עם המילה StatsBomb, או <code>competitionId: 43</code> ו־<code>seasonId: 3</code>) נדחית במצב «הביאו נתונים שלכם». אין סליקה בדמו, אין חשבון, ואין PDF למכירה.</p>
-    <p>פירוט המחקר, כולל מחירי קורסים בישראל ומודלי חסות: <a href="MONETIZATION.md">MONETIZATION.md</a>.</p>
+    <p>טעינת קובץ שנראה כמו Open Data (מקור עם המילה StatsBomb, או <code>competitionId: 43</code> ו־<code>seasonId: 3</code>) נדחית במצב «הביאו נתונים שלכם». נדחה גם קובץ שזהה לקובץ מונדיאל 2018 לפי התוכן: שם, קבוצה וספירות, גם אחרי שמירה מחדש כ-CSV או כמערך JSON בלי מטא-דאטה. אותם שחקנים מספק אחר, עם ספירות אחרות, עוברים. <strong>מה לא נתפס:</strong> קובץ עם שמות ששונו במכוון. זו בדיקה בדמו, לא אחריות משפטית. אין סליקה בדמו, אין חשבון, ואין PDF למכירה.</p>
+    <p>פירוט המחקר, כולל מחירי קורסים בישראל ומודלי חסות: <a href="https://github.com/Swissystem7/ScoutAI/blob/master/MONETIZATION.md">MONETIZATION.md</a>.</p>
   </section>
   <footer>ScoutAI · דף רישיון · לא ייעוץ משפטי · <a href="index.html">חזרה למעבדה</a></footer>
 </main>

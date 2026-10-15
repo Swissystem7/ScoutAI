@@ -12,4 +12,4 @@ Keep it only as history.
 
 ## What the live demo reads
 
-Only `data/wc2018_event_aggregates.json` (and, if the user asks, `data/user-dataset.example.json` or a local file they attest they licensed).
+Only `data/wc2018_event_aggregates.json` (the mentality lab in `mentality/` also reads `data/wc2018_mentality_matches.json`; and, if the user asks, `data/user-dataset.example.json` or a local file they attest they licensed).
