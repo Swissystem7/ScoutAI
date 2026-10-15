@@ -12,6 +12,10 @@ const engine = fs.readFileSync(path.join(root, 'trap.js'), 'utf8');
 const home = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const attic = fs.readFileSync(path.join(root, 'attic', 'proof-demo.js'), 'utf8');
 
+test('defaultValues attic mode uses 50 regardless of fill', () => {
+  assert.deepEqual(Trap.defaultValues([{ id: 'kante' }], 75, 'attic'), { kante: 50 });
+});
+
 test('sandbox ranking follows statScore when invented weight is zero', () => {
   const view = Trap.deriveRanking(Trap.SANDBOX_PLAYERS, { name: 'קסם', weight: 0, values: { flash: 0, hold: 100 } });
   assert.equal(view.rows[0].name, 'כנף מבריקה');
@@ -188,4 +192,16 @@ test('trap runtime has no network, forms, or submission path', () => {
   assert.match(html, /ScoutAITrap/);
   assert.match(html, /class="skip"/);
   assert.match(html, /:focus-visible/);
+});
+
+test('per-player sliders are built once, then updated in place so a drag or arrow key keeps focus', () => {
+  // The input handlers re-render on every step; rebuilding the rows would replace the slider under the pointer.
+  const flat = html.replace(/\s+/g, ' ');
+  [['valRoot', 'valueSliders', 'v-'], ['atticRoot', 'atticValueSliders', 'a-']].forEach(([name, id, prefix]) => {
+    assert.ok(flat.includes('const ' + name + " = document.getElementById('" + id + "');"), name + ' is looked up once');
+    assert.ok(flat.includes('if (!' + name + '.childElementCount) { ' + name + '.innerHTML ='), id + ' is built only when empty');
+    assert.ok(flat.includes("syncRange('" + prefix + "' + player.id"), id + ' is updated in place');
+    assert.ok(!flat.includes("getElementById('" + id + "').innerHTML"), id + ' is never rebuilt wholesale');
+  });
+  assert.match(html, /aria-valuenow="' \+ val \+ '"/);
 });

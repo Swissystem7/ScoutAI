@@ -295,6 +295,24 @@ test('position normalization rescales components inside a position group', () =>
   assert.ok(normHigh.components.grit > normLow.components.grit);
 });
 
+test('position percentiles share tied ranks instead of crediting a tie as beaten', () => {
+  const keeper = (name, shotXgSum) => ({
+    name, team: name, position: 'Goalkeeper', totalMinutesProxy: 360,
+    pressures: 0, tackles: 0, interceptions: 0, defensiveActions: 0, progressiveActions: 0,
+    keyPasses: 0, passesCompleted: 100, shotXgSum, boxTouches: 0, shotsOnTarget: 0
+  });
+  const spec = { grit: 0, involvement: 0, clutch: 100, minMinutes: 90, normalizePosition: true };
+  const rows = applyMetric({ players: [keeper('A', 0), keeper('B', 0), keeper('C', 0), keeper('D', 0.4)] }, spec);
+  const clutch = name => rows.find(row => row.name === name).components.clutch;
+  assert.equal(clutch('D'), 100);
+  assert.equal(clutch('A'), 33.3);
+  assert.equal(clutch('A'), clutch('C'));
+  const level = applyMetric({ players: [keeper('A', 0), keeper('B', 0)] }, spec);
+  assert.ok(level.every(row => row.components.clutch === 50));
+  const lone = applyMetric({ players: [keeper('A', 0.4)] }, spec);
+  assert.equal(lone[0].components.clutch, 50);
+});
+
 test('permalink hash encodes and decodes metric state', () => {
   const empty = parseMetricHash('');
   assert.deepEqual(normalizeMetricSpec(empty), normalizeMetricSpec(DEFAULT_METRIC));
@@ -742,4 +760,20 @@ test('curriculum and explorer stay Hebrew RTL and keep skip/focus semantics', ()
   assert.match(html, /id="splitSelect"/);
   assert.match(html, /aria-label="צעדי השיעור המלא"/);
   assert.doesNotMatch(html + '\n' + runtime, /https?:\/\//);
+});
+
+test('a partial or malformed shared link keeps the default weights instead of zeroing them or throwing', () => {
+  const partial = parseMetricHash('#sel=Kane');
+  assert.equal(partial.grit, DEFAULT_METRIC.grit);
+  assert.equal(partial.involvement, DEFAULT_METRIC.involvement);
+  assert.equal(partial.clutch, DEFAULT_METRIC.clutch);
+  assert.equal(partial.minMinutes, DEFAULT_METRIC.minMinutes);
+  assert.equal(partial.selectedId, 'Kane');
+  const explicitZero = parseMetricHash('#g=0&i=100&c=0&min=0');
+  assert.equal(explicitZero.grit, 0);
+  assert.equal(explicitZero.involvement, 100);
+  assert.equal(explicitZero.minMinutes, 0);
+  const truncated = parseMetricHash('#g=60&sel=M%FC');
+  assert.equal(truncated.grit, 60);
+  assert.equal(truncated.selectedId, 'M%FC');
 });

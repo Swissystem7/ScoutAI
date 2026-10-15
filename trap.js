@@ -183,10 +183,11 @@
     })
   ]);
 
-  function defaultValues(players, fill) {
+  function defaultValues(players, fill, mode) {
     const values = {};
+    const n = mode === 'attic' ? 50 : (fill == null ? 50 : clamp(fill, 0, 100));
     (players || []).forEach(function (player) {
-      values[player.id] = fill == null ? 50 : clamp(fill, 0, 100);
+      values[player.id] = n;
     });
     return values;
   }
