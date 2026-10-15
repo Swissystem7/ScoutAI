@@ -169,18 +169,31 @@
   // place. Reported once per file so the OT bucket is never a surprise.
   function auditPositions(players) {
     const unknown = [];
+    const technical = [];
     (players || []).forEach(function (row) {
       const text = String(row && row.position || '').trim();
-      if (!text || positionGroup(text) !== 'OT' || unknown.indexOf(text) >= 0) return;
-      unknown.push(text);
+      if (!text) return;
+      const group = positionGroup(text);
+      const bucket = group === 'OT' ? unknown : (group === 'UT' ? technical : null);
+      if (!bucket || bucket.indexOf(text) >= 0) return;
+      bucket.push(text);
     });
-    if (!unknown.length) return [];
-    const shown = unknown.slice(0, 8).join(', ') + (unknown.length > 8 ? ' ועוד ' + (unknown.length - 8) : '');
-    return ['עמדות שלא זוהו ונחשבות OT (ינורמלו רק זו מול זו): ' + shown +
-      ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית'];
+    const notes = [];
+    if (unknown.length) {
+      notes.push('עמדות שלא זוהו ונחשבות OT (ינורמלו רק זו מול זו): ' + shownLabels(unknown) +
+        ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית');
+    }
+    if (technical.length) {
+      notes.push('עמדות שסומנו UT (technical/unknown, ינורמלו רק זו מול זו): ' + shownLabels(technical));
+    }
+    return notes;
   }
 
-  const POSITION_FILTER_GROUPS = Object.freeze(['GK', 'DF', 'MF', 'FW', 'OT']);
+  function shownLabels(labels) {
+    return labels.slice(0, 8).join(', ') + (labels.length > 8 ? ' ועוד ' + (labels.length - 8) : '');
+  }
+
+  const POSITION_FILTER_GROUPS = Object.freeze(['GK', 'DF', 'MF', 'FW', 'OT', 'UT']);
 
   function rowPositionGroup(row) {
     return (row && row.positionGroup) || positionGroup(row && row.position);
