@@ -1922,6 +1922,48 @@
     return { errors: errors, warnings: warnings };
   }
 
+  // Spreadsheet exports end with aggregate rows: FBref writes "Squad Total"
+  // and "Opponent Total" under the Player column, Excel users add Total /
+  // Average / סה"כ. Such a row carries the whole team's minutes and counts
+  // under a player name, so it loads as a player, tops every count and ranks
+  // first - with no error, because every cell is a valid number. It is not a
+  // player: drop it and say so once. Matching is exact on the trimmed,
+  // lower-cased name with quote marks removed, plus any name ending in
+  // " total", so a surname like Totaro or Mean is never touched.
+  const HEBREW_GERESH = String.fromCharCode(0x05F3);
+  const HEBREW_GERSHAYIM = String.fromCharCode(0x05F4);
+  const SUMMARY_ROW_LABELS = Object.freeze(['total', 'totals', 'sum', 'subtotal', 'grand total', 'squad total',
+    'opponent total', 'team total', 'average', 'avg', 'mean', 'median',
+    'סהכ', 'סך הכל', 'סך הכול', 'סיכום', 'ממוצע', 'חציון']);
+  const SUMMARY_QUOTES_RE = new RegExp('["\'' + HEBREW_GERESH + HEBREW_GERSHAYIM + ':.]', 'g');
+
+  // True when a name cell is an aggregate label rather than a player.
+  function isSummaryRowName(name) {
+    const plain = String(name == null ? '' : name).toLowerCase()
+      .replace(SUMMARY_QUOTES_RE, '').replace(/\s+/g, ' ').trim();
+    if (!plain) return false;
+    return SUMMARY_ROW_LABELS.indexOf(plain) >= 0 || /\stotal$/.test(plain);
+  }
+
+  // Remove aggregate rows from a player list and report the labels dropped.
+  function stripSummaryRows(players) {
+    const kept = [];
+    const dropped = [];
+    const counts = {};
+    (players || []).forEach(function (row) {
+      if (!row || !isSummaryRowName(row.name)) {
+        kept.push(row);
+        return;
+      }
+      const label = String(row.name).trim();
+      if (!counts[label]) { counts[label] = 0; dropped.push(label); }
+      counts[label] += 1;
+    });
+    const warnings = dropped.length ? ['שורות סיכום דולגו (אינן שחקנים): ' +
+      dropped.map(function (label) { return counts[label] > 1 ? label + ' ×' + counts[label] : label; }).join(', ')] : [];
+    return { players: kept, warnings: warnings };
+  }
+
   // Header spellings a user sheet may carry for a column the lab reads.
   // Matching ignores case, spaces, underscores, hyphens and dots, so
   // Key Passes, key_passes and KEY-PASSES all load as keyPasses. The short
@@ -2077,6 +2119,47 @@
     return lines.join('\n') + '\n';
   }
 
+  // FBref's "Get table as CSV" output is the layout most of the header
+  // aliases exist for, and it is not a plain sheet: a group-header line
+  // (",,,,Playing Time,Playing Time,Performance,...") sits above the real
+  // header, and the header line itself is repeated every 25 players. Read
+  // as a plain CSV the file failed with "no name column", and after a
+  // manual fix every repeated header loaded as a player called "Player"
+  // with an error per copy. The header is now looked for among the first
+  // few lines (the first line whose cells resolve to a name column), the
+  // lines above it are skipped and shown once, and a data row equal to the
+  // header is dropped and counted once. A file whose first lines really
+  // have no name column still fails with the same message as before.
+  const CSV_HEADER_SCAN = 5;
+
+  // Index of the header record within the first CSV_HEADER_SCAN records:
+  // the first one that resolves to a name column, or -1.
+  function findCsvHeaderRow(lines) {
+    const limit = Math.min(lines.length, CSV_HEADER_SCAN);
+    for (let i = 0; i < limit; i += 1) {
+      if (lines[i].map(resolveCsvHeader).indexOf('name') >= 0) return i;
+    }
+    return -1;
+  }
+
+  // True when a data row is a copy of the header row (case-insensitive,
+  // trailing empty cells ignored on both sides).
+  function isRepeatedHeaderRow(cells, header) {
+    const width = usedWidth(cells);
+    if (width !== usedWidth(header)) return false;
+    for (let i = 0; i < width; i += 1) {
+      if (String(cells[i]).toLowerCase() !== String(header[i]).toLowerCase()) return false;
+    }
+    return true;
+  }
+
+  // Short preview of a skipped preamble line: its non-empty cells.
+  function previewCsvLine(cells) {
+    const filled = cells.filter(function (cell) { return cell !== ''; });
+    const shown = filled.slice(0, 4).join(' | ');
+    return filled.length > 4 ? shown + ' | …' : (shown || '(ריק)');
+  }
+
   function parseUserCsv(text) {
     const detected = detectCsvDelimiter(text);
     const delimiter = detected.delimiter;
@@ -2091,9 +2174,6 @@
       }
       return n;
     }
-    // Line numbers in messages are file lines: a sep= hint line pushes the
-    // header to line 2 and the first player to line 3.
-    const firstDataLine = detected.offset ? 3 : 2;
     let lines = parseCsvRecords(text, { delimiter: delimiter });
     // An unclosed quote turns the rest of the file into one cell, so every
     // player after it would vanish into a single bogus name. Drop that
@@ -2106,8 +2186,16 @@
       if (lines.length < 2) return { ok: false, errors: quoteErrors, players: [] };
     }
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
+    // The header is normally line 1; see findCsvHeaderRow for FBref exports.
+    const headerIdx = Math.max(findCsvHeaderRow(lines), 0);
+    const header = lines[headerIdx];
+    // Line numbers in messages are file lines: a sep= hint line pushes the
+    // header to line 2 and the first player to line 3; skipped preamble
+    // lines push both further down.
+    const headerLine = (detected.offset ? 2 : 1) + headerIdx;
+    const firstDataLine = headerLine + 1;
     // Column keys per header cell (null = not read); see resolveCsvHeader.
-    const headers = lines[0].map(resolveCsvHeader);
+    const headers = header.map(resolveCsvHeader);
     const nameIdx = headers.indexOf('name');
     if (nameIdx < 0) {
       return {
@@ -2123,32 +2211,43 @@
     });
     const players = [];
     const errors = quoteErrors;
-    const warnings = auditCsvHeaders(lines[0]);
+    const warnings = [];
+    if (headerIdx > 0) {
+      warnings.push('הכותרת נמצאה בשורה ' + headerLine + '; ' +
+        (headerIdx === 1 ? 'השורה שלפניה דולגה' : headerIdx + ' השורות שלפניה דולגו') +
+        ' (כותרת-על של FBref או הערה): ' + lines.slice(0, headerIdx).map(previewCsvLine).join(' // '));
+    }
+    auditCsvHeaders(header).forEach(function (w) { warnings.push(w); });
+    const repeatedHeaderLines = [];
     // A row wider than the header is almost always a name with an unquoted
     // delimiter ("Silva, Thiago" saved from a text editor): every stat after
     // it lands one column to the right, so the player would be scored on
     // the wrong numbers. Skip and say so. Trailing empty cells (Excel pads
     // "name,minutes,,,") are not a shift and are ignored on both sides.
-    const headerWidth = usedWidth(lines[0]);
-    lines.slice(1).forEach(function (cells, i) {
+    const headerWidth = usedWidth(header);
+    lines.slice(headerIdx + 1).forEach(function (cells, i) {
+      const lineNo = i + firstDataLine;
+      if (isRepeatedHeaderRow(cells, header)) {
+        repeatedHeaderLines.push(lineNo);
+        return;
+      }
       const width = usedWidth(cells);
       if (width > headerWidth) {
-        errors.push('שורה ' + (i + firstDataLine) + ': ' + width + ' תאים מול ' + headerWidth +
+        errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
           ' כותרות — כנראה מפריד לא מצוטט בתוך שם; השורה דולגה');
         return;
       }
       const name = cells[nameIdx];
       if (!name) {
-        errors.push('שורה ' + (i + firstDataLine) + ': חסר שם');
+        errors.push('שורה ' + lineNo + ': חסר שם');
         return;
       }
       const row = { name: name };
-      const lineNo = i + firstDataLine;
       if (width < headerWidth) {
         // Short row: keep the player, but say which columns never arrived so
         // a blank stat is not mistaken for a measured zero.
         errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
-          ' כותרות — ' + lines[0].slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
+          ' כותרות — ' + header.slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
       }
       const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
       if (csvMissingMarker(minutesRaw)) {
@@ -2185,6 +2284,11 @@
     if (grouped.length) {
       warnings.push('מספרים עם מפריד אלפים נקראו כשלמים: ' + grouped.slice(0, 3).join(', ') +
         (grouped.length > 3 ? ' ועוד ' + (grouped.length - 3) : ''));
+    }
+    if (repeatedHeaderLines.length) {
+      warnings.push('שורת הכותרת חוזרת בתוך הקובץ ' +
+        (repeatedHeaderLines.length === 1 ? 'פעם אחת (שורה ' : repeatedHeaderLines.length + ' פעמים (שורות ') +
+        repeatedHeaderLines.join(', ') + ') כמו בייצוא FBref — העותקים דולגו');
     }
     if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [], warnings: warnings };
     return { ok: true, errors: errors, warnings: warnings, players: players };
@@ -2266,11 +2370,18 @@
         provenance: null
       };
     }
-    const players = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    const named = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    const summary = stripSummaryRows(named);
+    const players = summary.players;
     if (!players.length) {
-      return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
+      return {
+        ok: false,
+        errors: [named.length ? 'כל השורות הן שורות סיכום (Total / סה"כ) — אין שחקנים' : 'אין שחקנים עם שדה name'],
+        players: [],
+        provenance: null
+      };
     }
-    parseWarnings = parseWarnings.concat(stripMissingMarkers(players));
+    parseWarnings = parseWarnings.concat(summary.warnings).concat(stripMissingMarkers(players));
     players.forEach(function (row) {
       invalidNumericFields(row).forEach(function (bad) {
         parseErrors.push('שחקן «' + row.name + '»: ' + bad.key + '=«' + String(bad.value) + '» אינו מספר — נחשב כחסר');
@@ -2352,6 +2463,9 @@
     auditMinutesAndSigns: auditMinutesAndSigns,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
+    findCsvHeaderRow: findCsvHeaderRow,
+    isRepeatedHeaderRow: isRepeatedHeaderRow,
+    CSV_HEADER_SCAN: CSV_HEADER_SCAN,
     auditCsvHeaders: auditCsvHeaders,
     auditPositions: auditPositions,
     POSITION_CODES: POSITION_CODES,
@@ -2364,6 +2478,9 @@
     csvMissingMarker: csvMissingMarker,
     stripMissingMarkers: stripMissingMarkers,
     MISSING_MARKERS: MISSING_MARKERS,
+    isSummaryRowName: isSummaryRowName,
+    stripSummaryRows: stripSummaryRows,
+    SUMMARY_ROW_LABELS: SUMMARY_ROW_LABELS,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,
