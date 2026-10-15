@@ -141,7 +141,8 @@
     { group: 'GK', re: /goalkeeper|keeper|portero|torwart|שוער/i },
     { group: 'MF', re: /midfield|mediocampista|mittelfeld|קשר/i },
     { group: 'DF', re: /back|defen|defensa|verteidiger|libero|sweeper|מגן|בלם/i },
-    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i }
+    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i },
+    { group: 'UT', re: /technical|unknown/i }
   ]);
 
   function positionGroup(position) {
@@ -163,15 +164,52 @@
   // place. Reported once per file so the OT bucket is never a surprise.
   function auditPositions(players) {
     const unknown = [];
+    const technical = [];
     (players || []).forEach(function (row) {
       const text = String(row && row.position || '').trim();
-      if (!text || positionGroup(text) !== 'OT' || unknown.indexOf(text) >= 0) return;
-      unknown.push(text);
+      if (!text) return;
+      const group = positionGroup(text);
+      const bucket = group === 'OT' ? unknown : (group === 'UT' ? technical : null);
+      if (!bucket || bucket.indexOf(text) >= 0) return;
+      bucket.push(text);
     });
-    if (!unknown.length) return [];
-    const shown = unknown.slice(0, 8).join(', ') + (unknown.length > 8 ? ' ועוד ' + (unknown.length - 8) : '');
-    return ['עמדות שלא זוהו ונחשבות OT (ינורמלו רק זו מול זו): ' + shown +
-      ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית'];
+    const notes = [];
+    if (unknown.length) {
+      notes.push('עמדות שלא זוהו ונחשבות OT (ינורמלו רק זו מול זו): ' + shownLabels(unknown) +
+        ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית');
+    }
+    if (technical.length) {
+      notes.push('עמדות שסומנו UT (technical/unknown, ינורמלו רק זו מול זו): ' + shownLabels(technical));
+    }
+    return notes;
+  }
+
+  function shownLabels(labels) {
+    return labels.slice(0, 8).join(', ') + (labels.length > 8 ? ' ועוד ' + (labels.length - 8) : '');
+  }
+
+  const POSITION_FILTER_GROUPS = Object.freeze(['GK', 'DF', 'MF', 'FW', 'OT', 'UT']);
+
+  function rowPositionGroup(row) {
+    return (row && row.positionGroup) || positionGroup(row && row.position);
+  }
+
+  function filterByPosition(players, selectedPosition) {
+    const list = Array.isArray(players) ? players : [];
+    const sel = String(selectedPosition == null ? '' : selectedPosition).trim();
+    if (!sel) return list.slice();
+    const upper = sel.toUpperCase();
+    if (POSITION_FILTER_GROUPS.indexOf(upper) >= 0) {
+      return list.filter(function (row) { return row && rowPositionGroup(row) === upper; });
+    }
+    return list.filter(function (row) {
+      if (!row) return false;
+      const pos = String(row.position || '').trim();
+      if (!pos) return false;
+      if (pos.toUpperCase() === upper) return true;
+      const tokens = pos.toUpperCase().split(/[^A-Z]+/);
+      return tokens.indexOf(upper) >= 0;
+    });
   }
 
   function per90(value, minutes) {
@@ -228,13 +266,18 @@
     };
   }
 
+  // Mid-rank percentile: the lowest value is 0, the highest 100, and tied
+  // values share the middle of their ranks. Counting ties as "below" gave a
+  // group of 38 keepers with zero clutch a 95th percentile each.
   function percentile(value, peers) {
-    if (!peers.length) return 50;
+    if (peers.length < 2) return 50;
     let below = 0;
+    let equal = 0;
     for (let i = 0; i < peers.length; i += 1) {
-      if (peers[i] <= value) below += 1;
+      if (peers[i] < value) below += 1;
+      else if (peers[i] === value) equal += 1;
     }
-    return round1(below / peers.length * 100);
+    return round1((below + Math.max(equal - 1, 0) / 2) / (peers.length - 1) * 100);
   }
 
   function normalizeByPosition(rows) {
@@ -468,7 +511,11 @@
       let rows = scorePrepared(players, metric);
       if (baselineSpec) rows = attachDeltas(rows, scorePrepared(players, baselineSpec));
       const selected = rows.find(function (row) { return row.id === metric.selectedId; }) || rows[0] || null;
-      if (selected && !metric.selectedId) metric.selectedId = selected.id;
+      // A selected id that no longer clears the minutes floor falls back to
+      // the first row; the spec must name that row too, or the table has no
+      // highlighted row and the share link names a player the lesson is not
+      // showing. With no rows at all the id is kept for when the floor drops.
+      if (selected) metric.selectedId = selected.id;
       const compared = findPrepared(rows, players, metric.compareId);
       const fragility = fragilityFromPrepared(players, metric, 10);
       const layer = { provenance: provenance, source: source };
@@ -555,6 +602,15 @@
     return parts.join('&');
   }
 
+  // A hand-trimmed or truncated link ("#sel=M%FC") must not throw and blank the page.
+  function safeDecode(text) {
+    try {
+      return decodeURIComponent(text);
+    } catch (err) {
+      return text;
+    }
+  }
+
   function parseMetricHash(hash) {
     const text = String(hash || '').replace(/^#/, '');
     if (!text) return normalizeMetricSpec(DEFAULT_METRIC);
@@ -562,13 +618,17 @@
     text.split('&').forEach(function (pair) {
       const parts = pair.split('=');
       if (parts.length < 2) return;
-      params[decodeURIComponent(parts[0])] = decodeURIComponent(parts.slice(1).join('='));
+      params[safeDecode(parts[0])] = safeDecode(parts.slice(1).join('='));
     });
+    // A key the link leaves out keeps its default, so "#sel=Kane" does not zero every weight.
+    function pick(key, fallback) {
+      return params[key] === undefined || params[key] === '' ? fallback : params[key];
+    }
     return normalizeMetricSpec({
-      grit: params.g,
-      involvement: params.i,
-      clutch: params.c,
-      minMinutes: params.min,
+      grit: pick('g', DEFAULT_METRIC.grit),
+      involvement: pick('i', DEFAULT_METRIC.involvement),
+      clutch: pick('c', DEFAULT_METRIC.clutch),
+      minMinutes: pick('min', DEFAULT_METRIC.minMinutes),
       normalizePosition: params.npos === '1' || params.npos === 'true',
       selectedId: params.sel || '',
       compareId: params.cmp || '',
@@ -1583,6 +1643,53 @@
     return next;
   }
 
+  function isDerivedLabView(value) {
+    return !!(value && typeof value === 'object' && value.spec && value.exercise &&
+      Array.isArray(value.curriculum));
+  }
+
+  function exercisesFromLessons(lessons, liveExercise) {
+    const exercises = (lessons || [])
+      .filter(function (lesson) { return lesson && lesson.exercise; })
+      .map(function (lesson) {
+        return {
+          lessonId: lesson.id,
+          title: lesson.title,
+          prompt: lesson.exercise
+        };
+      });
+    if (!exercises.length && liveExercise) {
+      exercises.push({
+        lessonId: liveExercise.id,
+        title: liveExercise.title,
+        prompt: liveExercise.prompt
+      });
+    }
+    return exercises;
+  }
+
+  function buildStructuredCourse(input, spec) {
+    const view = isDerivedLabView(input)
+      ? input
+      : createStore(input).derive(normalizeMetricSpec(spec || DEFAULT_METRIC));
+    const lessons = view.curriculum || evaluateCurriculum({
+      spec: view.spec,
+      selected: view.selected,
+      explorer: view.explorer,
+      validation: view.validation,
+      exercise: view.exercise,
+      answers: {}
+    });
+    return {
+      course: {
+        id: 'lesson-first',
+        lessons: lessons,
+        exercises: exercisesFromLessons(lessons, view.exercise)
+      },
+      sharedExercise: view.exercise
+    };
+  }
+
   function fragilityReport(dataset, spec, delta) {
     return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
@@ -1621,6 +1728,9 @@
   // quote ("") and even a line break; Excel writes all three when it exports a
   // sheet, so a one-line splitter silently mangles names like "Silva, Thiago".
   // The delimiter is detected from the header unless options.delimiter is set.
+  // A quote that never closes swallows the rest of the file into one cell; the
+  // result then carries a non-enumerable `unclosedQuote` ({ line, record })
+  // naming the file line where that quote opened.
   function parseCsvRecords(text, options) {
     const opts = options || {};
     const detected = detectCsvDelimiter(text);
@@ -1631,6 +1741,7 @@
     let cur = '';
     let quoted = false;
     let fieldStart = true;
+    let quoteStart = -1;
     for (let i = 0; i < src.length; i += 1) {
       const ch = src[i];
       if (quoted) {
@@ -1646,6 +1757,7 @@
       }
       if (ch === '"' && fieldStart) {
         quoted = true;
+        quoteStart = i;
         fieldStart = false;
       } else if (ch === delimiter) {
         row.push(cur.trim());
@@ -1665,9 +1777,16 @@
     }
     row.push(cur.trim());
     records.push(row);
-    return records.filter(function (cells) {
+    const kept = records.filter(function (cells) {
       return cells.some(function (cell) { return cell !== ''; });
     });
+    if (quoted) {
+      const breaks = src.slice(0, quoteStart).match(/\r\n|\r|\n/g) || [];
+      Object.defineProperty(kept, 'unclosedQuote', {
+        value: { line: breaks.length + (detected.offset ? 2 : 1), record: row }
+      });
+    }
+    return kept;
   }
 
   // Numeric columns a user file may carry. A cell that is not a plain number
@@ -1678,12 +1797,55 @@
   // decimalComma: in a `;`-delimited file the comma cannot be a separator, so
   // "12,5" is unambiguously twelve and a half and is accepted. In a comma file
   // it stays an error (the tokenizer would have split it anyway).
+  // Group marks spreadsheets put between thousands: space, the no-break and
+  // narrow no-break spaces French/Swiss Excel writes, and the Swiss apostrophe.
+  const GROUP_MARKS = [' ', "'", String.fromCharCode(0xA0), String.fromCharCode(0x202F)];
+  const GROUP_CLASS = '[' + GROUP_MARKS.join('') + ']';
+  const GROUPED_RE = new RegExp('^[-+]?[1-9]\\d{0,2}(?:' + GROUP_CLASS + '\\d{3})+(?:[.,]\\d+)?$');
+  const GROUP_STRIP_RE = new RegExp(GROUP_CLASS, 'g');
+  const UNICODE_MINUS = String.fromCharCode(0x2212);
+
+  // Cells a sheet uses for "no value": FBref writes "-" for a stat a player
+  // has no entry in, Excel writes #N/A, exports write NA / null / nan. They
+  // are missing values, not typos, so they are counted once per column
+  // (see stripMissingMarkers) instead of raising one error per row.
+  const MISSING_MARKERS = Object.freeze(['-', '--', String.fromCharCode(0x2013), String.fromCharCode(0x2014),
+    'n/a', 'na', '#n/a', 'null', 'nan', 'none', '?']);
+
+  function csvMissingMarker(raw) {
+    return MISSING_MARKERS.indexOf(String(raw == null ? '' : raw).trim().toLowerCase()) >= 0;
+  }
+
+  // "1,234" from a comma file, "1 234" / "1'234" / "1.234.567;" from a
+  // European one and the Unicode minus Excel pastes all mean plain numbers.
+  // "1,234" in a `;` file is a decimal; "12,5" in a comma file stays unknown
+  // (a comma there is a separator, see the messy.csv test).
   function csvNumber(raw, decimalComma) {
     let text = String(raw == null ? '' : raw).trim();
     if (text === '') return null;
-    if (decimalComma && /^-?\d+,\d+$/.test(text)) text = text.replace(',', '.');
+    if (text.charAt(0) === UNICODE_MINUS) text = '-' + text.slice(1);
+    if (GROUPED_RE.test(text)) {
+      text = text.replace(GROUP_STRIP_RE, '');
+    } else if (!decimalComma && /^[-+]?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$/.test(text)) {
+      text = text.replace(/,/g, '');
+    } else if (decimalComma && /^[-+]?[1-9]\d{0,2}(?:\.\d{3}){2,}(?:,\d+)?$/.test(text)) {
+      text = text.replace(/\./g, '');
+    }
+    if (decimalComma && /^[-+]?\d+,\d+$/.test(text)) text = text.replace(',', '.');
     const n = Number(text);
     return Number.isFinite(n) ? n : null;
+  }
+
+  // Excel with "Use 1000 separator" and FBref's Min column write 2970 as
+  // "2,970", quoted in a comma file. Only strict groups of three after a
+  // non-zero lead count, so "12,5" stays an error and "0,456" (a decimal
+  // comma, not a thousand) is never read as 456. Not used in `;` files,
+  // where the comma is the decimal mark.
+  const THOUSANDS_GROUPED = /^-?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$/;
+
+  function groupedNumber(raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    return THOUSANDS_GROUPED.test(text) ? Number(text.replace(/,/g, '')) : null;
   }
 
   // Number of cells up to the last non-empty one.
@@ -1691,6 +1853,26 @@
     let n = cells.length;
     while (n > 0 && cells[n - 1] === '') n -= 1;
     return n;
+  }
+
+  // Remove "-" / N/A style cells from every player's numeric fields and say
+  // once, per column, how many were blanked. A blank is not a measured 0:
+  // the column audit and the per-row width message already explain that.
+  function stripMissingMarkers(players) {
+    const counts = {};
+    const order = [];
+    (players || []).forEach(function (row) {
+      if (!row) return;
+      NUMERIC_USER_FIELDS.forEach(function (key) {
+        if (typeof row[key] !== 'string' || !csvMissingMarker(row[key])) return;
+        delete row[key];
+        if (!counts[key]) { counts[key] = 0; order.push(key); }
+        counts[key] += 1;
+      });
+    });
+    if (!order.length) return [];
+    return ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: ' +
+      order.map(function (key) { return key + ' ×' + counts[key]; }).join(', ')];
   }
 
   // Shared with the JSON path: list the numeric fields of one player row
@@ -1702,6 +1884,155 @@
       if (typeof row[key] === 'object' || csvNumber(row[key]) === null) bad.push({ key: key, value: row[key] });
     });
     return bad;
+  }
+
+  // Minutes drive every per-90 component and the minutes threshold, so a
+  // file without a readable minutes value scores every player 0 and ranks
+  // nobody - with no error, because nothing is malformed. Say so. A
+  // negative minutes value or a negative count cannot be a measurement
+  // (a stray Unicode minus or a formula export), so it is dropped like a
+  // non-numeric cell and reported per player. Zero minutes is a legal
+  // value (an unused squad member) and is only counted, not removed.
+  function auditMinutesAndSigns(players) {
+    const errors = [];
+    const warnings = [];
+    let withMinutes = 0;
+    let zeroMinutes = 0;
+    (players || []).forEach(function (row) {
+      if (!row) return;
+      // CSV sets both minutes keys to the same value: report it once.
+      const sameMinutes = row.totalMinutesProxy != null && Number(row.totalMinutesProxy) === Number(row.minutes);
+      NUMERIC_USER_FIELDS.forEach(function (key) {
+        const n = Number(row[key]);
+        if (row[key] == null || row[key] === '' || !Number.isFinite(n) || n >= 0) return;
+        if (key !== 'totalMinutesProxy' || !sameMinutes) errors.push('שחקן «' + row.name + '»: ' + key + '=«' + String(row[key]) + '» שלילי — נחשב כחסר');
+        delete row[key];
+      });
+      const minutes = Number(row.totalMinutesProxy != null && row.totalMinutesProxy !== '' ? row.totalMinutesProxy : row.minutes);
+      if ((row.totalMinutesProxy == null || row.totalMinutesProxy === '') && (row.minutes == null || row.minutes === '')) return;
+      if (!Number.isFinite(minutes)) return;
+      withMinutes += 1;
+      if (minutes === 0) zeroMinutes += 1;
+    });
+    if (players && players.length && !withMinutes) {
+      warnings.push('אף שחקן בלי דקות (עמודת minutes / דקות / Min חסרה או ריקה) — כל הרכיבים ל-90 יהיו 0 ואף שחקן לא יעבור את סף הדקות');
+    } else if (zeroMinutes) {
+      warnings.push((zeroMinutes === 1 ? 'שחקן אחד' : zeroMinutes + ' שחקנים') + ' עם 0 דקות — מקבל 0 בכל רכיב ולא עובר את סף הדקות');
+    }
+    return { errors: errors, warnings: warnings };
+  }
+
+  // Spreadsheet exports end with aggregate rows: FBref writes "Squad Total"
+  // and "Opponent Total" under the Player column, Excel users add Total /
+  // Average / סה"כ. Such a row carries the whole team's minutes and counts
+  // under a player name, so it loads as a player, tops every count and ranks
+  // first - with no error, because every cell is a valid number. It is not a
+  // player: drop it and say so once. Matching is exact on the trimmed,
+  // lower-cased name with quote marks removed, plus any name ending in
+  // " total", so a surname like Totaro or Mean is never touched.
+  const HEBREW_GERESH = String.fromCharCode(0x05F3);
+  const HEBREW_GERSHAYIM = String.fromCharCode(0x05F4);
+  const SUMMARY_ROW_LABELS = Object.freeze(['total', 'totals', 'sum', 'subtotal', 'grand total', 'squad total',
+    'opponent total', 'team total', 'average', 'avg', 'mean', 'median',
+    'סהכ', 'סך הכל', 'סך הכול', 'סיכום', 'ממוצע', 'חציון']);
+  const SUMMARY_QUOTES_RE = new RegExp('["\'' + HEBREW_GERESH + HEBREW_GERSHAYIM + ':.]', 'g');
+
+  // True when a name cell is an aggregate label rather than a player.
+  function isSummaryRowName(name) {
+    const plain = String(name == null ? '' : name).toLowerCase()
+      .replace(SUMMARY_QUOTES_RE, '').replace(/\s+/g, ' ').trim();
+    if (!plain) return false;
+    return SUMMARY_ROW_LABELS.indexOf(plain) >= 0 || /\stotal$/.test(plain);
+  }
+
+  // Remove aggregate rows from a player list and report the labels dropped.
+  function stripSummaryRows(players) {
+    const kept = [];
+    const dropped = [];
+    const counts = {};
+    (players || []).forEach(function (row) {
+      if (!row || !isSummaryRowName(row.name)) {
+        kept.push(row);
+        return;
+      }
+      const label = String(row.name).trim();
+      if (!counts[label]) { counts[label] = 0; dropped.push(label); }
+      counts[label] += 1;
+    });
+    const warnings = dropped.length ? ['שורות סיכום דולגו (אינן שחקנים): ' +
+      dropped.map(function (label) { return counts[label] > 1 ? label + ' ×' + counts[label] : label; }).join(', ')] : [];
+    return { players: kept, warnings: warnings };
+  }
+
+  // The same player name twice in one file is legal and loads as two rows
+  // (the store gives the second id a #2 suffix), but it is rarely what the
+  // user meant: a sheet pasted twice, or an FBref export in which a player
+  // who moved mid-season appears once per squad. Both rows rank separately,
+  // each on part of the player's minutes, with no error, because every cell
+  // is valid. Say so once, by name: an identical copy (every read field
+  // equal) is called a copy, two rows in one team are listed with a count,
+  // two teams are listed by team. Nothing is merged or dropped - which row
+  // is right is the user's call, in the file. Names match ignoring case and
+  // runs of spaces, so "cohen" and "Cohen " are the same player.
+  function plainPlayerName(name) {
+    return String(name == null ? '' : name).toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  // True when two player rows carry the same value in every field the lab reads.
+  function sameUserRow(a, b) {
+    const keys = USER_DATASET_COLUMNS.concat(['totalMinutesProxy']);
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      const x = a[key] == null || a[key] === '' ? '' : String(a[key]).trim();
+      const y = b[key] == null || b[key] === '' ? '' : String(b[key]).trim();
+      if (x !== y) return false;
+    }
+    return true;
+  }
+
+  function auditDuplicateNames(players) {
+    const groups = {};
+    const order = [];
+    (players || []).forEach(function (row) {
+      if (!row) return;
+      const key = plainPlayerName(row.name);
+      if (!key) return;
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(row);
+    });
+    const copies = [];
+    const sameTeam = [];
+    const teams = [];
+    order.forEach(function (key) {
+      const rows = groups[key];
+      if (rows.length < 2) return;
+      const label = String(rows[0].name).trim();
+      const teamNames = [];
+      rows.forEach(function (row) {
+        const team = row.team == null ? '' : String(row.team).trim();
+        if (teamNames.indexOf(team) < 0) teamNames.push(team);
+      });
+      if (teamNames.length > 1) {
+        teams.push(label + ' (' + teamNames.map(function (t) { return t || '—'; }).join(', ') + ')');
+        return;
+      }
+      const identical = rows.every(function (row) { return sameUserRow(row, rows[0]); });
+      (identical ? copies : sameTeam).push(label + ' ×' + rows.length);
+    });
+    const warnings = [];
+    if (copies.length) {
+      warnings.push('שורות זהות (אותו שחקן, אותם ערכים): ' + copies.join(', ') +
+        ' — כל עותק נטען ומדורג בנפרד; מחקו את העותק בקובץ');
+    }
+    if (sameTeam.length) {
+      warnings.push('שם שחקן חוזר באותה קבוצה: ' + sameTeam.join(', ') +
+        ' — כל שורה נטענת ומדורגת בנפרד (המזהה השני מקבל #2), לא מאוחדת');
+    }
+    if (teams.length) {
+      warnings.push('שם שחקן חוזר בקבוצות שונות: ' + teams.join('; ') +
+        ' — כנראה מעבר באמצע עונה או שני שחקנים; כל שורה מדורגת בנפרד על חלק מהדקות, לא מאוחדת');
+    }
+    return warnings;
   }
 
   // Header spellings a user sheet may carry for a column the lab reads.
@@ -1737,6 +2068,20 @@
     }
     if (plain === 'totalminutesproxy') return 'totalMinutesProxy';
     return Object.prototype.hasOwnProperty.call(CSV_HEADER_ALIASES, plain) ? CSV_HEADER_ALIASES[plain] : null;
+  }
+
+  // Most FBref tables (Defensive Actions, Possession, Passing, Shooting…)
+  // carry no Min column at all - only "90s", the minutes divided by 90 and
+  // rounded to a tenth. Read as a plain sheet such a file loaded with no
+  // minutes, every per-90 component was 0 and nobody passed the minutes
+  // threshold. 90s is not a header alias (its value needs ×90), so it is
+  // resolved separately: used as the minutes source only when the file has
+  // no minutes column, and always said so. The derived minutes are rounded
+  // to a whole minute and are approximate (a tenth of a 90 is 9 minutes).
+  const NINETIES_HEADERS = Object.freeze(['90s', 'nineties', '90splayed', 'ninetiesplayed']);
+
+  function isNinetiesHeader(header) {
+    return NINETIES_HEADERS.indexOf(plainCsvHeader(header)) >= 0;
   }
 
   // Levenshtein distance, only used to suggest a known header for a typo.
@@ -1784,9 +2129,14 @@
     const dupes = [];
     const unknown = [];
     const mapped = [];
+    const nineties = [];
     let stats = 0;
     rawHeaders.forEach(function (raw) {
       const header = String(raw || '');
+      if (isNinetiesHeader(header)) {
+        nineties.push(header);
+        return;
+      }
       const key = resolveCsvHeader(header);
       const id = key || header.toLowerCase();
       if (!id) return;
@@ -1805,6 +2155,13 @@
       if (aliased) mapped.push(header + ' → ' + key);
       if (COUNT_FIELDS.indexOf(key) >= 0) stats += 1;
     });
+    if (nineties.length) {
+      if (seen.minutes || seen.totalMinutesProxy) {
+        warnings.push('עמודת ' + nineties.join(', ') + ' לא נקראה — יש עמודת דקות (Min) והיא עדיפה');
+      } else {
+        mapped.push(nineties.join(', ') + ' → minutes (×90)');
+      }
+    }
     if (dupes.length) {
       warnings.push('כותרת כפולה: ' + dupes.join(', ') + ' — נקראת רק העמודה הראשונה');
     }
@@ -1820,17 +2177,122 @@
     return warnings;
   }
 
+  const PROVENANCE_LEDGER_COLUMNS = Object.freeze([
+    'fieldKey', 'label', 'value', 'filePath', 'provenance', 'dataset'
+  ]);
+
+  function csvEscapeCell(value) {
+    const text = String(value == null ? '' : value);
+    if (/[",\r\n]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+    return text;
+  }
+
+  function csvRow(cells) {
+    return cells.map(csvEscapeCell).join(',');
+  }
+
+  function createCsvReportWithProvenance(player, meta) {
+    const explorer = buildEventExplorer(player, meta);
+    const lines = [csvRow(PROVENANCE_LEDGER_COLUMNS)];
+    if (!player || !explorer.player) return lines.join('\n') + '\n';
+    lines.push(csvRow([
+      'minutes',
+      'דקות פרוקסי',
+      explorer.player.minutes,
+      'players[].totalMinutesProxy',
+      explorer.provenance,
+      explorer.dataset
+    ]));
+    explorer.rows.forEach(function (row) {
+      lines.push(csvRow([
+        row.key,
+        row.label,
+        row.total,
+        row.filePath,
+        explorer.provenance,
+        explorer.dataset
+      ]));
+    });
+    return lines.join('\n') + '\n';
+  }
+
+  // FBref's "Get table as CSV" output is the layout most of the header
+  // aliases exist for, and it is not a plain sheet: a group-header line
+  // (",,,,Playing Time,Playing Time,Performance,...") sits above the real
+  // header, and the header line itself is repeated every 25 players. Read
+  // as a plain CSV the file failed with "no name column", and after a
+  // manual fix every repeated header loaded as a player called "Player"
+  // with an error per copy. The header is now looked for among the first
+  // few lines (the first line whose cells resolve to a name column), the
+  // lines above it are skipped and shown once, and a data row equal to the
+  // header is dropped and counted once. A file whose first lines really
+  // have no name column still fails with the same message as before.
+  const CSV_HEADER_SCAN = 5;
+
+  // Index of the header record within the first CSV_HEADER_SCAN records:
+  // the first one that resolves to a name column, or -1.
+  function findCsvHeaderRow(lines) {
+    const limit = Math.min(lines.length, CSV_HEADER_SCAN);
+    for (let i = 0; i < limit; i += 1) {
+      if (lines[i].map(resolveCsvHeader).indexOf('name') >= 0) return i;
+    }
+    return -1;
+  }
+
+  // True when a data row is a copy of the header row (case-insensitive,
+  // trailing empty cells ignored on both sides).
+  function isRepeatedHeaderRow(cells, header) {
+    const width = usedWidth(cells);
+    if (width !== usedWidth(header)) return false;
+    for (let i = 0; i < width; i += 1) {
+      if (String(cells[i]).toLowerCase() !== String(header[i]).toLowerCase()) return false;
+    }
+    return true;
+  }
+
+  // Short preview of a skipped preamble line: its non-empty cells.
+  function previewCsvLine(cells) {
+    const filled = cells.filter(function (cell) { return cell !== ''; });
+    const shown = filled.slice(0, 4).join(' | ');
+    return filled.length > 4 ? shown + ' | …' : (shown || '(ריק)');
+  }
+
   function parseUserCsv(text) {
     const detected = detectCsvDelimiter(text);
     const delimiter = detected.delimiter;
     const decimalComma = delimiter === ';';
-    // Line numbers in messages are file lines: a sep= hint line pushes the
-    // header to line 2 and the first player to line 3.
-    const firstDataLine = detected.offset ? 3 : 2;
-    const lines = parseCsvRecords(text, { delimiter: delimiter });
+    const grouped = [];
+    // A cell that is not a plain number may still be a thousands-grouped one
+    // in a comma file; each such read is listed so the user can check it.
+    function cellNumber(raw, lineNo, key) {
+      const n = csvNumber(raw, decimalComma);
+      if (n !== null && delimiter === ',' && groupedNumber(raw) !== null) {
+        grouped.push('שורה ' + lineNo + ' ' + key + '=«' + String(raw).trim() + '» → ' + n);
+      }
+      return n;
+    }
+    let lines = parseCsvRecords(text, { delimiter: delimiter });
+    // An unclosed quote turns the rest of the file into one cell, so every
+    // player after it would vanish into a single bogus name. Drop that
+    // record and say where the quote opened.
+    const unclosed = lines.unclosedQuote;
+    const quoteErrors = [];
+    if (unclosed) {
+      lines = lines.filter(function (cells) { return cells !== unclosed.record; });
+      quoteErrors.push('שורה ' + unclosed.line + ': מירכאה (") נפתחה ולא נסגרה — כל מה שאחריה נבלע בתא אחד ודולג; סגרו אותה וטענו שוב');
+      if (lines.length < 2) return { ok: false, errors: quoteErrors, players: [] };
+    }
     if (lines.length < 2) return { ok: false, errors: ['CSV צריך שורת כותרת ולפחות שחקן אחד'], players: [] };
+    // The header is normally line 1; see findCsvHeaderRow for FBref exports.
+    const headerIdx = Math.max(findCsvHeaderRow(lines), 0);
+    const header = lines[headerIdx];
+    // Line numbers in messages are file lines: a sep= hint line pushes the
+    // header to line 2 and the first player to line 3; skipped preamble
+    // lines push both further down.
+    const headerLine = (detected.offset ? 2 : 1) + headerIdx;
+    const firstDataLine = headerLine + 1;
     // Column keys per header cell (null = not read); see resolveCsvHeader.
-    const headers = lines[0].map(resolveCsvHeader);
+    const headers = header.map(resolveCsvHeader);
     const nameIdx = headers.indexOf('name');
     if (nameIdx < 0) {
       return {
@@ -1840,46 +2302,73 @@
       };
     }
     const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalMinutesProxy');
+    // FBref tables without Min: see isNinetiesHeader. Only when no minutes
+    // column exists; the first 90s column is used.
+    let ninetiesIdx = -1;
+    if (minIdx < 0) {
+      for (let i = 0; i < header.length && ninetiesIdx < 0; i += 1) {
+        if (isNinetiesHeader(header[i])) ninetiesIdx = i;
+      }
+    }
     const col = {};
     USER_DATASET_COLUMNS.forEach(function (key) {
       col[key] = headers.indexOf(key);
     });
     const players = [];
-    const errors = [];
-    const warnings = auditCsvHeaders(lines[0]);
+    const errors = quoteErrors;
+    const warnings = [];
+    if (headerIdx > 0) {
+      warnings.push('הכותרת נמצאה בשורה ' + headerLine + '; ' +
+        (headerIdx === 1 ? 'השורה שלפניה דולגה' : headerIdx + ' השורות שלפניה דולגו') +
+        ' (כותרת-על של FBref או הערה): ' + lines.slice(0, headerIdx).map(previewCsvLine).join(' // '));
+    }
+    auditCsvHeaders(header).forEach(function (w) { warnings.push(w); });
+    if (ninetiesIdx >= 0) {
+      warnings.push('אין עמודת דקות (Min) — הדקות חושבו מעמודת ' + header[ninetiesIdx] +
+        ' של FBref: 90s × 90, מעוגל לדקה שלמה. FBref מעגל 90s לעשירית, כך שהדקות מקורבות (עד ±5)');
+    }
+    const repeatedHeaderLines = [];
     // A row wider than the header is almost always a name with an unquoted
     // delimiter ("Silva, Thiago" saved from a text editor): every stat after
     // it lands one column to the right, so the player would be scored on
     // the wrong numbers. Skip and say so. Trailing empty cells (Excel pads
     // "name,minutes,,,") are not a shift and are ignored on both sides.
-    const headerWidth = usedWidth(lines[0]);
-    lines.slice(1).forEach(function (cells, i) {
+    const headerWidth = usedWidth(header);
+    lines.slice(headerIdx + 1).forEach(function (cells, i) {
+      const lineNo = i + firstDataLine;
+      if (isRepeatedHeaderRow(cells, header)) {
+        repeatedHeaderLines.push(lineNo);
+        return;
+      }
       const width = usedWidth(cells);
       if (width > headerWidth) {
-        errors.push('שורה ' + (i + firstDataLine) + ': ' + width + ' תאים מול ' + headerWidth +
+        errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
           ' כותרות — כנראה מפריד לא מצוטט בתוך שם; השורה דולגה');
         return;
       }
       const name = cells[nameIdx];
       if (!name) {
-        errors.push('שורה ' + (i + firstDataLine) + ': חסר שם');
+        errors.push('שורה ' + lineNo + ': חסר שם');
         return;
       }
       const row = { name: name };
-      const lineNo = i + firstDataLine;
       if (width < headerWidth) {
         // Short row: keep the player, but say which columns never arrived so
         // a blank stat is not mistaken for a measured zero.
         errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
-          ' כותרות — ' + lines[0].slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
+          ' כותרות — ' + header.slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
       }
-      const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
-      if (minutesRaw !== '' && minutesRaw != null) {
-        const minutes = csvNumber(minutesRaw, decimalComma);
-        if (minutes === null) {
-          errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
+      const minutesRaw = minIdx >= 0 ? cells[minIdx] : (ninetiesIdx >= 0 ? cells[ninetiesIdx] : '');
+      if (csvMissingMarker(minutesRaw)) {
+        // Kept as text so stripMissingMarkers counts it with the JSON path.
+        row.minutes = minutesRaw;
+      } else if (minutesRaw !== '' && minutesRaw != null) {
+        const parsedMinutes = cellNumber(minutesRaw, lineNo, 'minutes');
+        if (parsedMinutes === null) {
+          errors.push('שורה ' + lineNo + ': ' + (ninetiesIdx >= 0 ? '90s' : 'minutes') + '=«' + minutesRaw + '» אינו מספר — השחקן דולג');
           return;
         }
+        const minutes = ninetiesIdx >= 0 ? Math.round(parsedMinutes * 90) : parsedMinutes;
         row.totalMinutesProxy = minutes;
         row.minutes = minutes;
       }
@@ -1889,11 +2378,11 @@
         if (idx < 0) return;
         const raw = cells[idx];
         if (raw === '' || raw == null) return;
-        if (NUMERIC_USER_FIELDS.indexOf(key) < 0) {
+        if (NUMERIC_USER_FIELDS.indexOf(key) < 0 || csvMissingMarker(raw)) {
           row[key] = raw;
           return;
         }
-        const n = csvNumber(raw, decimalComma);
+        const n = cellNumber(raw, lineNo, key);
         if (n === null) {
           errors.push('שורה ' + lineNo + ': ' + key + '=«' + raw + '» אינו מספר — התא נשאר ריק');
           return;
@@ -1902,8 +2391,50 @@
       });
       players.push(row);
     });
+    if (grouped.length) {
+      warnings.push('מספרים עם מפריד אלפים נקראו כשלמים: ' + grouped.slice(0, 3).join(', ') +
+        (grouped.length > 3 ? ' ועוד ' + (grouped.length - 3) : ''));
+    }
+    if (repeatedHeaderLines.length) {
+      warnings.push('שורת הכותרת חוזרת בתוך הקובץ ' +
+        (repeatedHeaderLines.length === 1 ? 'פעם אחת (שורה ' : repeatedHeaderLines.length + ' פעמים (שורות ') +
+        repeatedHeaderLines.join(', ') + ') כמו בייצוא FBref — העותקים דולגו');
+    }
     if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [], warnings: warnings };
     return { ok: true, errors: errors, warnings: warnings, players: players };
+  }
+
+  // FileReader.readAsText assumes UTF-8, but a Hebrew Excel saves "CSV" in
+  // windows-1255 and "Unicode Text" in UTF-16 with a BOM. Read as UTF-8
+  // that turns every Hebrew header and name into U+FFFD, so «שם» never
+  // matches and players arrive nameless. Decode the raw bytes instead: a BOM
+  // wins, then strict UTF-8, then a legacy codepage. Hebrew words are runs
+  // of high bytes (0xE0–0xFA); a Western file has lone accented letters
+  // (Müller, Mbappé), so a run of two picks windows-1255 over windows-1252.
+  function decodeUserFile(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const decode = function (label, from) {
+      return new TextDecoder(label).decode(b.subarray(from || 0));
+    };
+    if (b[0] === 0xFF && b[1] === 0xFE) return { text: decode('utf-16le', 2), encoding: 'utf-16le', warnings: [] };
+    if (b[0] === 0xFE && b[1] === 0xFF) return { text: decode('utf-16be', 2), encoding: 'utf-16be', warnings: [] };
+    if (b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) return { text: decode('utf-8', 3), encoding: 'utf-8', warnings: [] };
+    try {
+      return { text: new TextDecoder('utf-8', { fatal: true }).decode(b), encoding: 'utf-8', warnings: [] };
+    } catch (err) {
+      let hebrew = false;
+      for (let i = 1; i < b.length && !hebrew; i++) {
+        hebrew = b[i] >= 0xE0 && b[i] <= 0xFA && b[i - 1] >= 0xE0 && b[i - 1] <= 0xFA;
+      }
+      const encoding = hebrew ? 'windows-1255' : 'windows-1252';
+      return {
+        text: decode(encoding),
+        encoding: encoding,
+        warnings: ['הקובץ אינו UTF-8 ונקרא כ-' + encoding +
+          (hebrew ? ' (עברית של Excel)' : ' (Excel מערבי)') +
+          '. אם שמות נראים משובשים, שמרו מחדש כ-«CSV UTF-8».']
+      };
+    }
   }
 
   function parseUserDataset(text, options) {
@@ -1949,21 +2480,33 @@
         provenance: null
       };
     }
-    const players = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    const named = eventPlayers(dataset).filter(function (row) { return row && row.name; });
+    const summary = stripSummaryRows(named);
+    const players = summary.players;
     if (!players.length) {
-      return { ok: false, errors: ['אין שחקנים עם שדה name'], players: [], provenance: null };
+      return {
+        ok: false,
+        errors: [named.length ? 'כל השורות הן שורות סיכום (Total / סה"כ) — אין שחקנים' : 'אין שחקנים עם שדה name'],
+        players: [],
+        provenance: null
+      };
     }
+    parseWarnings = parseWarnings.concat(summary.warnings).concat(stripMissingMarkers(players));
     players.forEach(function (row) {
       invalidNumericFields(row).forEach(function (bad) {
         parseErrors.push('שחקן «' + row.name + '»: ' + bad.key + '=«' + String(bad.value) + '» אינו מספר — נחשב כחסר');
         delete row[bad.key];
       });
     });
+    const signs = auditMinutesAndSigns(players);
+    parseErrors = parseErrors.concat(signs.errors);
+    parseWarnings = parseWarnings.concat(signs.warnings);
     const provenance = synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE;
     return {
       ok: true,
       errors: parseErrors,
       warnings: parseWarnings
+        .concat(auditDuplicateNames(players))
         .concat(auditPositions(players))
         .concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
@@ -1986,6 +2529,7 @@
     SEASON_MISLABELED: SEASON_MISLABELED,
     DEFAULT_METRIC: DEFAULT_METRIC,
     positionGroup: positionGroup,
+    filterByPosition: filterByPosition,
     componentsFromEvents: componentsFromEvents,
     compositeScore: compositeScore,
     applyMetric: applyMetric,
@@ -2009,6 +2553,8 @@
     radarValues: radarValues,
     methodologyParagraph: methodologyParagraph,
     exportMetricBundle: exportMetricBundle,
+    createCsvReportWithProvenance: createCsvReportWithProvenance,
+    PROVENANCE_LEDGER_COLUMNS: PROVENANCE_LEDGER_COLUMNS,
     EVENT_COLUMNS: EVENT_COLUMNS,
     OUTCOMES: OUTCOMES,
     WC2018_GROUPS: WC2018_GROUPS,
@@ -2021,18 +2567,34 @@
     glossaryForPlayer: glossaryForPlayer,
     validateMetric: validateMetric,
     evaluateCurriculum: evaluateCurriculum,
+    buildStructuredCourse: buildStructuredCourse,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
+    decodeUserFile: decodeUserFile,
+    auditMinutesAndSigns: auditMinutesAndSigns,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
+    findCsvHeaderRow: findCsvHeaderRow,
+    isRepeatedHeaderRow: isRepeatedHeaderRow,
+    CSV_HEADER_SCAN: CSV_HEADER_SCAN,
     auditCsvHeaders: auditCsvHeaders,
     auditPositions: auditPositions,
     POSITION_CODES: POSITION_CODES,
     suggestCsvHeader: suggestCsvHeader,
     resolveCsvHeader: resolveCsvHeader,
     CSV_HEADER_ALIASES: CSV_HEADER_ALIASES,
+    NINETIES_HEADERS: NINETIES_HEADERS,
+    isNinetiesHeader: isNinetiesHeader,
     CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
+    csvNumber: csvNumber,
+    csvMissingMarker: csvMissingMarker,
+    stripMissingMarkers: stripMissingMarkers,
+    MISSING_MARKERS: MISSING_MARKERS,
+    isSummaryRowName: isSummaryRowName,
+    stripSummaryRows: stripSummaryRows,
+    auditDuplicateNames: auditDuplicateNames,
+    SUMMARY_ROW_LABELS: SUMMARY_ROW_LABELS,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
     USER_DATASET_COLUMNS: USER_DATASET_COLUMNS,

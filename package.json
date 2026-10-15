@@ -4,7 +4,8 @@
   "description": "Hebrew RTL educational lab: build a transparent football metric on StatsBomb Open Data",
   "scripts": {
     "test": "node --test",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "pr-size": "node tools/pr-size.js"
   },
   "devDependencies": {
     "playwright": "^1.64.0"

@@ -8,6 +8,9 @@ const {
   parseUserDataset,
   parseCsvRecords,
   detectCsvDelimiter,
+  findCsvHeaderRow,
+  isRepeatedHeaderRow,
+  CSV_HEADER_SCAN,
   auditCsvHeaders,
   auditPositions,
   positionGroup,
@@ -26,7 +29,18 @@ const {
   USER_DATASET_COLUMNS,
   NUMERIC_USER_FIELDS,
   invalidNumericFields,
+  csvNumber,
+  csvMissingMarker,
+  auditMinutesAndSigns,
+  stripMissingMarkers,
+  MISSING_MARKERS,
+  isSummaryRowName,
+  stripSummaryRows,
+  auditDuplicateNames,
+  SUMMARY_ROW_LABELS,
   playerKey,
+  isNinetiesHeader,
+  NINETIES_HEADERS,
   serializeMetricHash,
   parseMetricHash,
   DEFAULT_METRIC
@@ -164,6 +178,23 @@ test('European Excel CSV: `;` delimiter, sep= hint and decimal comma are underst
   assert.equal('pressures' in commaFile.players[0], false);
   assert.equal(commaFile.errors.length, 1);
 
+  // Excel's "1000 separator" format and FBref's Min column quote 2970 as
+  // "2,970". Strict groups of three load as a whole number and are listed;
+  // "0,456" is a decimal comma, not 456, and stays an error.
+  const grouped = parseUserDataset(
+    'name,minutes,pressures,shotXgSum\nA,"2,970","1,204.5",1\nB,"1,080",3,"0,456"\n',
+    { attested: true }
+  );
+  assert.equal(grouped.ok, true);
+  assert.equal(grouped.players[0].minutes, 2970);
+  assert.equal(grouped.players[0].pressures, 1204.5);
+  assert.equal(grouped.players[1].minutes, 1080);
+  assert.equal('shotXgSum' in grouped.players[1], false);
+  assert.deepEqual(grouped.errors, ['שורה 3: shotXgSum=«0,456» אינו מספר — התא נשאר ריק']);
+  assert.ok(grouped.warnings.some((w) => w.includes('מפריד אלפים') && w.includes('minutes=«2,970» → 2970')));
+  // In a `;` file the comma is the decimal mark, never a thousands group.
+  assert.equal(parseUserDataset('name;minutes;shotXgSum\nA;90;1,250\n', { attested: true }).players[0].shotXgSum, 1.25);
+
   // The wrong-column error now shows what was actually read, so a user whose
   // file collapsed into one column can see why.
   const noName = parseUserDataset('player|minutes\nA|90\n', { attested: true });
@@ -199,9 +230,10 @@ test('non-numeric stat cells are reported and never silently become 0', () => {
   assert.deepEqual(parsed.players.map((p) => p.name), ['Beta', 'Gamma', 'Delta']);
   assert.deepEqual(parsed.errors, [
     'שורה 2: minutes=«abc» אינו מספר — השחקן דולג',
-    'שורה 3: pressures=«12,5» אינו מספר — התא נשאר ריק',
-    'שורה 4: tackles=«n/a» אינו מספר — התא נשאר ריק'
+    'שורה 3: pressures=«12,5» אינו מספר — התא נשאר ריק'
   ]);
+  // n/a is a missing-value marker, not a typo: blanked and counted once per column.
+  assert.deepEqual(parsed.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: tackles ×1']);
   assert.equal(parsed.players[0].totalMinutesProxy, 90);
   assert.equal('pressures' in parsed.players[0], false);
   assert.equal(parsed.players[1].pressures, 7);
@@ -218,12 +250,80 @@ test('non-numeric stat cells are reported and never silently become 0', () => {
   assert.equal(json.ok, true);
   assert.deepEqual(json.errors, [
     'שחקן «J»: minutes=«x» אינו מספר — נחשב כחסר',
-    'שחקן «J»: pressures=«n/a» אינו מספר — נחשב כחסר',
     'שחקן «K»: pressures=«1» אינו מספר — נחשב כחסר'
   ]);
+  assert.deepEqual(json.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: pressures ×1']);
   assert.deepEqual(json.players[0], { name: 'J', team: 'T', tackles: 3 });
   assert.deepEqual(invalidNumericFields({ name: 'ok', minutes: 90, pressures: '7', shotXgSum: 0.4 }), []);
   assert.deepEqual(invalidNumericFields({ name: 'bad', minutes: Infinity }), [{ key: 'minutes', value: Infinity }]);
+});
+
+test('spreadsheet number formats load as numbers; "-" / N/A cells are blanked and counted per column', () => {
+  const NBSP = String.fromCharCode(0xA0);
+  const NNBSP = String.fromCharCode(0x202F);
+  const MINUS = String.fromCharCode(0x2212);
+  // Comma file: a comma inside a quoted cell can only be a thousands mark.
+  assert.equal(csvNumber('1,234', false), 1234);
+  assert.equal(csvNumber('1,234,567.5', false), 1234567.5);
+  assert.equal(csvNumber('12,5', false), null, 'two digits after the comma is not a thousands group');
+  assert.equal(csvNumber('1,23', false), null);
+  assert.equal(csvNumber('1,2,3', false), null);
+  // Space / NBSP / narrow NBSP / apostrophe groups from French and Swiss Excel.
+  assert.equal(csvNumber('1 234', false), 1234);
+  assert.equal(csvNumber('1' + NBSP + '234', false), 1234);
+  assert.equal(csvNumber('1' + NNBSP + '234,5', true), 1234.5);
+  assert.equal(csvNumber("1'234", true), 1234);
+  // `;` file: comma is the decimal mark, two or more dot groups are thousands.
+  assert.equal(csvNumber('12,5', true), 12.5);
+  assert.equal(csvNumber('1.234', true), 1.234, 'one dot group alone stays a decimal');
+  assert.equal(csvNumber('1.234.567', true), 1234567);
+  assert.equal(csvNumber('1.234.567,5', true), 1234567.5);
+  // Unicode minus pasted from a spreadsheet, explicit plus, whitespace.
+  assert.equal(csvNumber(MINUS + '5', false), -5);
+  assert.equal(csvNumber(' +7 ', false), 7);
+  assert.equal(csvNumber('abc', false), null);
+  assert.equal(csvNumber('', false), null);
+  assert.equal(csvNumber(null, false), null);
+
+  ['-', '--', 'N/A', 'n/a', '#N/A', 'NA', 'null', 'NaN', 'None', '?', ' - '].forEach((marker) => {
+    assert.equal(csvMissingMarker(marker), true, marker);
+  });
+  ['0', '-1', 'x', '', 'N/A%'].forEach((value) => assert.equal(csvMissingMarker(value), false, value));
+  assert.ok(MISSING_MARKERS.includes('n/a'));
+
+  // FBref-style export: "-" for stats a goalkeeper has none of, thousands
+  // in minutes, and one real typo that must still be an error.
+  const csv = [
+    'name,team,position,minutes,pressures,tackles,keyPasses',
+    'Keeper,Home,GK,"2,610",-,-,-',
+    'Mid,Home,CM,"1,980",312,45,N/A',
+    'Wing,Home,RW,900,abc,12,7'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'fbref.csv' });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Keeper', 'Mid', 'Wing']);
+  assert.equal(parsed.players[0].totalMinutesProxy, 2610);
+  assert.equal(parsed.players[1].totalMinutesProxy, 1980);
+  assert.deepEqual(Object.keys(parsed.players[0]).sort(), ['minutes', 'name', 'position', 'team', 'totalMinutesProxy']);
+  assert.equal('keyPasses' in parsed.players[1], false);
+  assert.equal(parsed.players[1].pressures, 312);
+  assert.deepEqual(parsed.errors, ['שורה 4: pressures=«abc» אינו מספר — התא נשאר ריק']);
+  assert.deepEqual(parsed.warnings.filter((w) => !w.includes('מפריד אלפים')), ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: pressures ×1, tackles ×1, keyPasses ×2']);
+
+  // A "-" in minutes blanks the minutes, it does not skip the player.
+  const noMinutes = parseUserDataset('name,minutes,tackles\nA,-,3\nB,90,4\n', { attested: true });
+  assert.deepEqual(noMinutes.errors, []);
+  assert.equal('minutes' in noMinutes.players[0], false);
+  assert.equal('totalMinutesProxy' in noMinutes.players[0], false);
+  assert.equal(noMinutes.players[0].tackles, 3);
+  assert.deepEqual(noMinutes.warnings, ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: minutes ×1']);
+
+  // Same helper on JSON rows: markers go, real values and typos stay.
+  const rows = [{ name: 'A', minutes: '-', tackles: 'N/A', pressures: 4 }, { name: 'B', minutes: 90, tackles: 'x' }];
+  assert.deepEqual(stripMissingMarkers(rows), ['תאים עם סימון חסר (-, N/A, null) נחשבו ריקים ולא 0: minutes ×1, tackles ×1']);
+  assert.deepEqual(rows, [{ name: 'A', pressures: 4 }, { name: 'B', minutes: 90, tackles: 'x' }]);
+  assert.deepEqual(stripMissingMarkers([{ name: 'C', minutes: 90 }]), []);
+  assert.ok(html.includes('1,234') || html.includes('1 234'), 'the BYOD help text must say thousands marks and N/A cells are understood');
 });
 
 test('CSV rows wider than the header are skipped, short rows name the missing columns', () => {
@@ -544,4 +644,387 @@ test('CSV header aliases: FBref codes, spaced or underscored names and Hebrew he
   assert.deepEqual(padded.errors, []);
   assert.deepEqual(padded.players, [{ name: 'Alpha', totalMinutesProxy: 270, minutes: 270, tackles: 4 }]);
   assert.ok(html.includes('Key Passes'), 'the BYOD help text must mention the accepted header spellings');
+});
+
+test('CSV with an unclosed quote: the swallowed tail is dropped and the opening line is named', () => {
+  const records = parseCsvRecords('name,minutes\r\nA,90\r\n"Broken,600\r\nC,500\r\n');
+  assert.deepEqual(records, [['name', 'minutes'], ['A', '90']].concat([records[2]]));
+  assert.equal(records.unclosedQuote.line, 3);
+  assert.equal(records.unclosedQuote.record, records[2]);
+  // Closed quotes leave no marker, and the marker stays out of deepEqual.
+  assert.equal(parseCsvRecords('a,b\n"x, y",1').unclosedQuote, undefined);
+  assert.deepEqual(Object.keys(records), ['0', '1', '2']);
+
+  const parsed = parseUserDataset('name,minutes,goals\nAlpha,300,1\n"Beta,200,0\nGamma,100,2\n', { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha']);
+  assert.equal(parsed.errors.length, 1);
+  assert.match(parsed.errors[0], /^שורה 3: מירכאה/);
+
+  // The sep= hint line counts as a file line.
+  const hinted = parseUserDataset('sep=;\nname;minutes\nAlpha;300\nBeta;200\n"Gamma;100', { attested: true });
+  assert.deepEqual(hinted.players.map((p) => p.name), ['Alpha', 'Beta']);
+  assert.match(hinted.errors[0], /^שורה 5: מירכאה/);
+
+  // Quote on the first player line: nothing left to score, the reason is the quote.
+  const none = parseUserDataset('name,minutes\n"Alpha,300\nBeta,200', { attested: true });
+  assert.equal(none.ok, false);
+  assert.match(none.errors[0], /^שורה 2: מירכאה/);
+});
+
+test('decodeUserFile reads a Hebrew Excel CSV saved in windows-1255 instead of mangling it as UTF-8', () => {
+  const { decodeUserFile } = require('../demo.js');
+  // "שם,דקות\nכהן,90" as Hebrew Excel writes it: one byte per Hebrew letter.
+  const bytes = new Uint8Array([0xF9, 0xED, 0x2C, 0xE3, 0xF7, 0xE5, 0xFA, 0x0A, 0xEB, 0xE4, 0xEF, 0x2C, 0x39, 0x30]);
+  const decoded = decodeUserFile(bytes);
+  assert.equal(decoded.encoding, 'windows-1255');
+  assert.equal(decoded.text, 'שם,דקות\nכהן,90');
+  assert.equal(decoded.warnings.length, 1);
+  assert.match(decoded.warnings[0], /windows-1255/);
+  const parsed = parseUserDataset(decoded.text, { attested: true, fileName: 'heb.csv' });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players[0].name, 'כהן');
+  assert.equal(parsed.players[0].minutes, 90);
+});
+
+test('decodeUserFile picks windows-1252 for a Western file with lone accented letters', () => {
+  const { decodeUserFile } = require('../demo.js');
+  // "name,minutes\nMüller,90" in windows-1252: ü is a single 0xFC between ASCII letters.
+  const bytes = new Uint8Array(Buffer.from('name,minutes\nM_ller,90', 'latin1'));
+  bytes[14] = 0xFC;
+  const decoded = decodeUserFile(bytes);
+  assert.equal(decoded.encoding, 'windows-1252');
+  assert.equal(decoded.text, 'name,minutes\nMüller,90');
+});
+
+test('decodeUserFile honours BOMs and leaves plain UTF-8 untouched without a warning', () => {
+  const { decodeUserFile } = require('../demo.js');
+  const utf8 = decodeUserFile(new Uint8Array(Buffer.from('name,minutes\nכהן,90', 'utf8')));
+  assert.deepEqual([utf8.encoding, utf8.text, utf8.warnings], ['utf-8', 'name,minutes\nכהן,90', []]);
+  const bom8 = decodeUserFile(new Uint8Array(Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), Buffer.from('שם,דקות', 'utf8')])));
+  assert.deepEqual([bom8.encoding, bom8.text], ['utf-8', 'שם,דקות']);
+  // Excel "Unicode Text": UTF-16LE with a BOM, tab-delimited.
+  const utf16 = decodeUserFile(new Uint8Array(Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('שם\tדקות\nכהן\t90', 'utf16le')])));
+  assert.deepEqual([utf16.encoding, utf16.text, utf16.warnings], ['utf-16le', 'שם\tדקות\nכהן\t90', []]);
+  const parsed = parseUserDataset(utf16.text, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players[0].name, 'כהן');
+});
+
+test('the BYOD loader reads raw bytes and shows the encoding note even when parsing fails', () => {
+  assert.ok(html.includes('readAsArrayBuffer'), 'readAsText would decode a windows-1255 file as UTF-8');
+  assert.ok(!html.includes('readAsText'), 'the upload must not fall back to readAsText');
+  assert.ok(html.includes('decodeUserFile'), 'the upload must decode bytes through decodeUserFile');
+  assert.ok(html.includes('windows-1255'), 'the BYOD help text must say Hebrew Excel CSV is read');
+});
+
+test('a file without readable minutes is loaded but says every per-90 score will be 0', () => {
+  const noColumn = parseUserDataset('name,team,position,pressures,tackles\nA,T,CB,10,3\nB,T,CB,20,6\n', { attested: true });
+  assert.equal(noColumn.ok, true);
+  assert.equal(noColumn.players.length, 2);
+  assert.ok(noColumn.warnings.some((w) => /אף שחקן בלי דקות/.test(w) && /סף הדקות/.test(w)), noColumn.warnings.join(' | '));
+  // The store built from it ranks nobody at the default 270 threshold: the warning is the only explanation the user gets.
+  const store = createStore({ players: noColumn.players }, { provenance: noColumn.provenance });
+  assert.equal(store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows.length, 0);
+
+  const blankColumn = parseUserDataset('name,minutes,pressures\nA,,10\nB,-,20\n', { attested: true });
+  assert.equal(blankColumn.ok, true);
+  assert.ok(blankColumn.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+
+  // One readable minutes value is enough to silence the file-level warning.
+  const oneValue = parseUserDataset('name,minutes,pressures\nA,300,10\nB,,20\n', { attested: true });
+  assert.ok(!oneValue.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+
+  // JSON path shares the audit, also through totalMinutesProxy.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', tackles: 3 }] }), { attested: true });
+  assert.ok(json.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+  const proxy = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', totalMinutesProxy: 300 }] }), { attested: true });
+  assert.ok(!proxy.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+});
+
+test('negative minutes and counts are dropped and reported per player, zero minutes are counted', () => {
+  const csv = 'name,team,position,minutes,pressures,tackles\nA,T,CB,0,10,3\nB,T,CB,-90,20,6\nC,T,CB,90,-5,2\n';
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.errors, [
+    'שחקן «B»: minutes=«-90» שלילי — נחשב כחסר',
+    'שחקן «C»: pressures=«-5» שלילי — נחשב כחסר'
+  ]);
+  const byName = Object.fromEntries(parsed.players.map((row) => [row.name, row]));
+  assert.equal(byName.A.minutes, 0);
+  assert.ok(!('minutes' in byName.B) && !('totalMinutesProxy' in byName.B), 'negative minutes removed from both keys');
+  assert.ok(!('pressures' in byName.C) && byName.C.tackles === 2, 'only the negative cell is dropped');
+  assert.ok(parsed.warnings.some((w) => /שחקן אחד עם 0 דקות/.test(w)), parsed.warnings.join(' | '));
+  // A dropped value must not come back as a measured 0 in the store.
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance });
+  const c = store.players.find((row) => row.name === 'C');
+  assert.equal(c.counts.pressures, 0);
+  assert.equal(c.components.raw.pressures90, 0);
+  assert.equal(c.components.raw.tacklesInt90, 2);
+
+  // Unicode minus is read as a sign first, so it lands in the same audit.
+  const unicode = parseUserDataset('name,minutes,tackles\nU,90,\u22123\n', { attested: true });
+  assert.deepEqual(unicode.errors, ['שחקן «U»: tackles=«-3» שלילי — נחשב כחסר']);
+
+  // JSON path: same rule, same message.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', minutes: -10, tackles: -1 }, { name: 'K', team: 'T', minutes: 200 }] }), { attested: true });
+  assert.deepEqual(json.errors, [
+    'שחקן «J»: minutes=«-10» שלילי — נחשב כחסר',
+    'שחקן «J»: tackles=«-1» שלילי — נחשב כחסר'
+  ]);
+  assert.deepEqual(auditMinutesAndSigns([{ name: 'ok', minutes: 90, pressures: 0 }]), { errors: [], warnings: [] });
+});
+
+test('FBref-style Squad Total / Opponent Total rows are dropped and reported, never ranked as a player', () => {
+  // An FBref squad export: every cell of the two trailing rows is a valid number, so
+  // nothing is malformed, yet "Squad Total" carries the whole team's minutes and counts.
+  const csv = [
+    'Player,Squad,Pos,Min,Press,Tkl,Int',
+    'Alpha,Home,CB,900,90,30,20',
+    'Beta,Home,CM,800,120,25,10',
+    'Gamma,Home,ST,700,60,10,5',
+    'Squad Total,Home,,2400,270,65,35',
+    'Opponent Total,Home,,2400,250,70,40',
+    ''
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((row) => row.name), ['Alpha', 'Beta', 'Gamma']);
+  assert.deepEqual(parsed.errors, []);
+  assert.ok(parsed.warnings.some((w) => w === 'שורות סיכום דולגו (אינן שחקנים): Squad Total, Opponent Total'), parsed.warnings.join(' | '));
+  // The blank position of the total rows must not surface as an OT report.
+  assert.ok(!parsed.warnings.some((w) => /OT/.test(w)), parsed.warnings.join(' | '));
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance });
+  const rows = store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows;
+  assert.equal(rows.length, 3);
+  assert.ok(rows.every((row) => !/total/i.test(row.name)));
+
+  // Hebrew labels, with or without gershayim, and a repeated label counted once.
+  const hebrew = parseUserDataset('שם,דקות,tackles\nא,300,3\nסה"כ,300,3\nסה"כ,300,3\nסה״כ,300,3\nממוצע,300,3\n', { attested: true });
+  assert.deepEqual(hebrew.players.map((row) => row.name), ['א']);
+  assert.ok(hebrew.warnings.some((w) => /שורות סיכום/.test(w) && /סה"כ ×2, סה״כ, ממוצע/.test(w)), hebrew.warnings.join(' | '));
+
+  // JSON path shares the rule.
+  const json = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', minutes: 300 }, { name: 'Total', team: 'T', minutes: 3000 }] }), { attested: true });
+  assert.deepEqual(json.players.map((row) => row.name), ['J']);
+  assert.ok(json.warnings.some((w) => /שורות סיכום/.test(w) && /Total/.test(w)));
+
+  // A file that is only totals is an error, not a one-player ranking.
+  const onlyTotals = parseUserDataset('name,minutes\nTotal,3000\n', { attested: true });
+  assert.equal(onlyTotals.ok, false);
+  assert.ok(/שורות סיכום/.test(onlyTotals.errors[0]), onlyTotals.errors.join(' | '));
+
+  // Real surnames and partial matches stay players.
+  ['Totaro', 'Mean Machine', 'Totally', 'Average Joe', 'Sum Lee', 'Totalt Erik', 'Thiago Silva'].forEach((name) => {
+    assert.equal(isSummaryRowName(name), false, name);
+  });
+  ['Total', ' TOTAL ', 'Totals', 'Squad Total', 'Team  Total', 'Total:', 'League Total', 'Avg', 'סה"כ', 'סהכ', 'סך הכל'].forEach((name) => {
+    assert.equal(isSummaryRowName(name), true, name);
+  });
+  assert.ok(SUMMARY_ROW_LABELS.includes('squad total') && SUMMARY_ROW_LABELS.includes('opponent total'));
+  assert.deepEqual(stripSummaryRows([{ name: 'A' }, null, { name: 'Total' }]), {
+    players: [{ name: 'A' }, null],
+    warnings: ['שורות סיכום דולגו (אינן שחקנים): Total']
+  });
+  assert.deepEqual(stripSummaryRows([{ name: 'A' }]).warnings, []);
+  assert.ok(html.includes('Squad Total'), 'the BYOD help text must mention the summary-row rule');
+});
+
+test('FBref "Get table as CSV" layout: group-header line above the header and repeated header rows are skipped and reported', () => {
+  // Verbatim shape of an FBref squad export: a group-header line, the real header,
+  // the header repeated after a page of players, then the totals.
+  const header = 'Rk,Player,Nation,Pos,Squad,Age,Born,MP,Starts,Min,90s,Gls,Ast,Tkl,Int,Matches';
+  const csv = [
+    ',,,,,,,Playing Time,Playing Time,Playing Time,Playing Time,Performance,Performance,Defense,Defense,',
+    header,
+    '1,Alpha,eng ENG,DF,Home,27,1998,30,30,"2,700",30.0,2,1,60,40,Matches',
+    '2,Beta,fr FRA,MF,Home,24,2001,28,20,"1,900",21.1,4,6,45,20,Matches',
+    header,
+    '3,Gamma,br BRA,FW,Home,22,2003,25,15,"1,400",15.6,9,3,10,5,Matches',
+    ',Squad Total,,,Home,,,30,330,"29,700",330.0,55,40,500,300,',
+    ''
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true, fileName: 'fbref.csv' });
+  assert.equal(parsed.ok, true, parsed.errors.join(' | '));
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha', 'Beta', 'Gamma']);
+  // The repeated header is not reported as a player called "Player"; the only message is the
+  // real FBref quirk that the totals row leaves its Matches cell empty (named from the header, not the preamble).
+  assert.deepEqual(parsed.errors, ['שורה 7: 15 תאים מול 16 כותרות — Matches נחשבים ריקים']);
+  assert.deepEqual(parsed.players[0], {
+    name: 'Alpha', team: 'Home', position: 'DF', totalMinutesProxy: 2700, minutes: 2700, goals: 2, assists: 1, tackles: 60, interceptions: 40
+  });
+  assert.equal(parsed.players[2].minutes, 1400);
+  assert.ok(parsed.warnings.some((w) => w === 'הכותרת נמצאה בשורה 2; השורה שלפניה דולגה (כותרת-על של FBref או הערה): Playing Time | Playing Time | Playing Time | Playing Time | …'), parsed.warnings.join(' | '));
+  // File line 5 is the repeated header (line 1 preamble, line 2 header, lines 3-4 players).
+  assert.ok(parsed.warnings.some((w) => w === 'שורת הכותרת חוזרת בתוך הקובץ פעם אחת (שורה 5) כמו בייצוא FBref — העותקים דולגו'), parsed.warnings.join(' | '));
+  assert.ok(parsed.warnings.some((w) => /שורות סיכום/.test(w) && /Squad Total/.test(w)), parsed.warnings.join(' | '));
+  // Line numbers in other messages count the skipped preamble too.
+  const shifted = parseUserDataset(',,group\nname,minutes,tackles\nA,90,1\n,90,2\nB,x,3\n', { attested: true });
+  assert.deepEqual(shifted.errors, ['שורה 4: חסר שם', 'שורה 5: minutes=«x» אינו מספר — השחקן דולג']);
+  assert.deepEqual(shifted.players.map((p) => p.name), ['A']);
+
+  // Two or more repeats are counted together; a sep= line shifts the numbers once more.
+  const twice = parseUserDataset('sep=;\nname;minutes\nA;90\nname;minutes\nB;80\nNAME;MINUTES\nC;70\n', { attested: true });
+  assert.deepEqual(twice.players.map((p) => p.name), ['A', 'B', 'C']);
+  assert.ok(twice.warnings.some((w) => w === 'שורת הכותרת חוזרת בתוך הקובץ 2 פעמים (שורות 4, 6) כמו בייצוא FBref — העותקים דולגו'), twice.warnings.join(' | '));
+  assert.ok(!twice.warnings.some((w) => /הכותרת נמצאה/.test(w)), 'no preamble was skipped');
+
+  // A plain file is untouched: header on line 1, no new warnings.
+  const plain = parseUserDataset('name,minutes\nA,90\nB,80\n', { attested: true });
+  assert.deepEqual(plain.warnings.filter((w) => /כותרת/.test(w)), []);
+  assert.deepEqual(plain.errors, []);
+
+  // A file whose first lines have no name column still fails with the old message, naming line 1.
+  const noName = parseUserDataset('team,minutes\nHome,90\nAway,80\n', { attested: true });
+  assert.equal(noName.ok, false);
+  assert.match(noName.errors[0], /^חסרה עמודת name\. כותרות שנמצאו: team \| minutes/);
+
+  // The scan is bounded: a header buried deeper than CSV_HEADER_SCAN lines is not found.
+  const deep = Array(CSV_HEADER_SCAN).fill('x,y').concat(['name,minutes', 'A,90']).join('\n');
+  assert.equal(parseUserDataset(deep, { attested: true }).ok, false);
+  assert.equal(findCsvHeaderRow([['x', 'y'], ['', 'Playing Time'], ['Rk', 'Player', 'Min']]), 2);
+  assert.equal(findCsvHeaderRow([['x', 'y'], ['team', 'minutes']]), -1);
+  assert.equal(findCsvHeaderRow([]), -1);
+
+  // Repeated-header matching: case-insensitive, trailing blanks ignored, any differing cell is a player.
+  assert.equal(isRepeatedHeaderRow(['Player', 'Min', ''], ['player', 'min']), true);
+  assert.equal(isRepeatedHeaderRow(['Player', '90'], ['Player', 'Min']), false);
+  assert.equal(isRepeatedHeaderRow(['Player'], ['Player', 'Min']), false);
+  // A real player who happens to be named after a column is kept: the whole row has to match.
+  const named = parseUserDataset('name,minutes\nPlayer,90\nMin,80\n', { attested: true });
+  assert.deepEqual(named.players.map((p) => p.name), ['Player', 'Min']);
+  assert.ok(html.includes('Get table as CSV'), 'the BYOD help text must mention the FBref layout');
+});
+
+test('FBref tables without Min: the 90s column gives minutes (×90), reported once; Min wins when both exist', () => {
+  assert.equal(isNinetiesHeader('90s'), true);
+  assert.equal(isNinetiesHeader(' 90s '), true);
+  assert.equal(isNinetiesHeader('Nineties'), true);
+  assert.equal(isNinetiesHeader('90'), false);
+  assert.equal(isNinetiesHeader('minutes'), false);
+  assert.equal(isNinetiesHeader(''), false);
+  NINETIES_HEADERS.forEach((h) => assert.equal(resolveCsvHeader(h), null, h + ' is not a plain alias: its value needs ×90'));
+
+  // An FBref Defensive Actions export: no Min column at all, 90s rounded to a tenth.
+  const csv = [
+    'Player,Nation,Pos,Squad,Age,Born,90s,Tkl,TklW,Int,Press',
+    'Alpha,ISR,DF,Home,27,1998,12.3,30,20,15,120',
+    'Beta,ISR,MF,Home,24,2001,0.5,2,1,1,10',
+    'Gamma,ISR,FW,Home,30,1995,-,0,0,0,0',
+    'Delta,ISR,FW,Home,30,1995,x,0,0,0,0'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha', 'Beta', 'Gamma']);
+  assert.equal(parsed.players[0].minutes, 1107, '12.3 × 90, rounded to a whole minute');
+  assert.equal(parsed.players[0].totalMinutesProxy, 1107);
+  assert.equal(parsed.players[1].minutes, 45);
+  assert.equal(parsed.players[2].minutes, undefined, '- in 90s is a missing value, not 0');
+  assert.deepEqual(parsed.errors, ['שורה 5: 90s=«x» אינו מספר — השחקן דולג']);
+  assert.ok(parsed.warnings.some((w) => w.startsWith('אין עמודת דקות (Min)') && w.includes('90s × 90')), parsed.warnings.join(' | '));
+  assert.ok(!parsed.warnings.some((w) => w.includes('אף שחקן בלי דקות')), parsed.warnings.join(' | '));
+  assert.ok(parsed.warnings.some((w) => w.startsWith('תאים עם סימון חסר') && w.includes('minutes ×1')), parsed.warnings.join(' | '));
+  const mapped = parsed.warnings.find((w) => w.startsWith('כותרות שהותאמו'));
+  assert.ok(mapped && mapped.includes('90s → minutes (×90)'), mapped);
+  assert.ok(!parsed.warnings.some((w) => w.startsWith('עמודות שלא זוהו') && w.includes('90s')), 'the 90s column is not reported as unknown');
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance });
+  const alpha = store.players.find((p) => p.name === 'Alpha');
+  assert.equal(alpha.minutes, 1107);
+  assert.ok(alpha.components.grit > 0, 'per-90 components are computed from the derived minutes');
+  const ranked = store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows;
+  assert.ok(ranked.some((row) => row.name === 'Alpha'), 'Alpha passes the minutes threshold');
+
+  // Both Min and 90s: Min is read, the 90s column is ignored and said so, and it is not a duplicate header.
+  const both = parseUserDataset('Player,Min,90s,Tkl\nA,900,10.0,5\nB,450,5.0,2\n', { attested: true });
+  assert.deepEqual(both.players.map((p) => p.minutes), [900, 450]);
+  assert.ok(both.warnings.some((w) => w.startsWith('עמודת 90s לא נקראה')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.includes('90s × 90')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.startsWith('כותרת כפולה')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.startsWith('עמודות שלא זוהו')), both.warnings.join(' | '));
+
+  // 90s before Min in the header still prefers Min.
+  const reversed = parseUserDataset('Player,90s,Min,Tkl\nA,10.0,900,5\nB,5.0,450,2\n', { attested: true });
+  assert.deepEqual(reversed.players.map((p) => p.minutes), [900, 450]);
+
+  // A negative 90s value is a negative minute count: dropped and reported per player like any sign error.
+  const neg = parseUserDataset('Player,90s,Tkl\nA,-1.0,5\nB,2.0,2\n', { attested: true });
+  assert.deepEqual(neg.players.map((p) => p.name), ['A', 'B']);
+  assert.equal(neg.players[0].minutes, undefined);
+  assert.equal(neg.players[1].minutes, 180);
+  assert.ok(neg.errors.some((e) => e.includes('A') && e.includes('minutes')), neg.errors.join(' | '));
+
+  // A ; file with a decimal comma in 90s.
+  const euro = parseUserDataset('sep=;\nPlayer;90s;Tkl\nA;12,3;5\n', { attested: true });
+  assert.equal(euro.players[0].minutes, 1107);
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('<code>90s</code>'), 'the BYOD help text must mention the 90s column');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('90s'), 'README must mention the 90s column');
+});
+
+test('the same player name twice is reported once by name - identical copy, same team, or two teams - and nothing is merged', () => {
+  assert.deepEqual(auditDuplicateNames([]), []);
+  assert.deepEqual(auditDuplicateNames(null), []);
+  assert.deepEqual(auditDuplicateNames([{ name: 'A', team: 'X' }, { name: 'B', team: 'X' }]), []);
+  assert.deepEqual(auditDuplicateNames([{ name: '' }, { name: '' }, { name: null }]), [], 'blank names are not duplicates');
+  // Case and spacing do not make two players.
+  const loose = auditDuplicateNames([{ name: 'Cohen', team: 'A', minutes: 90 }, { name: ' cohen  ', team: 'A', minutes: 80 }]);
+  assert.equal(loose.length, 1);
+  assert.ok(loose[0].startsWith('שם שחקן חוזר באותה קבוצה') && loose[0].includes('Cohen ×2'), loose[0]);
+
+  // A sheet pasted twice: identical rows, called a copy; nothing is dropped.
+  const copy = parseUserDataset('name,team,minutes,tackles\nCohen,A,900,10\nCohen,A,900,10\nLevi,A,800,5\n', { attested: true });
+  assert.equal(copy.ok, true);
+  assert.equal(copy.players.length, 3, 'nothing is dropped');
+  assert.deepEqual(copy.errors, []);
+  const copyWarn = copy.warnings.filter((w) => w.startsWith('שורות זהות'));
+  assert.equal(copyWarn.length, 1, copy.warnings.join(' | '));
+  assert.ok(copyWarn[0].includes('Cohen ×2'), copyWarn[0]);
+  assert.ok(!copy.warnings.some((w) => w.startsWith('שם שחקן חוזר')), copy.warnings.join(' | '));
+
+  // Same team, different values: two rows, two ids, one warning that names the #2 id.
+  const same = parseUserDataset('name,team,position,minutes,tackles\nCohen,A,CB,900,10\nCohen,A,ST,300,1\nLevi,A,CM,800,5\n', { attested: true });
+  const sameWarn = same.warnings.filter((w) => w.startsWith('שם שחקן חוזר באותה קבוצה'));
+  assert.equal(sameWarn.length, 1, same.warnings.join(' | '));
+  assert.ok(sameWarn[0].includes('Cohen ×2') && sameWarn[0].includes('#2'), sameWarn[0]);
+  assert.ok(!same.warnings.some((w) => w.startsWith('שורות זהות')), same.warnings.join(' | '));
+  const store = createStore({ players: same.players }, { provenance: same.provenance });
+  assert.deepEqual(store.players.map((p) => p.id), ['Cohen|A', 'Cohen|A#2', 'Levi|A']);
+
+  // No team column at all: still the same-team message.
+  const noTeam = parseUserDataset('name,minutes\nCohen,900\nCohen,300\n', { attested: true });
+  assert.ok(noTeam.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה') && w.includes('Cohen ×2')), noTeam.warnings.join(' | '));
+
+  // An FBref export of a mid-season transfer: one row per squad, listed by team.
+  const moved = parseUserDataset('Player,Squad,Min,Tkl\nCohen,A,900,10\nCohen,B,300,2\nLevi,B,800,5\n', { attested: true });
+  const movedWarn = moved.warnings.filter((w) => w.startsWith('שם שחקן חוזר בקבוצות שונות'));
+  assert.equal(movedWarn.length, 1, moved.warnings.join(' | '));
+  assert.ok(movedWarn[0].includes('Cohen (A, B)'), movedWarn[0]);
+  assert.equal(moved.players.length, 3, 'rows are not merged');
+  assert.ok(!moved.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה')), moved.warnings.join(' | '));
+
+  // Three names at once: each lands in its own message, in file order.
+  const mixed = auditDuplicateNames([
+    { name: 'A', team: 'X', minutes: 1 }, { name: 'B', team: 'X', minutes: 1 }, { name: 'C', team: 'X', minutes: 1 },
+    { name: 'A', team: 'X', minutes: 1 }, { name: 'B', team: 'X', minutes: 2 }, { name: 'C', team: 'Y', minutes: 1 },
+    { name: 'A', team: 'X', minutes: 1 }
+  ]);
+  assert.equal(mixed.length, 3, mixed.join(' | '));
+  assert.ok(mixed[0].startsWith('שורות זהות') && mixed[0].includes('A ×3'), mixed[0]);
+  assert.ok(mixed[1].startsWith('שם שחקן חוזר באותה קבוצה') && mixed[1].includes('B ×2'), mixed[1]);
+  assert.ok(mixed[2].startsWith('שם שחקן חוזר בקבוצות שונות') && mixed[2].includes('C (X, Y)'), mixed[2]);
+
+  // The JSON path shares the audit.
+  const json = parseUserDataset(JSON.stringify(twoCohens()), { attested: true });
+  assert.equal(json.ok, true);
+  assert.ok(json.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה') && w.includes('Cohen ×2')), json.warnings.join(' | '));
+
+  // Summary rows are stripped before the audit: two Squad Total rows are not a duplicate player.
+  const totals = parseUserDataset('name,team,minutes\nA,X,900\nB,X,800\nSquad Total,X,1700\nSquad Total,X,1700\n', { attested: true });
+  assert.equal(totals.ok, true);
+  assert.ok(!totals.warnings.some((w) => w.startsWith('שורות זהות') || w.startsWith('שם שחקן חוזר')), totals.warnings.join(' | '));
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('שם שחקן שחוזר'), 'the BYOD help text must mention repeated player names');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('שם שחקן שחוזר'), 'README must mention repeated player names');
 });
