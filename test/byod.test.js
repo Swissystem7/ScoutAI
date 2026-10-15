@@ -42,6 +42,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const licence = fs.readFileSync(path.join(root, 'licence.html'), 'utf8');
 const offer = fs.readFileSync(path.join(root, 'offer.html'), 'utf8');
 const monetization = fs.readFileSync(path.join(root, 'MONETIZATION.md'), 'utf8');
+const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const example = JSON.parse(fs.readFileSync(path.join(root, 'data', 'user-dataset.example.json'), 'utf8'));
 
 test('user JSON with attestation becomes USER_LICENSED_DATA and does not claim Open Data', () => {
@@ -731,6 +732,13 @@ test('a file without readable minutes is loaded but says every per-90 score will
   assert.ok(json.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
   const proxy = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', totalMinutesProxy: 300 }] }), { attested: true });
   assert.ok(!proxy.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
+
+  // A file that loads and then ranks nobody only makes sense if the help text
+  // says minutes are what drives every per-90 component and the threshold.
+  assert.ok(html.includes('בלי דקות קריאות') && html.includes('ואף שחקן לא עובר את סף הדקות'),
+    'the BYOD help text must say a file without readable minutes scores every component 0');
+  assert.ok(readme.includes('בלי דקות קריאות'),
+    'the README BYOD bullet must say a file without readable minutes is reported');
 });
 
 test('negative minutes and counts are dropped and reported per player, zero minutes are counted', () => {
@@ -764,4 +772,11 @@ test('negative minutes and counts are dropped and reported per player, zero minu
     'שחקן «J»: tackles=«-1» שלילי — נחשב כחסר'
   ]);
   assert.deepEqual(auditMinutesAndSigns([{ name: 'ok', minutes: 90, pressures: 0 }]), { errors: [], warnings: [] });
+
+  // Dropping a cell the file does contain has to be documented, or the per-player
+  // error is the first a user hears that a negative value is not a measurement.
+  assert.ok(html.includes('שליליות אינן מדידה') && html.includes('עם 0 דקות נספרים'),
+    'the BYOD help text must say negative values count as missing and 0 minutes is legal');
+  assert.ok(readme.includes('שליליות'),
+    'the README BYOD bullet must say negative minutes and counts are reported');
 });
