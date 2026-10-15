@@ -46,6 +46,10 @@ function normaliseBudget(budget) {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_BUDGET;
 }
 
+function validateBudget(budget) {
+  return normaliseBudget(budget);
+}
+
 // First-fit-decreasing: the largest files are placed first, so a group only stays half-empty when nothing
 // left fits in it. Ties break on path so the same diff always yields the same plan.
 function planSplit(files, budget) {
@@ -169,6 +173,7 @@ function parseArgs(argv) {
 module.exports = {
   DEFAULT_BUDGET,
   DEFAULT_BASE,
+  validateBudget,
   parseNumstat,
   totalChanged,
   planSplit,
