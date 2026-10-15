@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>שוברים את הסטטיסטיקה — ScoutAI</title>
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
+    body{margin:0;background:#f3f6f1}.skip{position:absolute;inset-inline-start:-999px;top:8px;background:#fff;color:#10281d;padding:8px 12px;border-radius:8px;z-index:5}
+    .skip:focus{inset-inline-start:8px}.shell{max-width:1000px;margin:auto;padding:24px}
+    .banner{background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code{display:inline-block;margin:2px;background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700;display:inline-flex;align-items:center;min-height:44px}
+    .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}
+    h1,h2{margin-top:0}p,li{line-height:1.65}code{overflow-wrap:anywhere}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}
+    .danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
+    .ok{border-inline-start:4px solid #145c3d;background:#e6f3ea;padding:12px;color:#0f3d26}
+    .verdict{font-size:1.1rem;font-weight:700;padding:14px;border-radius:12px;margin:12px 0;line-height:1.6}
+    .verdict.none{background:#f8ecec;color:#3d1010;border:2px solid #8a1f1f}
+    .verdict.found{background:#e6f3ea;color:#0f3d26;border:2px solid #145c3d}
+    .verdict.mixed{background:#fff6dd;color:#3d2e00;border:2px solid #8a5a00}
+    label{display:block;margin:12px 0 6px;font-weight:700}
+    select,input[type=file]{font:inherit;padding:10px;border-radius:10px;border:1px solid #8a9a8e;min-height:44px;max-width:100%;width:100%;background:#fff}
+    button{font:inherit;font-weight:700;padding:10px 16px;border-radius:10px;border:1px solid #145c3d;background:#145c3d;color:#fff;min-height:44px;cursor:pointer}
+    button.secondary{background:#fff;color:#145c3d}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .table-wrap{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;font-size:.92rem}
+    caption{text-align:start;font-weight:700;padding:8px 0}th,td{text-align:start;padding:8px 6px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    th{font-size:.82rem;color:#2d3a32}td.num{direction:ltr;text-align:end;white-space:nowrap}
+    tr.index-row td,tr.index-row th{background:#eef4ee;font-weight:700}
+    .muted{color:#3d4a42;font-size:.88rem}
+    .defs{display:grid;gap:10px;padding:0;list-style:none}.defs li{background:#f3f6f1;border-radius:12px;padding:12px}
+    .defs code{font-size:.8rem}
+    .split{display:flex;height:22px;border-radius:999px;overflow:hidden;background:#e3ebe4;margin:6px 0}
+    .split .phys{background:#8a5a00}.split .tech{background:#145c3d}
+    .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.88rem}.legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-inline-end:6px;vertical-align:-1px}
+    .legend .l-phys::before{background:#8a5a00}.legend .l-tech::before{background:#145c3d}
+    .bars{display:grid;gap:8px;margin-top:10px}.bar{display:grid;grid-template-columns:150px 1fr 44px;gap:8px;align-items:center}
+    .bar .track{background:#e3ebe4;border-radius:999px;height:14px;overflow:hidden}.bar .fill{background:#145c3d;height:100%;display:block}
+    .bar strong{direction:ltr;text-align:end}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0}
+    .kpi{background:#f3f6f1;border-radius:12px;padding:12px}.kpi b{display:block;font-size:1.4rem;direction:ltr;text-align:start}
+    .source{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .tag{display:inline-block;background:#dff4e7;color:#0f3d26;border-radius:999px;padding:2px 8px;font-size:.8rem;font-weight:700}
+    :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
+    footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
+    @media(max-width:650px){.shell{padding:12px}.card{padding:16px}.controls{grid-template-columns:1fr}.bar{grid-template-columns:100px 1fr 40px}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#validation">דלגו לתוצאת האימות</a>
+<main class="shell">
+  <aside class="banner" aria-label="סיווג הדף">
+    <code>STATSBOMB_OPEN_DATA</code> אירועי מונדיאל 2018, 64 משחקים — לימוד/מחקר בלבד.
+    <code>WIKIDATA_CC0</code> גובה וחודש לידה, רק כדי לבדוק את הטענה על הטיית גודל.
+    <code>NO_FACE_MODEL</code> אין תמונות, אין וידאו, אין ניתוח גוף.
+    <div class="nav">
+      <a href="../">חזרה למעבדת המדד</a>
+      <a href="../mentality/">מדד מנטליות</a>
+      <a href="../trap/">מלכודת הפיצ'רים</a>
+      <a href="../licence.html">רישיון</a>
+    </div>
+  </aside>
+
+  <section class="card" id="hero">
+    <h1>שוברים את הסטטיסטיקה — יהלומים חבויים ותיקון הטיה פיזית</h1>
+    <p>הטענה: הסטטיסטיקה של היום מעדיפה שחקנים גבוהים, גדולים ופיזיים — ולכן סקאוט שעובד לפיה מפספס שחקנים טכניים וחכמים. הדף הזה עושה שלושה דברים: (1) מפרק לכל שחקן <strong>כמה מהדירוג שלו בא מאירועים פיזיים</strong> (אוויר, דו-קרבות, הרחקות) וכמה מאירועים טכניים והחלטתיים; (2) בונה <strong>מדד טכני-החלטתי</strong> שמוציא במכוון את כל האירועים הפיזיים ומנורמל בתוך התפקיד; (3) מציג <strong>יהלומים חבויים</strong> — מדד טכני גבוה, דירוג קונבנציונלי נמוך. ואז בודק ביושר, על משחקים שהמדד לא ראה, אם זה עובד.</p>
+    <div class="source" role="group" aria-label="מקור הנתונים">
+      <span>מקור נתונים פעיל:</span> <span id="sourceTag" class="tag">מונדיאל 2018 (Open Data)</span>
+      <button type="button" id="resetSource" class="secondary" hidden>חזרה למונדיאל 2018</button>
+    </div>
+    <div id="headline" class="verdict none" role="status" aria-live="polite">מחשב את תוצאות האימות…</div>
+  </section>
+
+  <section class="card" id="research">
+    <h2>מה ידוע על הטיית גודל ובגרות בסקאוטינג</h2>
+    <ul>
+      <li><strong>אפקט הגיל היחסי.</strong> מטא-אנליזה של מחקרים בספורט מצאה שחלוקה לשנתונים יוצרת יתרון לילידי תחילת השנה — בגלל פער גופני בגיל הצעיר <em>ובגלל פרקטיקות הבחירה</em> (<a href="https://pubmed.ncbi.nlm.nih.gov/19290678/" rel="noopener">Cobley ועמיתים, Sports Medicine, 2009</a>).</li>
+      <li><strong>אקדמיות באנגליה.</strong> ב-812 שחקני אקדמיה (U10–U16, 23 מועדונים): 45.0% נולדו ברבעון הראשון של שנת הבחירה ו-9.8% ברבעון האחרון (יחס סיכויים 4.57); פער הגובה בין המבוגר לצעיר בשנתון הגיע ל-40 ס״מ (<a href="https://www.frontiersin.org/journals/sports-and-active-living/articles/10.3389/fspor.2022.847438/full" rel="noopener">Bolckmans ועמיתים, Frontiers, 3.3.2022</a>).</li>
+      <li><strong>הצעירים שנבחרו — לא פחות טובים.</strong> באקדמיה אנגלית מקטגוריה 1: לילידי הרבעון הראשון היה סיכוי גבוה פי 6.0 להיות בסגל מאשר לילידי הרבעון האחרון, אבל בגילי U11–U18 נצפתה נטייה של ילידי הרבעון האחרון לעלות עליהם במבחני ספרינט, ניתור, זריזות וסיבולת (<a href="https://journals.sagepub.com/doi/10.1177/1747954119879348" rel="noopener">Patel ועמיתים, 2019</a>).</li>
+      <li><strong>עד היום.</strong> במונדיאל U-17 של 2023, 44.1% מהשחקנים נולדו בינואר–מרץ, לעומת 25% צפויים (<a href="https://www.fifatrainingcentre.com/en/environment/fifa-research/high-performance/talent-pathways/fifa-u-17-world-cup-player-analysis.php" rel="noopener">FIFA Training Centre, 30.11.2023</a>).</li>
+    </ul>
+    <p class="notice">המחקרים האלה עוסקים ב<strong>בחירת נוער</strong>. הם לא מוכיחים שמדדי ביצוע של שחקנים בוגרים מוטים לגובה — את זה בודקים כאן, על הנתונים.</p>
+  </section>
+
+  <section class="card" id="premise">
+    <h2>האם ההטיה קיימת בנתונים שלנו?</h2>
+    <p>לכל שחקן עם גובה ידוע (Wikidata) — מתאם Spearman בין הגובה לכל מדד, <strong>בתוך התפקיד</strong> (בלם מול בלם, כנף מול כנף), כדי שלא נמדוד רק «בלמים גבוהים יותר מכנפיים». חיובי = גבוהים מקבלים יותר.</p>
+    <div class="table-wrap" id="heightTable"></div>
+    <p id="heightNote" class="muted"></p>
+    <h3>אפקט הגיל היחסי — גם אצל שחקנים בוגרים</h3>
+    <div class="kpis" id="raeKpis"></div>
+    <p id="raeNote" class="muted"></p>
+  </section>
+
+  <section class="card" id="share">
+    <h2>1. מאיפה בא הדירוג? חלק פיזי מול טכני</h2>
+    <p>«דירוג קונבנציונלי» כאן = שיטת נקודות שקופה בסגנון דירוגי משחק ציבוריים: כל אירוע מקבל ניקוד קבוע, נסכם ל-90 דקות. <strong>החלק הפיזי</strong> = נקודות מדו-קרבות אוויריים, תיקולים, 50/50, הרחקות, חסימות, הגנה על כדור, עבירות שנסחטו ו-xG מנגיחות, חלקי כל הנקודות.</p>
+    <div class="legend"><span class="l-phys">פיזי / אווירי / דו-קרב</span><span class="l-tech">טכני / החלטתי</span></div>
+    <div class="table-wrap" id="roleShareTable"></div>
+    <label for="sharePlayer">שחקן לפירוק</label>
+    <select id="sharePlayer"></select>
+    <div id="shareCard"></div>
+    <details><summary>הניקוד המלא של כל אירוע</summary><div class="table-wrap" id="weightsTable"></div></details>
+  </section>
+
+  <section class="card" id="tdi">
+    <h2>2. המדד הטכני-החלטתי — בלי אוויר ובלי גוף</h2>
+    <p>שישה רכיבים, כל אחד מכווץ לממוצע התפקיד כשיש מעט דקות (90 דקות מדומות), מנורמל ל-z <strong>בתוך התפקיד</strong>, במשקל שווה. מוצג כאחוזון בתוך התפקיד. תפקידים: בלם, מגן, קשר אחורי/מרכזי, קשר התקפי/כנף, חלוץ. שוערים לא נכללים.</p>
+    <ul id="tdiList" class="defs"></ul>
+    <p class="notice"><strong>מוצא במכוון:</strong> <span id="excludedList"></span>.</p>
+  </section>
+
+  <section class="card" id="gems">
+    <h2>3. יהלומים חבויים</h2>
+    <p>יהלום = מדד טכני-החלטתי באחוזון <span id="gemTdi"></span> ומעלה בתפקיד, <strong>וגם</strong> דירוג קונבנציונלי באחוזון <span id="gemConv"></span> ומטה. זה מה שסקאוט שמסתכל על הדירוג הרגיל היה מפספס. העמודה «דקות» מראה אם גם המאמן שלו פספס.</p>
+    <p class="danger">זו רשימה תיאורית של טורניר אחד. האימות למטה קובע אם מותר להסיק ממנה על העתיד.</p>
+    <div class="controls">
+      <div>
+        <label for="gemRole">תפקיד</label>
+        <select id="gemRole"><option value="ALL">כל התפקידים</option></select>
+      </div>
+      <div>
+        <label for="gemMin">סף דקות</label>
+        <select id="gemMin">
+          <option value="90">90+</option>
+          <option value="180" selected>180+</option>
+          <option value="270">270+</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap" id="gemTable"></div>
+  </section>
+
+  <section class="card" id="validation">
+    <h2>4. אימות מוחזק — האם זה מנבא?</h2>
+    <p>המדד, הדירוג הקונבנציונלי, הדקות וקווי הבסיס האחרים מחושבים <strong>רק ממשחקי האימון</strong>. היעד נמדד <strong>רק במשחקי המבחן</strong> של אותם שחקנים (60+ דקות), ומנורמל בתוך התפקיד. הרכיבים, הניקוד, הספים, הפיצולים, היעדים וכלל ההכרעה נקבעו בקוד לפני שהורצה התוצאה.</p>
+    <div class="controls">
+      <div>
+        <label for="splitSelect">פיצול</label>
+        <select id="splitSelect"></select>
+      </div>
+      <div>
+        <label for="outcomeSelect">יעד במשחקי המבחן</label>
+        <select id="outcomeSelect"></select>
+      </div>
+    </div>
+    <p id="outcomeWhy" class="muted"></p>
+    <div id="verdict" class="verdict none" role="status" aria-live="polite">מחשב…</div>
+    <div class="table-wrap" id="validationTable"></div>
+    <div class="table-wrap" id="deltaTable"></div>
+    <p id="gemTestLine"></p>
+    <p class="muted">ρ = מתאם Spearman עם היעד. בסוגריים: רווח סמך 95% מ-bootstrap של 1,000 דגימות שחקנים. כלל ההכרעה: «נמצא אות» רק אם הגבול התחתון של ρ למדד מעל 0 <strong>וגם</strong> היתרון שלו על הדירוג הקונבנציונלי <strong>וגם</strong> על הדקות מובהק (גבול תחתון מעל 0), עם 30 שחקנים לפחות.</p>
+    <h3>מה חוזר על עצמו בין משחקים?</h3>
+    <p>אותו מדד במשחקי האימון מול משחקי המבחן, לאותם שחקנים (90+ דקות בכל חצי, אותו תפקיד). מדד שלא חוזר על עצמו הוא רעש.</p>
+    <div class="table-wrap" id="reliabilityTable"></div>
+  </section>
+
+  <section class="card" id="byod">
+    <h2>הביאו נתונים שלכם</h2>
+    <p>כל הדף רץ גם על קובץ CSV שלכם — הכל בדפדפן, שום דבר לא נשלח. שורה לשחקן או לשחקן-משחק. חובה: <code>name</code>, <code>minutes</code>, ו-<code>position</code> (שם עמדה של StatsBomb) או <code>role</code> (CB / FB / CM / AM / ST). עמודות ספירה חסרות נחשבות 0. עם <code>teamMatchNo</code> (מספר המשחק של הקבוצה) — גם האימות המוחזק רץ. עם <code>heightCm</code> / <code>birthMonth</code> — גם בדיקת הטיית הגובה והגיל היחסי.</p>
+    <p><a href="../data/gems-template.csv" download>הורידו תבנית CSV</a> <span class="muted">(שתי שורות סינתטיות להדגמת הפורמט — לא שחקנים אמיתיים)</span></p>
+    <label for="csvFile">קובץ CSV מקומי</label>
+    <input id="csvFile" type="file" accept=".csv,text/csv">
+    <p id="csvStatus" class="muted" role="status" aria-live="polite"></p>
+  </section>
+
+  <footer>
+    נתוני אירועים: <span dir="ltr">StatsBomb Open Data</span> (<a href="https://github.com/hudl/open-data" rel="noopener">hudl/open-data</a>) — מחקר ושיתוף ציבורי עם קרדיט; שימוש מסחרי אסור. גובה וחודש לידה: <a href="https://www.wikidata.org/" rel="noopener">Wikidata</a> (CC0), נשמר רק חודש, לא תאריך. «קבלה בין הקווים» היא קירוב מיקומי — בנתוני 2018 הפתוחים אין מיקום שחקני יריב. כלי לימוד ומבחן השערה, לא שירות סקאוטינג.
+  </footer>
+</main>
+<script src="../demo.js"></script>
+<script src="../gems-base.js"></script>
+<script src="../gems-validate.js"></script>
+<script src="../gems.js"></script>
+<script src="page.js"></script>
+</body>
+</html>
