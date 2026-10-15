@@ -26,3 +26,23 @@ jobs:
           else
             node --test
           fi
+
+  # Headless Playwright smoke test of index.html at a 390px phone viewport. The page itself needs no network
+  # (it is served from 127.0.0.1 and the test fails on any off-host request); only the browser download does,
+  # so Playwright stays out of package.json and the suite above remains install-free.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Smoke test
+        env:
+          SCOUTAI_SMOKE_REQUIRED: "1"
+        run: npm run smoke

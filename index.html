@@ -19,7 +19,8 @@
     .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
     .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0;accent-color:#145c3d}
     .toggle{display:flex;gap:10px;align-items:center;font-weight:700;margin:10px 0}
-    .toggle input{width:auto}.up{color:#0f3d26;font-weight:700}.down{color:#8a1f1f;font-weight:700}
+    .toggle input[type=checkbox]{width:24px;height:24px;flex:none;padding:0;accent-color:#145c3d}
+    .up{color:#0f3d26;font-weight:700}.down{color:#8a1f1f;font-weight:700}
     .lesson{display:grid;gap:12px}.lesson-step{background:#f3f6f1;border-radius:12px;padding:14px}
     .lesson-step h3{margin:0 0 6px;font-size:1rem}.lesson-nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
     .lesson-nav button{margin-top:0;padding:8px 12px}.lesson-nav button[aria-current="step"]{outline:3px solid #10281d}
@@ -290,6 +291,18 @@
       .replace(/"/g, '&quot;');
   }
 
+  // demo.js builds the score formula as a Hebrew label plus a left-to-right expression:
+  // "ציון = (40×Grit + 30×Involvement + 30×Clutch) / 100". Dropped into an RTL paragraph as plain text, bidi
+  // reordering tears the weights off their components and that line reads "(Grit + … ×40) = ציון". Isolate
+  // everything from the "=" on, the way the page already marks the JSON export dir="ltr".
+  const FORMULA_LINE = /^ציון = \(.*\) \/ \d+$/;
+  function formulaHtml(text) {
+    const line = String(text == null ? '' : text);
+    if (!FORMULA_LINE.test(line)) return escapeHtml(line);
+    const eq = line.indexOf('=');
+    return escapeHtml(line.slice(0, eq)) + '<bdi dir="ltr">' + escapeHtml(line.slice(eq)) + '</bdi>';
+  }
+
   function readSpecFromControls() {
     return ScoutAIDemo.normalizeMetricSpec({
       grit: document.getElementById('wGrit').value,
@@ -348,7 +361,7 @@
   }
 
   function renderTable(current) {
-    formulaLine.textContent = current.formula;
+    formulaLine.innerHTML = formulaHtml(current.formula);
     const rows = current.rows;
     const spec = current.spec;
     const tag = (current.provenance || 'STATSBOMB_OPEN_DATA');
@@ -424,7 +437,7 @@
       return '<li class="' + (item.pass ? 'pass' : 'fail') + '">' +
         '<span class="check-flag">' + (item.pass ? 'עבר' : 'לא עבר') + '</span>' +
         escapeHtml(item.label) +
-        '<div class="muted">' + escapeHtml(item.detail) + '</div></li>';
+        '<div class="muted">' + formulaHtml(item.detail) + '</div></li>';
     }).join('');
   }
 
@@ -738,7 +751,7 @@
         return '<li class="' + (item.pass ? 'pass' : 'fail') + '">' +
           '<span class="check-flag">' + (item.pass ? 'עבר' : 'לא עבר') + '</span>' +
           escapeHtml(item.label) +
-          '<div class="muted">' + escapeHtml(item.detail || '') + '</div></li>';
+          '<div class="muted">' + formulaHtml(item.detail || '') + '</div></li>';
       }).join('') + '</ul></article>';
     syncQuizControls(lesson);
   }
