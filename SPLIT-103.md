@@ -46,3 +46,17 @@ them. PR #109 was slice 1 re-opened from the pre-#101 `master`, so #101 made
 its code a duplicate and GitHub reported it as conflicting with every file #101
 had already changed; what was left of its intent is what this PR carries, and
 #109 can be closed.
+
+## Update (2026-10-15, after merging `master` into this branch)
+
+All four slices are on `master`: #101 (slice 1), #102 (slice 2), #103 (slice 3)
+and #104 (slice 4), branches `factory/laptop-claude-98-split-1` to `-4`, each cut
+from `master` after the previous one merged. The branch that relanded the whole
+stack in one PR was #98 (`copilot/reland-byod-stack`), now closed; the 782 changed
+lines that issue #106 measured on #103 were slice 3 stacked on top of slice 2
+before #102 reached `master`, not a separate whole-stack PR. PR #109 is closed.
+
+The `README.md` bullet and the `index.html` BYOD paragraph are taken from
+`master`, which already carries the minutes sentences this PR set out to add
+(followed by the slice 2-4 sentences). What this PR still adds is this file and
+the two `test/byod.test.js` assertions that pin those sentences to the help text.
