@@ -91,6 +91,24 @@ test('refuses Open Data payload even if the user attests', () => {
   assert.match(parsed.errors[0], /StatsBomb Open Data/);
 });
 
+test('refuses shipped WC2018 JSON when source metadata lines are stripped', () => {
+  const wc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'wc2018_event_aggregates.json'), 'utf8'));
+  const stripped = { players: wc.players };
+  assert.equal(looksLikeOpenDataPayload(stripped), true);
+  const parsed = parseUserDataset(JSON.stringify(stripped), { attested: true });
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.detected, OPEN_DATA_PROVENANCE);
+  assert.equal(looksLikeOpenDataPayload(example), false);
+  assert.equal(looksLikeOpenDataPayload({
+    players: [
+      { name: 'Alpha', team: 'Home', position: 'Center Back', minutes: 400, pressures: 40 },
+      { name: 'Beta', team: 'Away', position: 'Center Forward', minutes: 400, pressures: 10 }
+    ]
+  }), false);
+  const storeProbe = createStore(stripped, { provenance: USER_DATA_PROVENANCE });
+  assert.equal(storeProbe.derive({ minMinutes: 90 }).commercialAllowed, false);
+});
+
 test('refuses user upload without an attestation', () => {
   const parsed = parseUserDataset(JSON.stringify({
     players: [{ name: 'No Attest', minutes: 200 }]
