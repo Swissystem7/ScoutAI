@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>התאמה לקבוצה — ScoutAI</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
+    body{margin:0;background:#f3f6f1}.skip{position:absolute;inset-inline-start:-999px;top:8px;background:#fff;color:#10281d;padding:8px 12px;border-radius:8px;z-index:5}
+    .skip:focus{inset-inline-start:8px}.shell{max-width:1040px;margin:auto;padding:24px}
+    .banner{background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code{display:inline-block;margin:2px;background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}
+    .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700;display:inline-flex;align-items:center;min-height:44px}
+    .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}
+    h1,h2,h3{margin-top:0}p,li{line-height:1.65}code{overflow-wrap:anywhere}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}
+    .danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
+    .verdict{font-size:1.08rem;font-weight:700;padding:14px;border-radius:12px;margin:12px 0;line-height:1.6}
+    .verdict.none{background:#f8ecec;color:#3d1010;border:2px solid #8a1f1f}
+    .verdict.partial{background:#fff6dd;color:#3d2e00;border:2px solid #8a5a00}
+    .verdict.found{background:#e6f3ea;color:#0f3d26;border:2px solid #145c3d}
+    label{display:block;margin:12px 0 6px;font-weight:700}
+    select,input[type=file]{font:inherit;padding:10px;border-radius:10px;border:1px solid #8a9a8e;min-height:44px;max-width:100%;width:100%;background:#fff}
+    button{font:inherit;font-weight:700;padding:10px 14px;border-radius:10px;border:1px solid #145c3d;background:#145c3d;color:#fff;min-height:44px;cursor:pointer}
+    button.secondary{background:#fff;color:#145c3d}
+    .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .check{display:flex;gap:8px;align-items:center;min-height:44px;font-weight:700;margin-top:34px}.check input{width:22px;height:22px}
+    .table-wrap{overflow-x:auto;max-width:100%}table{width:100%;border-collapse:collapse;font-size:.92rem}
+    caption{text-align:start;font-weight:700;padding:8px 0}th,td{text-align:start;padding:8px 6px;border-bottom:1px solid #c5d0c6;vertical-align:top}
+    th{font-size:.84rem;color:#2d3a32}td.num{direction:ltr;text-align:end;white-space:nowrap}
+    tr.hl td,tr.hl th{background:#eef4ee;font-weight:700}
+    .muted{color:#3d4a42;font-size:.88rem}
+    .tag{display:inline-block;border-radius:999px;padding:2px 8px;font-size:.78rem;font-weight:700;white-space:nowrap}
+    .tag.stable{background:#e6f3ea;color:#0f3d26}.tag.partial{background:#fff6dd;color:#3d2e00}.tag.noise{background:#f8ecec;color:#3d1010}
+    .zbar{position:relative;height:12px;background:#e3ebe4;border-radius:999px;min-width:90px}
+    .zbar span{position:absolute;top:0;height:100%;background:#145c3d;border-radius:999px}
+    .zbar span.neg{background:#8a5a00}.zbar::after{content:"";position:absolute;inset-inline-start:50%;top:-2px;height:16px;border-inline-start:2px solid #17211b}
+    .sliders{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin-top:10px}
+    .slider label{margin:8px 0 2px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .slider output{font-weight:400;direction:ltr}
+    input[type=range]{width:100%;min-height:36px;accent-color:#145c3d}
+    .players{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+    .player{border:1px solid #dbe4dc;border-radius:14px;padding:14px;background:#fbfdfb}
+    .player h3{margin:0 0 4px;font-size:1.05rem;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
+    .player .fit{margin-inline-start:auto;font-size:1.25rem;color:#0f3d26}
+    .player ul{margin:6px 0 0;padding-inline-start:20px}.player li{margin:2px 0}
+    .player.miss{background:#fffaf0;border-color:#e6d3a8}
+    .shift{font-size:.82rem;font-weight:700}.shift.up{color:#145c3d}.shift.down{color:#8a1f1f}
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .status{min-height:1.5em;font-weight:700}
+    .defs{display:grid;gap:10px;padding:0;list-style:none}.defs li{background:#f3f6f1;border-radius:12px;padding:12px}
+    :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
+    footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
+    @media(max-width:760px){.shell{padding:12px}.card{padding:16px}.controls,.sliders{grid-template-columns:1fr}.check{margin-top:4px}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#shortlist">דלגו לרשימה המקוצרת</a>
+<main class="shell">
+  <aside class="banner" aria-label="סיווג הדף">
+    <code>STATSBOMB_OPEN_DATA</code> אירועי מונדיאל 2018, 64 משחקים, 32 נבחרות — לימוד/מחקר בלבד.
+    <code>NO_AI</code> אין מודל שאומן: משקלות גלויים, וכל סיבה בדירוג היא מספר מהקובץ.
+    <code>NO_FACE_MODEL</code> רק פעולות על המגרש. אין תמונות, אין גובה/משקל, אין «אופי».
+    <div class="nav">
+      <a href="../">חזרה למעבדת המדד</a>
+      <a href="../mentality/">מדד מנטליות</a>
+      <a href="../licence.html">רישיון</a>
+      <a href="../offer.html">סדנה</a>
+    </div>
+  </aside>
+
+  <section class="card" id="hero">
+    <h1>התאמה לקבוצה — סקאוטינג בשביל מערכת מסוימת</h1>
+    <p>אותו שחקן יכול להיות מושלם לקבוצה אחת ומיותר לאחרת. הדף בונה <strong>פרופיל סגנון לקבוצה</strong> מנתוני אירועים (החזקה, עצימות וגובה לחץ, לחץ-נגד, ישירות, הגבהות מול כדורי עומק, בנייה מאחור, תלות בנייחים), ו<strong>פרופיל פעולות לשחקן לפי עמדה</strong> — ומדרג שחקנים לפי מה שהמערכת דורשת מהעמדה: חלוץ של קבוצה לוחצת צריך לחץ-נגד; בלם של קבוצת החזקה צריך מסירות מתקדמות תחת לחץ.</p>
+    <p>זה גם «שובר את הסטטיסטיקה» הרגילה: אין כאן גובה, משקל או ספרינט — רק מה שהשחקן עשה עם הכדור ובלעדיו.</p>
+    <div id="headline" class="verdict partial" role="status" aria-live="polite">מחשב את תוצאות האימות…</div>
+  </section>
+
+  <section class="card" id="team">
+    <h2>1. בחרו קבוצה — או בנו פרופיל משלכם</h2>
+    <div class="controls">
+      <div>
+        <label for="teamSelect">קבוצה</label>
+        <select id="teamSelect"></select>
+      </div>
+      <div>
+        <label for="roleSelect">עמדה לחיזוק</label>
+        <select id="roleSelect"></select>
+      </div>
+      <div>
+        <label for="minSelect">סף דקות בטורניר</label>
+        <select id="minSelect">
+          <option value="90">90+</option>
+          <option value="180" selected>180+</option>
+          <option value="270">270+</option>
+        </select>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="excludeOwn" checked> הסתירו שחקנים של הקבוצה עצמה (מחפשים חיזוק מבחוץ)</label>
+    <div id="customBox" hidden>
+      <p class="notice">פרופיל מותאם: הזיזו כל ממד בסטיות תקן ביחס ל-32 הנבחרות (0 = ממוצע המונדיאל). בסוגריים — הערך הגולמי שזה מייצג. מתאים למועדון שלא בנתונים: «אנחנו מחזיקים הרבה, לוחצים גבוה, כמעט לא מגביהים».</p>
+      <div class="row">
+        <button type="button" class="secondary" id="copyFrom">העתיקו מהקבוצה: <span id="copyName"></span></button>
+        <button type="button" class="secondary" id="resetSliders">איפוס לממוצע</button>
+      </div>
+      <div class="sliders" id="sliders"></div>
+    </div>
+    <div class="table-wrap" id="profileTable"></div>
+    <p class="muted">התווית ליד כל ממד היא תוצאת מבחן היציבות (חצי-מדגם, למטה): <span class="tag stable">יציב</span> <span class="tag partial">חלקי</span> <span class="tag noise">רעש</span>. ממד «רעש» בפרופיל של קבוצה אמיתית — אל תסמכו עליו; עדיף להזין אותו ידנית בפרופיל מותאם.</p>
+  </section>
+
+  <section class="card" id="weights">
+    <h2>2. מה המערכת דורשת מהעמדה</h2>
+    <p>לכל עמדה רשימת פעולות עם משקל בסיס. כל ממד סגנון מזיז משקלות: <code dir="ltr">weight = max(0, base + Σ loading × z)</code>. ציון ההתאמה = ממוצע משוקלל של אחוזוני השחקן בפעולות האלה, בתוך העמדה (0–100).</p>
+    <div class="table-wrap" id="weightsTable"></div>
+  </section>
+
+  <section class="card" id="shortlist">
+    <h2>3. רשימה מקוצרת — עם 3 סיבות לכל שחקן</h2>
+    <p id="shortlistMeta" class="muted"></p>
+    <ol class="players" id="shortlistList"></ol>
+    <h3 style="margin-top:22px">כמעט נכנסו — ולמה לא</h3>
+    <ol class="players" id="nearList"></ol>
+    <p class="muted">«↑ 5 מול ניטרלי» = כמה מקומות השחקן עלה בזכות הסגנון של הקבוצה, מול דירוג עמדה ניטרלי (כל הממדים = 0). בלי הזזה — הרשימה היא בעיקר איכות כללית בעמדה.</p>
+  </section>
+
+  <section class="card" id="validation">
+    <h2>4. האם זה אמיתי? אימות כן</h2>
+    <p>ההגדרות — ממדים, עמדות, משקלות, כיווץ, ספים, שני פיצולים וכללי ההכרעה — קבועים בקוד (<code>clubfit.js</code>) ונקבעו לפני שהרצנו את האימות. רווחי סמך 95% מ-bootstrap.</p>
+    <label for="splitSelect">פיצול</label>
+    <select id="splitSelect"></select>
+
+    <h3 style="margin-top:18px">א. האם פרופיל הקבוצה יציב בין משחקים?</h3>
+    <p class="muted">לכל ממד: ρ Spearman בין ערך הקבוצה בחצי אחד של משחקיה לערכה בחצי השני, על פני 32 נבחרות (כל חצי = 1–4 משחקים). כלל: «יציב» אם ρ ≥ 0.5 והגבול התחתון מעל 0; «חלקי» אם רק הגבול התחתון מעל 0; אחרת «רעש».</p>
+    <div class="table-wrap" id="teamStabTable"></div>
+    <p id="fingerprint" class="muted"></p>
+
+    <h3 style="margin-top:18px">ב. האם ציון ההתאמה של שחקן יציב בין משחקים — או רעש?</h3>
+    <p class="muted">פרופילי הקבוצות קבועים (כל הטורניר). פעולות השחקן נלקחות מחצי אחד של המשחקים מול החצי השני, לשחקנים עם 90+ דקות בכל חצי. לכל אחד מ-32 הפרופילים מחשבים ρ בין שני החצאים וממצעים. «החלק הייחודי» = התאמה לקבוצה פחות ממוצע ההתאמה של השחקן לכל 32 הקבוצות — זה החלק שבחירת הקבוצה מוסיפה. כלל: «יציב» אם הגבול התחתון של ρ &gt; 0.5, «חלקי» אם &gt; 0.2; לחלק הייחודי «יש אות» אם הגבול התחתון &gt; 0 ו-ρ ≥ 0.2.</p>
+    <div id="fitVerdict" class="verdict partial" role="status" aria-live="polite">מחשב…</div>
+    <div class="table-wrap" id="fitStabTable"></div>
+
+    <h3 style="margin-top:18px">ג. בדיקת שפיות: האם שחקן «מתאים» לקבוצה שלו?</h3>
+    <p class="muted">פרופיל הקבוצה מחצי אחד של המשחקים, פעולות השחקן מהחצי השני. לכל שחקן: באיזה אחוזון נמצאת הקבוצה שלו בין 32 הקבוצות לפי החלק הייחודי. במקרה = 50. bootstrap לפי קבוצות. הסתייגות: השחקן עצמו הוא חלק מסגנון הקבוצה, אז זה בודק שהסגנון נישא על הרגלים של שחקנים — לא שהשחקן «יצליח» אחרי מעבר.</p>
+    <div id="ownTeam" class="verdict partial" role="status">מחשב…</div>
+
+    <h3 style="margin-top:18px">ד. כמה הרשימות באמת שונות בין קבוצות?</h3>
+    <div class="table-wrap" id="diversityTable"></div>
+    <p class="danger"><strong>מה לא נבדק:</strong> אין עונה שנייה ואין העברות בנתונים, ולכן לא נבדק אם שחקן עם התאמה גבוהה <em>הצליח יותר</em> אחרי שעבר לקבוצה כזו. ציון ההתאמה מתאר דמיון בין פעולות למערכת — הוא לא מנבא הצלחה. נבחרות משחקות 3–7 משחקים; במועדון עם 30+ משחקים בעונה הפרופילים צפויים להיות יציבים יותר, אבל את זה לא מדדנו כאן.</p>
+  </section>
+
+  <section class="card" id="byod">
+    <h2>5. הביאו נתונים שלכם</h2>
+    <p>קובץ CSV — שורה לשחקן (או לשחקן במשחק). חובה: <code dir="ltr">name, team, position, minutes</code>. <code dir="ltr">position</code> בשמות StatsBomb (למשל <code dir="ltr">Center Back</code>, <code dir="ltr">Left Wing</code>). כל עמודת פעולה אופציונלית; פעולה שחסרה מקבלת משקל 0. שמות העמודות: <code dir="ltr" id="csvFields"></code>. הקבוצה והעמדה נלקחות מהבחירה למעלה (כולל פרופיל מותאם). האחוזונים מחושבים בתוך הקובץ שלכם. הקובץ לא עוזב את הדפדפן.</p>
+    <label for="csvFile">קובץ CSV</label>
+    <input type="file" id="csvFile" accept=".csv,text/csv,.txt">
+    <div class="row"><button type="button" class="secondary" id="loadExample">טענו דוגמה סינתטית (6 שחקנים מומצאים)</button></div>
+    <p id="byodStatus" class="status" role="status" aria-live="polite"></p>
+    <ol class="players" id="byodList"></ol>
+  </section>
+
+  <section class="card" id="method">
+    <h2>איך זה מחושב</h2>
+    <ul class="defs" id="dimList"></ul>
+    <p class="muted">פעולות השחקן: ספירה ל-90 דקות, מכווצת לממוצע העמדה עם 90 «דקות מדומות» (<code dir="ltr">(count + roleRate × 90) / (minutes + 90) × 90</code>) — כך ששחקן עם 40 דקות מבריקות לא קופץ לראש. אחוזון בתוך העמדה, בין השחקנים עם 90+ דקות. העמדה = העמדה שבה השחקן שיחק הכי הרבה דקות. נבנה ב־<code>node tools/build-club-fit.js</code> אל <code>data/wc2018_club_fit.json</code>.</p>
+  </section>
+
+  <footer>
+    נתונים: <span dir="ltr">StatsBomb Open Data</span> (<a href="https://github.com/hudl/open-data" rel="noopener">hudl/open-data</a>) — מחקר ושיתוף ציבורי עם קרדיט; שימוש מסחרי בנתונים ובניתוחים שנגזרים מהם אסור. על נתונים שהמועדון רישיין בעצמו — מותר להריץ את אותו כלי.
+  </footer>
+</main>
+<script src="../clubfit-base.js"></script>
+<script src="../clubfit-fit.js"></script>
+<script src="../clubfit.js"></script>
+<script src="page.js"></script>
+</body>
+</html>
