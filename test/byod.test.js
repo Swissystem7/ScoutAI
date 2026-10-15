@@ -36,8 +36,11 @@ const {
   MISSING_MARKERS,
   isSummaryRowName,
   stripSummaryRows,
+  auditDuplicateNames,
   SUMMARY_ROW_LABELS,
   playerKey,
+  isNinetiesHeader,
+  NINETIES_HEADERS,
   serializeMetricHash,
   parseMetricHash,
   DEFAULT_METRIC
@@ -891,4 +894,137 @@ test('FBref "Get table as CSV" layout: group-header line above the header and re
   const named = parseUserDataset('name,minutes\nPlayer,90\nMin,80\n', { attested: true });
   assert.deepEqual(named.players.map((p) => p.name), ['Player', 'Min']);
   assert.ok(html.includes('Get table as CSV'), 'the BYOD help text must mention the FBref layout');
+});
+
+test('FBref tables without Min: the 90s column gives minutes (×90), reported once; Min wins when both exist', () => {
+  assert.equal(isNinetiesHeader('90s'), true);
+  assert.equal(isNinetiesHeader(' 90s '), true);
+  assert.equal(isNinetiesHeader('Nineties'), true);
+  assert.equal(isNinetiesHeader('90'), false);
+  assert.equal(isNinetiesHeader('minutes'), false);
+  assert.equal(isNinetiesHeader(''), false);
+  NINETIES_HEADERS.forEach((h) => assert.equal(resolveCsvHeader(h), null, h + ' is not a plain alias: its value needs ×90'));
+
+  // An FBref Defensive Actions export: no Min column at all, 90s rounded to a tenth.
+  const csv = [
+    'Player,Nation,Pos,Squad,Age,Born,90s,Tkl,TklW,Int,Press',
+    'Alpha,ISR,DF,Home,27,1998,12.3,30,20,15,120',
+    'Beta,ISR,MF,Home,24,2001,0.5,2,1,1,10',
+    'Gamma,ISR,FW,Home,30,1995,-,0,0,0,0',
+    'Delta,ISR,FW,Home,30,1995,x,0,0,0,0'
+  ].join('\n');
+  const parsed = parseUserDataset(csv, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.players.map((p) => p.name), ['Alpha', 'Beta', 'Gamma']);
+  assert.equal(parsed.players[0].minutes, 1107, '12.3 × 90, rounded to a whole minute');
+  assert.equal(parsed.players[0].totalMinutesProxy, 1107);
+  assert.equal(parsed.players[1].minutes, 45);
+  assert.equal(parsed.players[2].minutes, undefined, '- in 90s is a missing value, not 0');
+  assert.deepEqual(parsed.errors, ['שורה 5: 90s=«x» אינו מספר — השחקן דולג']);
+  assert.ok(parsed.warnings.some((w) => w.startsWith('אין עמודת דקות (Min)') && w.includes('90s × 90')), parsed.warnings.join(' | '));
+  assert.ok(!parsed.warnings.some((w) => w.includes('אף שחקן בלי דקות')), parsed.warnings.join(' | '));
+  assert.ok(parsed.warnings.some((w) => w.startsWith('תאים עם סימון חסר') && w.includes('minutes ×1')), parsed.warnings.join(' | '));
+  const mapped = parsed.warnings.find((w) => w.startsWith('כותרות שהותאמו'));
+  assert.ok(mapped && mapped.includes('90s → minutes (×90)'), mapped);
+  assert.ok(!parsed.warnings.some((w) => w.startsWith('עמודות שלא זוהו') && w.includes('90s')), 'the 90s column is not reported as unknown');
+  const store = createStore({ players: parsed.players }, { provenance: parsed.provenance });
+  const alpha = store.players.find((p) => p.name === 'Alpha');
+  assert.equal(alpha.minutes, 1107);
+  assert.ok(alpha.components.grit > 0, 'per-90 components are computed from the derived minutes');
+  const ranked = store.derive(DEFAULT_METRIC, DEFAULT_METRIC).rows;
+  assert.ok(ranked.some((row) => row.name === 'Alpha'), 'Alpha passes the minutes threshold');
+
+  // Both Min and 90s: Min is read, the 90s column is ignored and said so, and it is not a duplicate header.
+  const both = parseUserDataset('Player,Min,90s,Tkl\nA,900,10.0,5\nB,450,5.0,2\n', { attested: true });
+  assert.deepEqual(both.players.map((p) => p.minutes), [900, 450]);
+  assert.ok(both.warnings.some((w) => w.startsWith('עמודת 90s לא נקראה')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.includes('90s × 90')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.startsWith('כותרת כפולה')), both.warnings.join(' | '));
+  assert.ok(!both.warnings.some((w) => w.startsWith('עמודות שלא זוהו')), both.warnings.join(' | '));
+
+  // 90s before Min in the header still prefers Min.
+  const reversed = parseUserDataset('Player,90s,Min,Tkl\nA,10.0,900,5\nB,5.0,450,2\n', { attested: true });
+  assert.deepEqual(reversed.players.map((p) => p.minutes), [900, 450]);
+
+  // A negative 90s value is a negative minute count: dropped and reported per player like any sign error.
+  const neg = parseUserDataset('Player,90s,Tkl\nA,-1.0,5\nB,2.0,2\n', { attested: true });
+  assert.deepEqual(neg.players.map((p) => p.name), ['A', 'B']);
+  assert.equal(neg.players[0].minutes, undefined);
+  assert.equal(neg.players[1].minutes, 180);
+  assert.ok(neg.errors.some((e) => e.includes('A') && e.includes('minutes')), neg.errors.join(' | '));
+
+  // A ; file with a decimal comma in 90s.
+  const euro = parseUserDataset('sep=;\nPlayer;90s;Tkl\nA;12,3;5\n', { attested: true });
+  assert.equal(euro.players[0].minutes, 1107);
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('<code>90s</code>'), 'the BYOD help text must mention the 90s column');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('90s'), 'README must mention the 90s column');
+});
+
+test('the same player name twice is reported once by name - identical copy, same team, or two teams - and nothing is merged', () => {
+  assert.deepEqual(auditDuplicateNames([]), []);
+  assert.deepEqual(auditDuplicateNames(null), []);
+  assert.deepEqual(auditDuplicateNames([{ name: 'A', team: 'X' }, { name: 'B', team: 'X' }]), []);
+  assert.deepEqual(auditDuplicateNames([{ name: '' }, { name: '' }, { name: null }]), [], 'blank names are not duplicates');
+  // Case and spacing do not make two players.
+  const loose = auditDuplicateNames([{ name: 'Cohen', team: 'A', minutes: 90 }, { name: ' cohen  ', team: 'A', minutes: 80 }]);
+  assert.equal(loose.length, 1);
+  assert.ok(loose[0].startsWith('שם שחקן חוזר באותה קבוצה') && loose[0].includes('Cohen ×2'), loose[0]);
+
+  // A sheet pasted twice: identical rows, called a copy; nothing is dropped.
+  const copy = parseUserDataset('name,team,minutes,tackles\nCohen,A,900,10\nCohen,A,900,10\nLevi,A,800,5\n', { attested: true });
+  assert.equal(copy.ok, true);
+  assert.equal(copy.players.length, 3, 'nothing is dropped');
+  assert.deepEqual(copy.errors, []);
+  const copyWarn = copy.warnings.filter((w) => w.startsWith('שורות זהות'));
+  assert.equal(copyWarn.length, 1, copy.warnings.join(' | '));
+  assert.ok(copyWarn[0].includes('Cohen ×2'), copyWarn[0]);
+  assert.ok(!copy.warnings.some((w) => w.startsWith('שם שחקן חוזר')), copy.warnings.join(' | '));
+
+  // Same team, different values: two rows, two ids, one warning that names the #2 id.
+  const same = parseUserDataset('name,team,position,minutes,tackles\nCohen,A,CB,900,10\nCohen,A,ST,300,1\nLevi,A,CM,800,5\n', { attested: true });
+  const sameWarn = same.warnings.filter((w) => w.startsWith('שם שחקן חוזר באותה קבוצה'));
+  assert.equal(sameWarn.length, 1, same.warnings.join(' | '));
+  assert.ok(sameWarn[0].includes('Cohen ×2') && sameWarn[0].includes('#2'), sameWarn[0]);
+  assert.ok(!same.warnings.some((w) => w.startsWith('שורות זהות')), same.warnings.join(' | '));
+  const store = createStore({ players: same.players }, { provenance: same.provenance });
+  assert.deepEqual(store.players.map((p) => p.id), ['Cohen|A', 'Cohen|A#2', 'Levi|A']);
+
+  // No team column at all: still the same-team message.
+  const noTeam = parseUserDataset('name,minutes\nCohen,900\nCohen,300\n', { attested: true });
+  assert.ok(noTeam.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה') && w.includes('Cohen ×2')), noTeam.warnings.join(' | '));
+
+  // An FBref export of a mid-season transfer: one row per squad, listed by team.
+  const moved = parseUserDataset('Player,Squad,Min,Tkl\nCohen,A,900,10\nCohen,B,300,2\nLevi,B,800,5\n', { attested: true });
+  const movedWarn = moved.warnings.filter((w) => w.startsWith('שם שחקן חוזר בקבוצות שונות'));
+  assert.equal(movedWarn.length, 1, moved.warnings.join(' | '));
+  assert.ok(movedWarn[0].includes('Cohen (A, B)'), movedWarn[0]);
+  assert.equal(moved.players.length, 3, 'rows are not merged');
+  assert.ok(!moved.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה')), moved.warnings.join(' | '));
+
+  // Three names at once: each lands in its own message, in file order.
+  const mixed = auditDuplicateNames([
+    { name: 'A', team: 'X', minutes: 1 }, { name: 'B', team: 'X', minutes: 1 }, { name: 'C', team: 'X', minutes: 1 },
+    { name: 'A', team: 'X', minutes: 1 }, { name: 'B', team: 'X', minutes: 2 }, { name: 'C', team: 'Y', minutes: 1 },
+    { name: 'A', team: 'X', minutes: 1 }
+  ]);
+  assert.equal(mixed.length, 3, mixed.join(' | '));
+  assert.ok(mixed[0].startsWith('שורות זהות') && mixed[0].includes('A ×3'), mixed[0]);
+  assert.ok(mixed[1].startsWith('שם שחקן חוזר באותה קבוצה') && mixed[1].includes('B ×2'), mixed[1]);
+  assert.ok(mixed[2].startsWith('שם שחקן חוזר בקבוצות שונות') && mixed[2].includes('C (X, Y)'), mixed[2]);
+
+  // The JSON path shares the audit.
+  const json = parseUserDataset(JSON.stringify(twoCohens()), { attested: true });
+  assert.equal(json.ok, true);
+  assert.ok(json.warnings.some((w) => w.startsWith('שם שחקן חוזר באותה קבוצה') && w.includes('Cohen ×2')), json.warnings.join(' | '));
+
+  // Summary rows are stripped before the audit: two Squad Total rows are not a duplicate player.
+  const totals = parseUserDataset('name,team,minutes\nA,X,900\nB,X,800\nSquad Total,X,1700\nSquad Total,X,1700\n', { attested: true });
+  assert.equal(totals.ok, true);
+  assert.ok(!totals.warnings.some((w) => w.startsWith('שורות זהות') || w.startsWith('שם שחקן חוזר')), totals.warnings.join(' | '));
+
+  // Help text and README mention the rule.
+  assert.ok(html.includes('שם שחקן שחוזר'), 'the BYOD help text must mention repeated player names');
+  assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('שם שחקן שחוזר'), 'README must mention repeated player names');
 });

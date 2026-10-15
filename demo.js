@@ -1964,6 +1964,77 @@
     return { players: kept, warnings: warnings };
   }
 
+  // The same player name twice in one file is legal and loads as two rows
+  // (the store gives the second id a #2 suffix), but it is rarely what the
+  // user meant: a sheet pasted twice, or an FBref export in which a player
+  // who moved mid-season appears once per squad. Both rows rank separately,
+  // each on part of the player's minutes, with no error, because every cell
+  // is valid. Say so once, by name: an identical copy (every read field
+  // equal) is called a copy, two rows in one team are listed with a count,
+  // two teams are listed by team. Nothing is merged or dropped - which row
+  // is right is the user's call, in the file. Names match ignoring case and
+  // runs of spaces, so "cohen" and "Cohen " are the same player.
+  function plainPlayerName(name) {
+    return String(name == null ? '' : name).toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  // True when two player rows carry the same value in every field the lab reads.
+  function sameUserRow(a, b) {
+    const keys = USER_DATASET_COLUMNS.concat(['totalMinutesProxy']);
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      const x = a[key] == null || a[key] === '' ? '' : String(a[key]).trim();
+      const y = b[key] == null || b[key] === '' ? '' : String(b[key]).trim();
+      if (x !== y) return false;
+    }
+    return true;
+  }
+
+  function auditDuplicateNames(players) {
+    const groups = {};
+    const order = [];
+    (players || []).forEach(function (row) {
+      if (!row) return;
+      const key = plainPlayerName(row.name);
+      if (!key) return;
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(row);
+    });
+    const copies = [];
+    const sameTeam = [];
+    const teams = [];
+    order.forEach(function (key) {
+      const rows = groups[key];
+      if (rows.length < 2) return;
+      const label = String(rows[0].name).trim();
+      const teamNames = [];
+      rows.forEach(function (row) {
+        const team = row.team == null ? '' : String(row.team).trim();
+        if (teamNames.indexOf(team) < 0) teamNames.push(team);
+      });
+      if (teamNames.length > 1) {
+        teams.push(label + ' (' + teamNames.map(function (t) { return t || '—'; }).join(', ') + ')');
+        return;
+      }
+      const identical = rows.every(function (row) { return sameUserRow(row, rows[0]); });
+      (identical ? copies : sameTeam).push(label + ' ×' + rows.length);
+    });
+    const warnings = [];
+    if (copies.length) {
+      warnings.push('שורות זהות (אותו שחקן, אותם ערכים): ' + copies.join(', ') +
+        ' — כל עותק נטען ומדורג בנפרד; מחקו את העותק בקובץ');
+    }
+    if (sameTeam.length) {
+      warnings.push('שם שחקן חוזר באותה קבוצה: ' + sameTeam.join(', ') +
+        ' — כל שורה נטענת ומדורגת בנפרד (המזהה השני מקבל #2), לא מאוחדת');
+    }
+    if (teams.length) {
+      warnings.push('שם שחקן חוזר בקבוצות שונות: ' + teams.join('; ') +
+        ' — כנראה מעבר באמצע עונה או שני שחקנים; כל שורה מדורגת בנפרד על חלק מהדקות, לא מאוחדת');
+    }
+    return warnings;
+  }
+
   // Header spellings a user sheet may carry for a column the lab reads.
   // Matching ignores case, spaces, underscores, hyphens and dots, so
   // Key Passes, key_passes and KEY-PASSES all load as keyPasses. The short
@@ -1997,6 +2068,20 @@
     }
     if (plain === 'totalminutesproxy') return 'totalMinutesProxy';
     return Object.prototype.hasOwnProperty.call(CSV_HEADER_ALIASES, plain) ? CSV_HEADER_ALIASES[plain] : null;
+  }
+
+  // Most FBref tables (Defensive Actions, Possession, Passing, Shooting…)
+  // carry no Min column at all - only "90s", the minutes divided by 90 and
+  // rounded to a tenth. Read as a plain sheet such a file loaded with no
+  // minutes, every per-90 component was 0 and nobody passed the minutes
+  // threshold. 90s is not a header alias (its value needs ×90), so it is
+  // resolved separately: used as the minutes source only when the file has
+  // no minutes column, and always said so. The derived minutes are rounded
+  // to a whole minute and are approximate (a tenth of a 90 is 9 minutes).
+  const NINETIES_HEADERS = Object.freeze(['90s', 'nineties', '90splayed', 'ninetiesplayed']);
+
+  function isNinetiesHeader(header) {
+    return NINETIES_HEADERS.indexOf(plainCsvHeader(header)) >= 0;
   }
 
   // Levenshtein distance, only used to suggest a known header for a typo.
@@ -2044,9 +2129,14 @@
     const dupes = [];
     const unknown = [];
     const mapped = [];
+    const nineties = [];
     let stats = 0;
     rawHeaders.forEach(function (raw) {
       const header = String(raw || '');
+      if (isNinetiesHeader(header)) {
+        nineties.push(header);
+        return;
+      }
       const key = resolveCsvHeader(header);
       const id = key || header.toLowerCase();
       if (!id) return;
@@ -2065,6 +2155,13 @@
       if (aliased) mapped.push(header + ' → ' + key);
       if (COUNT_FIELDS.indexOf(key) >= 0) stats += 1;
     });
+    if (nineties.length) {
+      if (seen.minutes || seen.totalMinutesProxy) {
+        warnings.push('עמודת ' + nineties.join(', ') + ' לא נקראה — יש עמודת דקות (Min) והיא עדיפה');
+      } else {
+        mapped.push(nineties.join(', ') + ' → minutes (×90)');
+      }
+    }
     if (dupes.length) {
       warnings.push('כותרת כפולה: ' + dupes.join(', ') + ' — נקראת רק העמודה הראשונה');
     }
@@ -2205,6 +2302,14 @@
       };
     }
     const minIdx = headers.indexOf('minutes') >= 0 ? headers.indexOf('minutes') : headers.indexOf('totalMinutesProxy');
+    // FBref tables without Min: see isNinetiesHeader. Only when no minutes
+    // column exists; the first 90s column is used.
+    let ninetiesIdx = -1;
+    if (minIdx < 0) {
+      for (let i = 0; i < header.length && ninetiesIdx < 0; i += 1) {
+        if (isNinetiesHeader(header[i])) ninetiesIdx = i;
+      }
+    }
     const col = {};
     USER_DATASET_COLUMNS.forEach(function (key) {
       col[key] = headers.indexOf(key);
@@ -2218,6 +2323,10 @@
         ' (כותרת-על של FBref או הערה): ' + lines.slice(0, headerIdx).map(previewCsvLine).join(' // '));
     }
     auditCsvHeaders(header).forEach(function (w) { warnings.push(w); });
+    if (ninetiesIdx >= 0) {
+      warnings.push('אין עמודת דקות (Min) — הדקות חושבו מעמודת ' + header[ninetiesIdx] +
+        ' של FBref: 90s × 90, מעוגל לדקה שלמה. FBref מעגל 90s לעשירית, כך שהדקות מקורבות (עד ±5)');
+    }
     const repeatedHeaderLines = [];
     // A row wider than the header is almost always a name with an unquoted
     // delimiter ("Silva, Thiago" saved from a text editor): every stat after
@@ -2249,16 +2358,17 @@
         errors.push('שורה ' + lineNo + ': ' + width + ' תאים מול ' + headerWidth +
           ' כותרות — ' + header.slice(width, headerWidth).join(', ') + ' נחשבים ריקים');
       }
-      const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
+      const minutesRaw = minIdx >= 0 ? cells[minIdx] : (ninetiesIdx >= 0 ? cells[ninetiesIdx] : '');
       if (csvMissingMarker(minutesRaw)) {
         // Kept as text so stripMissingMarkers counts it with the JSON path.
         row.minutes = minutesRaw;
       } else if (minutesRaw !== '' && minutesRaw != null) {
-        const minutes = cellNumber(minutesRaw, lineNo, 'minutes');
-        if (minutes === null) {
-          errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
+        const parsedMinutes = cellNumber(minutesRaw, lineNo, 'minutes');
+        if (parsedMinutes === null) {
+          errors.push('שורה ' + lineNo + ': ' + (ninetiesIdx >= 0 ? '90s' : 'minutes') + '=«' + minutesRaw + '» אינו מספר — השחקן דולג');
           return;
         }
+        const minutes = ninetiesIdx >= 0 ? Math.round(parsedMinutes * 90) : parsedMinutes;
         row.totalMinutesProxy = minutes;
         row.minutes = minutes;
       }
@@ -2396,6 +2506,7 @@
       ok: true,
       errors: parseErrors,
       warnings: parseWarnings
+        .concat(auditDuplicateNames(players))
         .concat(auditPositions(players))
         .concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
@@ -2472,6 +2583,8 @@
     suggestCsvHeader: suggestCsvHeader,
     resolveCsvHeader: resolveCsvHeader,
     CSV_HEADER_ALIASES: CSV_HEADER_ALIASES,
+    NINETIES_HEADERS: NINETIES_HEADERS,
+    isNinetiesHeader: isNinetiesHeader,
     CSV_DELIMITERS: CSV_DELIMITERS,
     invalidNumericFields: invalidNumericFields,
     csvNumber: csvNumber,
@@ -2480,6 +2593,7 @@
     MISSING_MARKERS: MISSING_MARKERS,
     isSummaryRowName: isSummaryRowName,
     stripSummaryRows: stripSummaryRows,
+    auditDuplicateNames: auditDuplicateNames,
     SUMMARY_ROW_LABELS: SUMMARY_ROW_LABELS,
     NUMERIC_USER_FIELDS: NUMERIC_USER_FIELDS,
     looksLikeOpenDataPayload: looksLikeOpenDataPayload,
