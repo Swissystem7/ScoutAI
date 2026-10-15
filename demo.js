@@ -472,11 +472,56 @@
     });
   }
 
+  const WC2018_OPEN_DATA_FINGERPRINTS = Object.freeze([
+    Object.freeze(["N'Golo Kanté", 'France', 621, 183]),
+    Object.freeze(['Harry Kane', 'England', 595, 115]),
+    Object.freeze(['Luka Modrić', 'Croatia', 720, 121]),
+    Object.freeze(['Kylian Mbappé Lottin', 'France', 550, 99]),
+    Object.freeze(['Cristiano Ronaldo dos Santos Aveiro', 'Portugal', 381, 31])
+  ]);
+  const WC2018_FINGERPRINT_MATCH_ID_A = 7525;
+  const WC2018_FINGERPRINT_MATCH_ID_B = 8658;
+  const WC2018_FINGERPRINT_MIN_HITS = 3;
+
+  function wc2018PlayerFingerprintHit(row) {
+    if (!row || typeof row !== 'object') return false;
+    const name = row.name;
+    const team = row.team;
+    if (!name || !team) return false;
+    const minutes = Number(row.totalMinutesProxy != null ? row.totalMinutesProxy : row.minutes);
+    const pressures = Number(row.pressures);
+    if (!Number.isFinite(minutes) || !Number.isFinite(pressures)) return false;
+    return WC2018_OPEN_DATA_FINGERPRINTS.some(function (fp) {
+      return fp[0] === name && fp[1] === team && fp[2] === minutes && fp[3] === pressures;
+    });
+  }
+
+  function wc2018MatchIdsFingerprint(matchIds) {
+    if (!Array.isArray(matchIds)) return false;
+    let hasA = false;
+    let hasB = false;
+    for (let i = 0; i < matchIds.length; i++) {
+      const id = Number(matchIds[i]);
+      if (id === WC2018_FINGERPRINT_MATCH_ID_A) hasA = true;
+      if (id === WC2018_FINGERPRINT_MATCH_ID_B) hasB = true;
+    }
+    return hasA && hasB;
+  }
+
   function looksLikeOpenDataPayload(dataset) {
     if (!dataset || typeof dataset !== 'object' || Array.isArray(dataset)) return false;
     const source = String(dataset.source || dataset.license || '').toLowerCase();
     if (source.indexOf('statsbomb') >= 0) return true;
     if (Number(dataset.competitionId) === 43 && Number(dataset.seasonId) === 3) return true;
+    if (wc2018MatchIdsFingerprint(dataset.matchIds)) return true;
+    const players = dataset.players;
+    if (Array.isArray(players)) {
+      let hits = 0;
+      for (let i = 0; i < players.length; i++) {
+        if (wc2018PlayerFingerprintHit(players[i])) hits += 1;
+      }
+      if (hits >= WC2018_FINGERPRINT_MIN_HITS) return true;
+    }
     return false;
   }
 
