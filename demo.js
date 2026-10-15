@@ -511,7 +511,11 @@
       let rows = scorePrepared(players, metric);
       if (baselineSpec) rows = attachDeltas(rows, scorePrepared(players, baselineSpec));
       const selected = rows.find(function (row) { return row.id === metric.selectedId; }) || rows[0] || null;
-      if (selected && !metric.selectedId) metric.selectedId = selected.id;
+      // A selected id that no longer clears the minutes floor falls back to
+      // the first row; the spec must name that row too, or the table has no
+      // highlighted row and the share link names a player the lesson is not
+      // showing. With no rows at all the id is kept for when the floor drops.
+      if (selected) metric.selectedId = selected.id;
       const compared = findPrepared(rows, players, metric.compareId);
       const fragility = fragilityFromPrepared(players, metric, 10);
       const layer = { provenance: provenance, source: source };
