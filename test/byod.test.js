@@ -164,6 +164,23 @@ test('European Excel CSV: `;` delimiter, sep= hint and decimal comma are underst
   assert.equal('pressures' in commaFile.players[0], false);
   assert.equal(commaFile.errors.length, 1);
 
+  // Excel's "1000 separator" format and FBref's Min column quote 2970 as
+  // "2,970". Strict groups of three load as a whole number and are listed;
+  // "0,456" is a decimal comma, not 456, and stays an error.
+  const grouped = parseUserDataset(
+    'name,minutes,pressures,shotXgSum\nA,"2,970","1,204.5",1\nB,"1,080",3,"0,456"\n',
+    { attested: true }
+  );
+  assert.equal(grouped.ok, true);
+  assert.equal(grouped.players[0].minutes, 2970);
+  assert.equal(grouped.players[0].pressures, 1204.5);
+  assert.equal(grouped.players[1].minutes, 1080);
+  assert.equal('shotXgSum' in grouped.players[1], false);
+  assert.deepEqual(grouped.errors, ['שורה 3: shotXgSum=«0,456» אינו מספר — התא נשאר ריק']);
+  assert.ok(grouped.warnings.some((w) => w.includes('מפריד אלפים') && w.includes('minutes=«2,970» → 2970')));
+  // In a `;` file the comma is the decimal mark, never a thousands group.
+  assert.equal(parseUserDataset('name;minutes;shotXgSum\nA;90;1,250\n', { attested: true }).players[0].shotXgSum, 1.25);
+
   // The wrong-column error now shows what was actually read, so a user whose
   // file collapsed into one column can see why.
   const noName = parseUserDataset('player|minutes\nA|90\n', { attested: true });
@@ -570,4 +587,50 @@ test('CSV with an unclosed quote: the swallowed tail is dropped and the opening 
   const none = parseUserDataset('name,minutes\n"Alpha,300\nBeta,200', { attested: true });
   assert.equal(none.ok, false);
   assert.match(none.errors[0], /^שורה 2: מירכאה/);
+});
+
+test('decodeUserFile reads a Hebrew Excel CSV saved in windows-1255 instead of mangling it as UTF-8', () => {
+  const { decodeUserFile } = require('../demo.js');
+  // "שם,דקות\nכהן,90" as Hebrew Excel writes it: one byte per Hebrew letter.
+  const bytes = new Uint8Array([0xF9, 0xED, 0x2C, 0xE3, 0xF7, 0xE5, 0xFA, 0x0A, 0xEB, 0xE4, 0xEF, 0x2C, 0x39, 0x30]);
+  const decoded = decodeUserFile(bytes);
+  assert.equal(decoded.encoding, 'windows-1255');
+  assert.equal(decoded.text, 'שם,דקות\nכהן,90');
+  assert.equal(decoded.warnings.length, 1);
+  assert.match(decoded.warnings[0], /windows-1255/);
+  const parsed = parseUserDataset(decoded.text, { attested: true, fileName: 'heb.csv' });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players[0].name, 'כהן');
+  assert.equal(parsed.players[0].minutes, 90);
+});
+
+test('decodeUserFile picks windows-1252 for a Western file with lone accented letters', () => {
+  const { decodeUserFile } = require('../demo.js');
+  // "name,minutes\nMüller,90" in windows-1252: ü is a single 0xFC between ASCII letters.
+  const bytes = new Uint8Array(Buffer.from('name,minutes\nM_ller,90', 'latin1'));
+  bytes[14] = 0xFC;
+  const decoded = decodeUserFile(bytes);
+  assert.equal(decoded.encoding, 'windows-1252');
+  assert.equal(decoded.text, 'name,minutes\nMüller,90');
+});
+
+test('decodeUserFile honours BOMs and leaves plain UTF-8 untouched without a warning', () => {
+  const { decodeUserFile } = require('../demo.js');
+  const utf8 = decodeUserFile(new Uint8Array(Buffer.from('name,minutes\nכהן,90', 'utf8')));
+  assert.deepEqual([utf8.encoding, utf8.text, utf8.warnings], ['utf-8', 'name,minutes\nכהן,90', []]);
+  const bom8 = decodeUserFile(new Uint8Array(Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), Buffer.from('שם,דקות', 'utf8')])));
+  assert.deepEqual([bom8.encoding, bom8.text], ['utf-8', 'שם,דקות']);
+  // Excel "Unicode Text": UTF-16LE with a BOM, tab-delimited.
+  const utf16 = decodeUserFile(new Uint8Array(Buffer.concat([Buffer.from([0xFF, 0xFE]), Buffer.from('שם\tדקות\nכהן\t90', 'utf16le')])));
+  assert.deepEqual([utf16.encoding, utf16.text, utf16.warnings], ['utf-16le', 'שם\tדקות\nכהן\t90', []]);
+  const parsed = parseUserDataset(utf16.text, { attested: true });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.players[0].name, 'כהן');
+});
+
+test('the BYOD loader reads raw bytes and shows the encoding note even when parsing fails', () => {
+  assert.ok(html.includes('readAsArrayBuffer'), 'readAsText would decode a windows-1255 file as UTF-8');
+  assert.ok(!html.includes('readAsText'), 'the upload must not fall back to readAsText');
+  assert.ok(html.includes('decodeUserFile'), 'the upload must decode bytes through decodeUserFile');
+  assert.ok(html.includes('windows-1255'), 'the BYOD help text must say Hebrew Excel CSV is read');
 });

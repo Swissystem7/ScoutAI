@@ -141,7 +141,8 @@
     { group: 'GK', re: /goalkeeper|keeper|portero|torwart|שוער/i },
     { group: 'MF', re: /midfield|mediocampista|mittelfeld|קשר/i },
     { group: 'DF', re: /back|defen|defensa|verteidiger|libero|sweeper|מגן|בלם/i },
-    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i }
+    { group: 'FW', re: /forward|wing|striker|attack|delantero|stürmer|חלוץ|כנף|קיצוני|מתקיף/i },
+    { group: 'UT', re: /technical|unknown/i }
   ]);
 
   function positionGroup(position) {
@@ -172,6 +173,30 @@
     const shown = unknown.slice(0, 8).join(', ') + (unknown.length > 8 ? ' ועוד ' + (unknown.length - 8) : '');
     return ['עמדות שלא זוהו ונחשבות OT (ינורמלו רק זו מול זו): ' + shown +
       ' — מוכרים: GK/DF/MF/FW, קודים כמו CB, CDM, ST, או השמות המלאים באנגלית/בעברית'];
+  }
+
+  const POSITION_FILTER_GROUPS = Object.freeze(['GK', 'DF', 'MF', 'FW', 'OT']);
+
+  function rowPositionGroup(row) {
+    return (row && row.positionGroup) || positionGroup(row && row.position);
+  }
+
+  function filterByPosition(players, selectedPosition) {
+    const list = Array.isArray(players) ? players : [];
+    const sel = String(selectedPosition == null ? '' : selectedPosition).trim();
+    if (!sel) return list.slice();
+    const upper = sel.toUpperCase();
+    if (POSITION_FILTER_GROUPS.indexOf(upper) >= 0) {
+      return list.filter(function (row) { return row && rowPositionGroup(row) === upper; });
+    }
+    return list.filter(function (row) {
+      if (!row) return false;
+      const pos = String(row.position || '').trim();
+      if (!pos) return false;
+      if (pos.toUpperCase() === upper) return true;
+      const tokens = pos.toUpperCase().split(/[^A-Z]+/);
+      return tokens.indexOf(upper) >= 0;
+    });
   }
 
   function per90(value, minutes) {
@@ -228,13 +253,18 @@
     };
   }
 
+  // Mid-rank percentile: the lowest value is 0, the highest 100, and tied
+  // values share the middle of their ranks. Counting ties as "below" gave a
+  // group of 38 keepers with zero clutch a 95th percentile each.
   function percentile(value, peers) {
-    if (!peers.length) return 50;
+    if (peers.length < 2) return 50;
     let below = 0;
+    let equal = 0;
     for (let i = 0; i < peers.length; i += 1) {
-      if (peers[i] <= value) below += 1;
+      if (peers[i] < value) below += 1;
+      else if (peers[i] === value) equal += 1;
     }
-    return round1(below / peers.length * 100);
+    return round1((below + Math.max(equal - 1, 0) / 2) / (peers.length - 1) * 100);
   }
 
   function normalizeByPosition(rows) {
@@ -555,6 +585,15 @@
     return parts.join('&');
   }
 
+  // A hand-trimmed or truncated link ("#sel=M%FC") must not throw and blank the page.
+  function safeDecode(text) {
+    try {
+      return decodeURIComponent(text);
+    } catch (err) {
+      return text;
+    }
+  }
+
   function parseMetricHash(hash) {
     const text = String(hash || '').replace(/^#/, '');
     if (!text) return normalizeMetricSpec(DEFAULT_METRIC);
@@ -562,13 +601,17 @@
     text.split('&').forEach(function (pair) {
       const parts = pair.split('=');
       if (parts.length < 2) return;
-      params[decodeURIComponent(parts[0])] = decodeURIComponent(parts.slice(1).join('='));
+      params[safeDecode(parts[0])] = safeDecode(parts.slice(1).join('='));
     });
+    // A key the link leaves out keeps its default, so "#sel=Kane" does not zero every weight.
+    function pick(key, fallback) {
+      return params[key] === undefined || params[key] === '' ? fallback : params[key];
+    }
     return normalizeMetricSpec({
-      grit: params.g,
-      involvement: params.i,
-      clutch: params.c,
-      minMinutes: params.min,
+      grit: pick('g', DEFAULT_METRIC.grit),
+      involvement: pick('i', DEFAULT_METRIC.involvement),
+      clutch: pick('c', DEFAULT_METRIC.clutch),
+      minMinutes: pick('min', DEFAULT_METRIC.minMinutes),
       normalizePosition: params.npos === '1' || params.npos === 'true',
       selectedId: params.sel || '',
       compareId: params.cmp || '',
@@ -1583,6 +1626,53 @@
     return next;
   }
 
+  function isDerivedLabView(value) {
+    return !!(value && typeof value === 'object' && value.spec && value.exercise &&
+      Array.isArray(value.curriculum));
+  }
+
+  function exercisesFromLessons(lessons, liveExercise) {
+    const exercises = (lessons || [])
+      .filter(function (lesson) { return lesson && lesson.exercise; })
+      .map(function (lesson) {
+        return {
+          lessonId: lesson.id,
+          title: lesson.title,
+          prompt: lesson.exercise
+        };
+      });
+    if (!exercises.length && liveExercise) {
+      exercises.push({
+        lessonId: liveExercise.id,
+        title: liveExercise.title,
+        prompt: liveExercise.prompt
+      });
+    }
+    return exercises;
+  }
+
+  function buildStructuredCourse(input, spec) {
+    const view = isDerivedLabView(input)
+      ? input
+      : createStore(input).derive(normalizeMetricSpec(spec || DEFAULT_METRIC));
+    const lessons = view.curriculum || evaluateCurriculum({
+      spec: view.spec,
+      selected: view.selected,
+      explorer: view.explorer,
+      validation: view.validation,
+      exercise: view.exercise,
+      answers: {}
+    });
+    return {
+      course: {
+        id: 'lesson-first',
+        lessons: lessons,
+        exercises: exercisesFromLessons(lessons, view.exercise)
+      },
+      sharedExercise: view.exercise
+    };
+  }
+
   function fragilityReport(dataset, spec, delta) {
     return fragilityFromPrepared(createStore(dataset).players, spec, delta);
   }
@@ -1696,6 +1786,18 @@
     if (decimalComma && /^-?\d+,\d+$/.test(text)) text = text.replace(',', '.');
     const n = Number(text);
     return Number.isFinite(n) ? n : null;
+  }
+
+  // Excel with "Use 1000 separator" and FBref's Min column write 2970 as
+  // "2,970", quoted in a comma file. Only strict groups of three after a
+  // non-zero lead count, so "12,5" stays an error and "0,456" (a decimal
+  // comma, not a thousand) is never read as 456. Not used in `;` files,
+  // where the comma is the decimal mark.
+  const THOUSANDS_GROUPED = /^-?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$/;
+
+  function groupedNumber(raw) {
+    const text = String(raw == null ? '' : raw).trim();
+    return THOUSANDS_GROUPED.test(text) ? Number(text.replace(/,/g, '')) : null;
   }
 
   // Number of cells up to the last non-empty one.
@@ -1832,10 +1934,59 @@
     return warnings;
   }
 
+  const PROVENANCE_LEDGER_COLUMNS = Object.freeze([
+    'fieldKey', 'label', 'value', 'filePath', 'provenance', 'dataset'
+  ]);
+
+  function csvEscapeCell(value) {
+    const text = String(value == null ? '' : value);
+    if (/[",\r\n]/.test(text)) return '"' + text.replace(/"/g, '""') + '"';
+    return text;
+  }
+
+  function csvRow(cells) {
+    return cells.map(csvEscapeCell).join(',');
+  }
+
+  function createCsvReportWithProvenance(player, meta) {
+    const explorer = buildEventExplorer(player, meta);
+    const lines = [csvRow(PROVENANCE_LEDGER_COLUMNS)];
+    if (!player || !explorer.player) return lines.join('\n') + '\n';
+    lines.push(csvRow([
+      'minutes',
+      'דקות פרוקסי',
+      explorer.player.minutes,
+      'players[].totalMinutesProxy',
+      explorer.provenance,
+      explorer.dataset
+    ]));
+    explorer.rows.forEach(function (row) {
+      lines.push(csvRow([
+        row.key,
+        row.label,
+        row.total,
+        row.filePath,
+        explorer.provenance,
+        explorer.dataset
+      ]));
+    });
+    return lines.join('\n') + '\n';
+  }
+
   function parseUserCsv(text) {
     const detected = detectCsvDelimiter(text);
     const delimiter = detected.delimiter;
     const decimalComma = delimiter === ';';
+    const grouped = [];
+    // A cell that is not a plain number may still be a thousands-grouped one
+    // in a comma file; each such read is listed so the user can check it.
+    function cellNumber(raw, lineNo, key) {
+      const n = csvNumber(raw, decimalComma);
+      if (n !== null || delimiter !== ',') return n;
+      const g = groupedNumber(raw);
+      if (g !== null) grouped.push('שורה ' + lineNo + ' ' + key + '=«' + String(raw).trim() + '» → ' + g);
+      return g;
+    }
     // Line numbers in messages are file lines: a sep= hint line pushes the
     // header to line 2 and the first player to line 3.
     const firstDataLine = detected.offset ? 3 : 2;
@@ -1897,7 +2048,7 @@
       }
       const minutesRaw = minIdx >= 0 ? cells[minIdx] : '';
       if (minutesRaw !== '' && minutesRaw != null) {
-        const minutes = csvNumber(minutesRaw, decimalComma);
+        const minutes = cellNumber(minutesRaw, lineNo, 'minutes');
         if (minutes === null) {
           errors.push('שורה ' + lineNo + ': minutes=«' + minutesRaw + '» אינו מספר — השחקן דולג');
           return;
@@ -1915,7 +2066,7 @@
           row[key] = raw;
           return;
         }
-        const n = csvNumber(raw, decimalComma);
+        const n = cellNumber(raw, lineNo, key);
         if (n === null) {
           errors.push('שורה ' + lineNo + ': ' + key + '=«' + raw + '» אינו מספר — התא נשאר ריק');
           return;
@@ -1924,8 +2075,45 @@
       });
       players.push(row);
     });
+    if (grouped.length) {
+      warnings.push('מספרים עם מפריד אלפים נקראו כשלמים: ' + grouped.slice(0, 3).join(', ') +
+        (grouped.length > 3 ? ' ועוד ' + (grouped.length - 3) : ''));
+    }
     if (!players.length) return { ok: false, errors: errors.length ? errors : ['לא נמצאו שחקנים'], players: [], warnings: warnings };
     return { ok: true, errors: errors, warnings: warnings, players: players };
+  }
+
+  // FileReader.readAsText assumes UTF-8, but a Hebrew Excel saves "CSV" in
+  // windows-1255 and "Unicode Text" in UTF-16 with a BOM. Read as UTF-8
+  // that turns every Hebrew header and name into U+FFFD, so «שם» never
+  // matches and players arrive nameless. Decode the raw bytes instead: a BOM
+  // wins, then strict UTF-8, then a legacy codepage. Hebrew words are runs
+  // of high bytes (0xE0–0xFA); a Western file has lone accented letters
+  // (Müller, Mbappé), so a run of two picks windows-1255 over windows-1252.
+  function decodeUserFile(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    const decode = function (label, from) {
+      return new TextDecoder(label).decode(b.subarray(from || 0));
+    };
+    if (b[0] === 0xFF && b[1] === 0xFE) return { text: decode('utf-16le', 2), encoding: 'utf-16le', warnings: [] };
+    if (b[0] === 0xFE && b[1] === 0xFF) return { text: decode('utf-16be', 2), encoding: 'utf-16be', warnings: [] };
+    if (b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF) return { text: decode('utf-8', 3), encoding: 'utf-8', warnings: [] };
+    try {
+      return { text: new TextDecoder('utf-8', { fatal: true }).decode(b), encoding: 'utf-8', warnings: [] };
+    } catch (err) {
+      let hebrew = false;
+      for (let i = 1; i < b.length && !hebrew; i++) {
+        hebrew = b[i] >= 0xE0 && b[i] <= 0xFA && b[i - 1] >= 0xE0 && b[i - 1] <= 0xFA;
+      }
+      const encoding = hebrew ? 'windows-1255' : 'windows-1252';
+      return {
+        text: decode(encoding),
+        encoding: encoding,
+        warnings: ['הקובץ אינו UTF-8 ונקרא כ-' + encoding +
+          (hebrew ? ' (עברית של Excel)' : ' (Excel מערבי)') +
+          '. אם שמות נראים משובשים, שמרו מחדש כ-«CSV UTF-8».']
+      };
+    }
   }
 
   function parseUserDataset(text, options) {
@@ -2008,6 +2196,7 @@
     SEASON_MISLABELED: SEASON_MISLABELED,
     DEFAULT_METRIC: DEFAULT_METRIC,
     positionGroup: positionGroup,
+    filterByPosition: filterByPosition,
     componentsFromEvents: componentsFromEvents,
     compositeScore: compositeScore,
     applyMetric: applyMetric,
@@ -2031,6 +2220,8 @@
     radarValues: radarValues,
     methodologyParagraph: methodologyParagraph,
     exportMetricBundle: exportMetricBundle,
+    createCsvReportWithProvenance: createCsvReportWithProvenance,
+    PROVENANCE_LEDGER_COLUMNS: PROVENANCE_LEDGER_COLUMNS,
     EVENT_COLUMNS: EVENT_COLUMNS,
     OUTCOMES: OUTCOMES,
     WC2018_GROUPS: WC2018_GROUPS,
@@ -2043,8 +2234,10 @@
     glossaryForPlayer: glossaryForPlayer,
     validateMetric: validateMetric,
     evaluateCurriculum: evaluateCurriculum,
+    buildStructuredCourse: buildStructuredCourse,
     CURRICULUM_LESSONS: CURRICULUM_LESSONS,
     parseUserDataset: parseUserDataset,
+    decodeUserFile: decodeUserFile,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
     auditCsvHeaders: auditCsvHeaders,

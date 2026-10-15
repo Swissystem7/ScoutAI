@@ -196,14 +196,21 @@
     const view = T.deriveRanking(T.SANDBOX_PLAYERS, spec);
     syncRange('wInvented', spec.weight, 'משקל פיצ\'ר, ' + Math.round(spec.weight) + ' אחוז');
     document.getElementById('formulaLine').textContent = view.formula;
-    document.getElementById('valueSliders').innerHTML = T.SANDBOX_PLAYERS.map(function (player) {
-      const val = spec.values[player.id];
-      return '<div class="slider-row">' +
-        '<label for="v-' + escapeHtml(player.id) + '">' + escapeHtml(player.name) +
-        '<div class="muted">סטט ' + escapeHtml(player.statScore) + ' · ' + escapeHtml(player.note) + '</div></label>' +
-        '<input id="v-' + escapeHtml(player.id) + '" data-id="' + escapeHtml(player.id) + '" type="range" min="0" max="100" value="' + val + '">' +
-        '<strong>' + val + '</strong></div>';
-    }).join('');
+    const valRoot = document.getElementById('valueSliders');
+    if (!valRoot.childElementCount) {
+      valRoot.innerHTML = T.SANDBOX_PLAYERS.map(function (player) {
+        const val = spec.values[player.id];
+        return '<div class="slider-row">' +
+          '<label for="v-' + escapeHtml(player.id) + '">' + escapeHtml(player.name) +
+          '<div class="muted">סטט ' + escapeHtml(player.statScore) + ' · ' + escapeHtml(player.note) + '</div></label>' +
+          '<input id="v-' + escapeHtml(player.id) + '" data-id="' + escapeHtml(player.id) + '" type="range" min="0" max="100" value="' + val + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + val + '">' +
+          '<strong id="v-' + escapeHtml(player.id) + 'Val">' + val + '</strong></div>';
+      }).join('');
+    } else {
+      T.SANDBOX_PLAYERS.forEach(function (player) {
+        syncRange('v-' + player.id, spec.values[player.id]);
+      });
+    }
     const swings = view.swings;
     document.getElementById('swingRoot').innerHTML = swings.length
       ? '<ol>' + swings.map(function (row) {
@@ -260,17 +267,24 @@
     };
     const view = T.evaluateAtticWalkthrough(spec);
     syncRange('wAttic', spec.weight, 'משקל שיחזור, ' + Math.round(spec.weight) + ' אחוז');
-    document.getElementById('atticValueSliders').innerHTML = T.ATTIC_PLAYERS.map(function (player) {
-      const val = atticValues[player.id];
-      return '<div class="slider-row">' +
-        '<label for="a-' + escapeHtml(player.id) + '">' + escapeHtml(player.name) +
-        '<div class="muted">סטט ' + escapeHtml(player.statScore) + ' · מומנטום ארכיון ' +
-        escapeHtml(player.momentumRaw) + ' · ממוצע מוקלד ' + escapeHtml(player.archivedInvented) +
-        '</div></label>' +
-        '<input id="a-' + escapeHtml(player.id) + '" data-attic="' + escapeHtml(player.id) +
-        '" type="range" min="0" max="100" value="' + val + '">' +
-        '<strong>' + val + '</strong></div>';
-    }).join('');
+    const atticRoot = document.getElementById('atticValueSliders');
+    if (!atticRoot.childElementCount) {
+      atticRoot.innerHTML = T.ATTIC_PLAYERS.map(function (player) {
+        const val = atticValues[player.id];
+        return '<div class="slider-row">' +
+          '<label for="a-' + escapeHtml(player.id) + '">' + escapeHtml(player.name) +
+          '<div class="muted">סטט ' + escapeHtml(player.statScore) + ' · מומנטום ארכיון ' +
+          escapeHtml(player.momentumRaw) + ' · ממוצע מוקלד ' + escapeHtml(player.archivedInvented) +
+          '</div></label>' +
+          '<input id="a-' + escapeHtml(player.id) + '" data-attic="' + escapeHtml(player.id) +
+          '" type="range" min="0" max="100" value="' + val + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + val + '">' +
+          '<strong id="a-' + escapeHtml(player.id) + 'Val">' + val + '</strong></div>';
+      }).join('');
+    } else {
+      T.ATTIC_PLAYERS.forEach(function (player) {
+        syncRange('a-' + player.id, atticValues[player.id]);
+      });
+    }
     document.getElementById('atticProof').textContent = view.proofLine + ' ' + view.formula;
     document.getElementById('atticProof').className = 'status ' + (view.holds ? 'up' : 'down');
     document.getElementById('atticRank').innerHTML =
@@ -306,7 +320,8 @@
     });
     ['labGrit', 'labInv', 'labClutch'].forEach(function (id) {
       const val = document.getElementById(id).value;
-      document.getElementById(id + 'Val').textContent = val;
+      const labels = { labGrit: 'Grit במעבדה, ', labInv: 'Involvement במעבדה, ', labClutch: 'Clutch במעבדה, ' };
+      syncRange(id, val, labels[id] + val);
     });
     const report = T.evaluateFalsification(answers, spec, {
       tunedAfterSeeingRank: sandboxTouched || spec.weight > 0,
