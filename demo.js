@@ -119,14 +119,19 @@
   // Position labels a user file may carry. StatsBomb writes long English
   // names ("Center Defensive Midfield"); a club export or a hand-made sheet
   // usually writes the FIFA/Opta code ("CDM", "RB", "ST") or a Hebrew word.
+  // A Wyscout export writes its own side-specific codes (RCMF, LDMF, RWF,
+  // RCB3, LB5): the lettered ones are listed below, the digit suffix of a
+  // back-three / back-five code is dropped by the tokenizer. Before they
+  // were listed every Wyscout midfielder and winger landed in OT.
   // Anything unrecognised lands in OT, and with position normalisation on,
   // every OT player is then ranked only against the other unknowns, so a
   // file of CB/CM/ST rows used to collapse into one silent group.
   const POSITION_CODES = Object.freeze({
     GK: ['GK', 'G', 'GR', 'POR', 'TW'],
     DF: ['DF', 'D', 'DEF', 'CB', 'LB', 'RB', 'LCB', 'RCB', 'LWB', 'RWB', 'WB', 'FB', 'SW', 'DC', 'DL', 'DR'],
-    MF: ['MF', 'M', 'MID', 'CM', 'DM', 'CDM', 'DMF', 'AM', 'CAM', 'AMF', 'LM', 'RM', 'LCM', 'RCM', 'MC', 'ML', 'MR', 'DMC', 'AMC'],
-    FW: ['FW', 'F', 'FWD', 'ST', 'CF', 'LW', 'RW', 'LF', 'RF', 'SS', 'ATT', 'WF', 'AML', 'AMR', 'FC']
+    MF: ['MF', 'M', 'MID', 'CM', 'DM', 'CDM', 'DMF', 'AM', 'CAM', 'AMF', 'LM', 'RM', 'LCM', 'RCM', 'MC', 'ML', 'MR', 'DMC', 'AMC',
+      'RCMF', 'LCMF', 'RDMF', 'LDMF', 'RAMF', 'LAMF'],
+    FW: ['FW', 'F', 'FWD', 'ST', 'CF', 'LW', 'RW', 'LF', 'RF', 'SS', 'ATT', 'WF', 'AML', 'AMR', 'FC', 'RWF', 'LWF']
   });
   const POSITION_CODE_GROUP = (function () {
     const map = {};
@@ -1893,11 +1898,20 @@
   // (a stray Unicode minus or a formula export), so it is dropped like a
   // non-numeric cell and reported per player. Zero minutes is a legal
   // value (an unused squad member) and is only counted, not removed.
+  // When the file does have minutes but some rows do not (an empty Min
+  // cell, a "-" blanked by stripMissingMarkers, a negative value dropped
+  // here, or a JSON player without the key), those players load with 0
+  // minutes: every per-90 component is 0 and they never pass the minutes
+  // threshold, so they vanish from the ranking with no message. Say so
+  // once, by name, up to MISSING_MINUTES_NAMES names.
+  const MISSING_MINUTES_NAMES = 5;
+
   function auditMinutesAndSigns(players) {
     const errors = [];
     const warnings = [];
     let withMinutes = 0;
     let zeroMinutes = 0;
+    const noMinutes = [];
     (players || []).forEach(function (row) {
       if (!row) return;
       // CSV sets both minutes keys to the same value: report it once.
@@ -1909,17 +1923,75 @@
         delete row[key];
       });
       const minutes = Number(row.totalMinutesProxy != null && row.totalMinutesProxy !== '' ? row.totalMinutesProxy : row.minutes);
-      if ((row.totalMinutesProxy == null || row.totalMinutesProxy === '') && (row.minutes == null || row.minutes === '')) return;
-      if (!Number.isFinite(minutes)) return;
+      if (((row.totalMinutesProxy == null || row.totalMinutesProxy === '') && (row.minutes == null || row.minutes === '')) ||
+        !Number.isFinite(minutes)) {
+        noMinutes.push(String(row.name == null ? '' : row.name).trim() || '(בלי שם)');
+        return;
+      }
       withMinutes += 1;
       if (minutes === 0) zeroMinutes += 1;
     });
     if (players && players.length && !withMinutes) {
       warnings.push('אף שחקן בלי דקות (עמודת minutes / דקות / Min חסרה או ריקה) — כל הרכיבים ל-90 יהיו 0 ואף שחקן לא יעבור את סף הדקות');
-    } else if (zeroMinutes) {
-      warnings.push((zeroMinutes === 1 ? 'שחקן אחד' : zeroMinutes + ' שחקנים') + ' עם 0 דקות — מקבל 0 בכל רכיב ולא עובר את סף הדקות');
+    } else {
+      if (noMinutes.length) {
+        const shown = noMinutes.slice(0, MISSING_MINUTES_NAMES).join(', ') +
+          (noMinutes.length > MISSING_MINUTES_NAMES ? ' ועוד ' + (noMinutes.length - MISSING_MINUTES_NAMES) : '');
+        warnings.push((noMinutes.length === 1 ? 'שחקן אחד בלי דקות (תא ריק): ' : noMinutes.length + ' שחקנים בלי דקות (תא ריק): ') +
+          shown + ' — נטענים עם 0 דקות: 0 בכל רכיב ולא עוברים את סף הדקות, לכן לא יופיעו בדירוג');
+      }
+      if (zeroMinutes) {
+        warnings.push((zeroMinutes === 1 ? 'שחקן אחד' : zeroMinutes + ' שחקנים') + ' עם 0 דקות — מקבל 0 בכל רכיב ולא עובר את סף הדקות');
+      }
     }
     return { errors: errors, warnings: warnings };
+  }
+
+  // A file in which every cell is valid and every player has minutes can
+  // still rank nobody: a single-match export tops out at 90 minutes, a cup
+  // weekend at 180, and the threshold is 270. The status line then says
+  // "N players" with no note and the table says "no players above the
+  // minutes threshold" with no hint that the file, not the data, is short.
+  // Say at load time, when the threshold admits nobody or one player, what
+  // the file's highest minutes are and which slider value would admit how
+  // many players. The slider moves in steps of THRESHOLD_STEP and does not
+  // go below THRESHOLD_FLOOR (index.html mirrors both), so a file whose
+  // top player has fewer minutes than the floor cannot be ranked in the
+  // lab at all; say that too. Nothing is changed: the threshold stays the
+  // user's choice, and the lesson that a small sample lies still stands.
+  // Minutes are read the way preparePlayer reads them, so the count here is
+  // the count the ranking will use.
+  const THRESHOLD_STEP = 30;
+  const THRESHOLD_FLOOR = 90;
+
+  function rankedMinutes(row) {
+    const minutes = Number(row.totalMinutesProxy || row.minutes || 0);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+  }
+
+  function auditMinutesThreshold(players, minMinutes) {
+    const requested = Number(minMinutes);
+    const threshold = Number.isFinite(requested) && requested >= 0 ? requested : DEFAULT_METRIC.minMinutes;
+    const minutes = (players || []).filter(Boolean).map(rankedMinutes).filter(function (m) { return m > 0; })
+      .sort(function (a, b) { return b - a; });
+    // No minutes at all is auditMinutesAndSigns' message; one player is
+    // the trivial-ranking message.
+    if (minutes.length < 2) return [];
+    const passing = minutes.filter(function (m) { return m >= threshold; }).length;
+    if (passing >= 2) return [];
+    const top = minutes[0];
+    const head = passing === 0
+      ? 'אף שחקן לא עובר את סף הדקות (' + threshold + '): הדקות הגבוהות ביותר בקובץ הן ' + top + ' — הדירוג יהיה ריק'
+      : 'שחקן אחד בלבד עובר את סף הדקות (' + threshold + '), השני בקובץ עם ' + minutes[1] + ' דקות — הדירוג יהיה טריוויאלי';
+    // A ranking needs two players, so the suggested threshold is the one
+    // the runner-up in minutes passes, rounded down to a slider step.
+    const needed = minutes[1];
+    if (needed < THRESHOLD_FLOOR) {
+      return [head + '; גם הסף הנמוך ביותר במעבדה (' + THRESHOLD_FLOOR + ' דקות) היה מכניס לכל היותר שחקן אחד — הקובץ קצר מדי לדירוג'];
+    }
+    const suggested = Math.max(THRESHOLD_FLOOR, Math.floor(needed / THRESHOLD_STEP) * THRESHOLD_STEP);
+    const admitted = minutes.filter(function (m) { return m >= suggested; }).length;
+    return [head + '; סף של ' + suggested + ' דקות היה מכניס ' + admitted + ' שחקנים — זכרו שמדגם קטן משקר'];
   }
 
   // Spreadsheet exports end with aggregate rows: FBref writes "Squad Total"
@@ -2508,6 +2580,7 @@
       warnings: parseWarnings
         .concat(auditDuplicateNames(players))
         .concat(auditPositions(players))
+        .concat(auditMinutesThreshold(players, opts.minMinutes))
         .concat(players.length < 2 ? ['שחקן אחד — הדירוג יהיה טריוויאלי'] : []),
       players: players,
       provenance: provenance,
@@ -2572,6 +2645,9 @@
     parseUserDataset: parseUserDataset,
     decodeUserFile: decodeUserFile,
     auditMinutesAndSigns: auditMinutesAndSigns,
+    auditMinutesThreshold: auditMinutesThreshold,
+    THRESHOLD_STEP: THRESHOLD_STEP,
+    THRESHOLD_FLOOR: THRESHOLD_FLOOR,
     parseCsvRecords: parseCsvRecords,
     detectCsvDelimiter: detectCsvDelimiter,
     findCsvHeaderRow: findCsvHeaderRow,
