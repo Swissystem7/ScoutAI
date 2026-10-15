@@ -76,6 +76,12 @@ test('planSplit reports a single file larger than the budget instead of hiding i
   for (const group of plan.groups) assert.ok(group.changed <= 400);
 });
 
+test('validateBudget returns a positive integer budget or defaults to 400', () => {
+  assert.equal(prSize.validateBudget(500), 500);
+  assert.equal(prSize.validateBudget(-100), 400);
+  assert.equal(prSize.validateBudget('invalid'), 400);
+});
+
 test('planSplit falls back to the 400-line budget when given a nonsense one', () => {
   for (const bad of [undefined, null, 0, -5, NaN, 'abc']) {
     assert.equal(prSize.planSplit([], bad).budget, 400, 'budget ' + String(bad));
