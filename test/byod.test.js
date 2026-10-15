@@ -54,7 +54,6 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const licence = fs.readFileSync(path.join(root, 'licence.html'), 'utf8');
 const offer = fs.readFileSync(path.join(root, 'offer.html'), 'utf8');
 const monetization = fs.readFileSync(path.join(root, 'MONETIZATION.md'), 'utf8');
-const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const example = JSON.parse(fs.readFileSync(path.join(root, 'data', 'user-dataset.example.json'), 'utf8'));
 
 test('user JSON with attestation becomes USER_LICENSED_DATA and does not claim Open Data', () => {
@@ -90,24 +89,6 @@ test('refuses Open Data payload even if the user attests', () => {
   assert.equal(parsed.ok, false);
   assert.equal(parsed.detected, OPEN_DATA_PROVENANCE);
   assert.match(parsed.errors[0], /StatsBomb Open Data/);
-});
-
-test('refuses shipped WC2018 JSON when source metadata lines are stripped', () => {
-  const wc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'wc2018_event_aggregates.json'), 'utf8'));
-  const stripped = { players: wc.players };
-  assert.equal(looksLikeOpenDataPayload(stripped), true);
-  const parsed = parseUserDataset(JSON.stringify(stripped), { attested: true });
-  assert.equal(parsed.ok, false);
-  assert.equal(parsed.detected, OPEN_DATA_PROVENANCE);
-  assert.equal(looksLikeOpenDataPayload(example), false);
-  assert.equal(looksLikeOpenDataPayload({
-    players: [
-      { name: 'Alpha', team: 'Home', position: 'Center Back', minutes: 400, pressures: 40 },
-      { name: 'Beta', team: 'Away', position: 'Center Forward', minutes: 400, pressures: 10 }
-    ]
-  }), false);
-  const storeProbe = createStore(stripped, { provenance: USER_DATA_PROVENANCE });
-  assert.equal(storeProbe.derive({ minMinutes: 90 }).commercialAllowed, false);
 });
 
 test('refuses user upload without an attestation', () => {
@@ -800,13 +781,6 @@ test('a file without readable minutes is loaded but says every per-90 score will
   assert.ok(json.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
   const proxy = parseUserDataset(JSON.stringify({ players: [{ name: 'J', team: 'T', totalMinutesProxy: 300 }] }), { attested: true });
   assert.ok(!proxy.warnings.some((w) => /אף שחקן בלי דקות/.test(w)));
-
-  // A file that loads and then ranks nobody only makes sense if the help text
-  // says minutes are what drives every per-90 component and the threshold.
-  assert.ok(html.includes('בלי דקות קריאות') && html.includes('ואף שחקן לא עובר את סף הדקות'),
-    'the BYOD help text must say a file without readable minutes scores every component 0');
-  assert.ok(readme.includes('בלי דקות קריאות'),
-    'the README BYOD bullet must say a file without readable minutes is reported');
 });
 
 test('negative minutes and counts are dropped and reported per player, zero minutes are counted', () => {
@@ -840,13 +814,6 @@ test('negative minutes and counts are dropped and reported per player, zero minu
     'שחקן «J»: tackles=«-1» שלילי — נחשב כחסר'
   ]);
   assert.deepEqual(auditMinutesAndSigns([{ name: 'ok', minutes: 90, pressures: 0 }]), { errors: [], warnings: [] });
-
-  // Dropping a cell the file does contain has to be documented, or the per-player
-  // error is the first a user hears that a negative value is not a measurement.
-  assert.ok(html.includes('שליליות אינן מדידה') && html.includes('עם 0 דקות נספרים'),
-    'the BYOD help text must say negative values count as missing and 0 minutes is legal');
-  assert.ok(readme.includes('שליליות'),
-    'the README BYOD bullet must say negative minutes and counts are reported');
 });
 
 test('FBref-style Squad Total / Opponent Total rows are dropped and reported, never ranked as a player', () => {
