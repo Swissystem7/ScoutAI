@@ -1,0 +1,3 @@
+name,team,position,minutes,teamMatchNo,heightCm,birthMonth,aerialWon,aerialLost,tacklesWon,fiftyWon,clearances,blocks,shields,foulsWon,headedXg,passesIntoBox,progPasses,progCarries,receptionsBetweenLines,pressuredPasses,pressuredPassesCompleted,counterpress,interceptionsWon,recoveries,dribblesCompleted,keyPassesOpen,xa,footXg,npxg,xgChain,xgBuildup
+Synthetic Playmaker (example),Team A,Center Midfield,90,1,170,11,0,1,1,0,0,0,0,2,0,3,7,3,5,12,10,4,2,6,2,2,0.2,0.05,0.05,0.6,0.45
+Synthetic Target Man (example),Team A,Center Forward,85,1,193,2,6,3,0,1,1,0,1,3,0.35,0,1,0,2,6,3,1,0,1,0,0,0.02,0.1,0.45,0.5,0.05
