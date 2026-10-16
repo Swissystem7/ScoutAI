@@ -213,7 +213,7 @@
       <option value="groups">בתים A–D מול E–H (מומלץ)</option>
       <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
     </select>
-    <p id="validateStatus" class="status" role="status"></p>
+    <p id="validateStatus" class="status" role="status" aria-live="polite">מחשב אימות מול מדגם מוחזק…</p>
     <p id="validateVerdict" class="lab-note" role="status" aria-live="polite"></p>
     <div id="validateStats" class="stats-grid"></div>
     <div id="validateTables" class="table-wrap"></div>
@@ -229,14 +229,14 @@
   <section class="card" id="export">
     <h2>ייצוא המדד ופסקת מתודולוגיה</h2>
     <p>ההורדה נשארת במחשב שלכם. אין שליחה לשרת, אין PDF מעוצב, ואין ציטוט שמותר למכור — רק תיעוד לימודי עם קרדיט ל-StatsBomb Open Data.</p>
-    <button id="copyMethod" class="secondary" type="button">העתיקו פסקת מתודולוגיה</button>
-    <button id="downloadJson" class="secondary" type="button">הורידו JSON מקומי</button>
+    <button id="copyMethod" class="secondary" type="button" disabled title="הגדירו משקלות במעבדה כדי להעתיק פסקת מתודולוגיה">העתיקו פסקת מתודולוגיה</button>
+    <button id="downloadJson" class="secondary" type="button" disabled title="הגדירו משקלות במעבדה כדי להוריד JSON">הורידו JSON מקומי</button>
     <button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות (CSV)</button>
     <p id="exportStatus" class="status" role="status" aria-live="polite"></p>
     <h3>פסקה לציטוט</h3>
-    <p id="methodText" class="export-box"></p>
+    <p id="methodText" class="export-box">הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה.</p>
     <h3>JSON</h3>
-    <pre id="exportJson" class="export-box" dir="ltr"></pre>
+    <pre id="exportJson" class="export-box" dir="ltr">הגדירו משקלות במעבדה כדי ליצור חבילת ייצוא ב-JSON.</pre>
   </section>
 
   <section class="card" id="glossary">
@@ -406,11 +406,11 @@
     lessonNav.innerHTML = steps.map(function (step, i) {
       return '<button type="button" data-step="' + i + '"' + (i === lessonIndex ? ' aria-current="step"' : '') + ' aria-label="שלב ' + (i + 1) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev"' + (lessonIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next"' + (lessonIndex >= steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' + (lessonIndex === 0 || !steps.length ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' + (lessonIndex >= steps.length - 1 || !steps.length ? ' disabled' : '') + '>הבא</button>';
     const step = steps[lessonIndex];
     if (!step) {
-      lessonRoot.innerHTML = '';
+      lessonRoot.innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לראות את שלבי השיעור השקוף.</p>';
       return;
     }
     const bars = (current.contributions || []).map(function (item) {
@@ -502,6 +502,16 @@
   function renderExport(current) {
     const bundle = current.exportBundle;
     const downloadCsv = document.getElementById('downloadCsv');
+    const copyMethod = document.getElementById('copyMethod');
+    const downloadJson = document.getElementById('downloadJson');
+    if (copyMethod) {
+      copyMethod.disabled = !bundle;
+      copyMethod.setAttribute('title', bundle ? 'העתיקו את פסקת המתודולוגיה ללוח' : 'הגדירו משקלות במעבדה כדי להעתיק פסקת מתודולוגיה');
+    }
+    if (downloadJson) {
+      downloadJson.disabled = !bundle;
+      downloadJson.setAttribute('title', bundle ? 'הורידו קובץ JSON של הגדרת המדד' : 'הגדירו משקלות במעבדה כדי להוריד JSON');
+    }
     if (downloadCsv) {
       downloadCsv.disabled = !current.selected;
       if (current.selected) {
@@ -510,7 +520,11 @@
         downloadCsv.setAttribute('title', 'בחרו שחקן בטבלה כדי לייצא ספר ספירות ב-CSV');
       }
     }
-    if (!bundle) return;
+    if (!bundle) {
+      document.getElementById('methodText').textContent = 'הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה.';
+      document.getElementById('exportJson').textContent = 'הגדירו משקלות במעבדה כדי ליצור חבילת ייצוא ב-JSON.';
+      return;
+    }
     document.getElementById('methodText').textContent = bundle.methodologyHe;
     document.getElementById('exportJson').textContent = JSON.stringify(bundle, null, 2);
   }
@@ -574,13 +588,28 @@
 
   function renderValidation(current) {
     const report = current.validation;
-    if (!report) return;
-    document.getElementById('validateStatus').textContent =
+    const hasRows = current.rows && current.rows.length > 0;
+    const outcomeSelect = document.getElementById('outcomeSelect');
+    const splitSelect = document.getElementById('splitSelect');
+    if (outcomeSelect) outcomeSelect.disabled = !hasRows;
+    if (splitSelect) splitSelect.disabled = !hasRows;
+    const statusEl = document.getElementById('validateStatus');
+    const verdictEl = document.getElementById('validateVerdict');
+    const statsEl = document.getElementById('validateStats');
+    const tablesEl = document.getElementById('validateTables');
+    if (!report || !hasRows) {
+      statusEl.textContent = 'אין שחקנים שעוברים את סף הדקות לאימות.';
+      verdictEl.textContent = 'הורידו את סף הדקות במעבדה כדי לאמת את המדד מול מדגם מוחזק.';
+      statsEl.innerHTML = '';
+      tablesEl.innerHTML = '<p class="notice">הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות מול מדגם מוחזק.</p>';
+      return;
+    }
+    statusEl.textContent =
       (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
       ' · אימון n=' + report.train.n + ' ρ=' + report.train.rho +
       ' · מבחן n=' + report.test.n + ' ρ=' + report.test.rho +
       (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop);
-    document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
+    verdictEl.textContent = report.verdict + ' ' + report.honesty;
     function rhoLine(label, stats) {
       const cr = stats.componentRho || {};
       return '<article class="lesson-step"><h3>' + label + '</h3>' +
@@ -837,6 +866,10 @@
   document.getElementById('copyMethod').addEventListener('click', function () {
     const text = document.getElementById('methodText').textContent;
     const status = document.getElementById('exportStatus');
+    if (!view || !view.exportBundle || !text) {
+      status.textContent = 'אין פסקת מתודולוגיה זמינה להעתקה.';
+      return;
+    }
     const done = function () { status.textContent = 'פסקת המתודולוגיה הועתקה. לא נשלח דבר.'; };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(function () {
@@ -847,7 +880,10 @@
     }
   });
   document.getElementById('downloadJson').addEventListener('click', function () {
-    if (!view || !view.exportBundle) return;
+    if (!view || !view.exportBundle) {
+      document.getElementById('exportStatus').textContent = 'אין חבילת ייצוא זמינה להורדה.';
+      return;
+    }
     const blob = new Blob([JSON.stringify(view.exportBundle, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
