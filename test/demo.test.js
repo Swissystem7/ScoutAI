@@ -374,6 +374,9 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /border-inline-start/);
   assert.match(html, /ArrowDown/);
   assert.match(html, /min-height:44px/);
+  assert.match(html, /<a href="#fragility">שבריריות<\/a>/);
+  assert.match(html, /id="selectedSwing"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לעקוב אחריו כאן/);
 });
 
 const DEFENDERS = {
