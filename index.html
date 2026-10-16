@@ -73,6 +73,7 @@
 <body>
 <a class="skip" href="#course">דלגו לשיעור המלא</a>
 <a class="skip" href="#lab">דלגו למעבדת המדד</a>
+<a class="skip" href="#exercise">דלגו לתרגיל המודרך</a>
 <a class="skip" href="#ranking">דלגו לדירוג החי</a>
 <a class="skip" href="#byod">דלגו לנתונים שלכם</a>
 <main class="shell">
@@ -83,6 +84,7 @@
     <nav class="toc" aria-label="מעבר לחלקי המעבדה">
       <a href="#course">שיעור מלא</a>
       <a href="#lab">בנה מדד</a>
+      <a href="#exercise">תרגיל מודרך</a>
       <a href="#ranking">דירוג חי</a>
       <a href="#lesson">שיעור שקוף</a>
       <a href="#radar">מכ״ם</a>
@@ -109,7 +111,7 @@
     <h2>שיעור מלא: מאירוע למדד מאומת</h2>
     <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
     <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
-    <p id="courseProgress" class="status" role="status"></p>
+    <p id="courseProgress" class="status" role="status" aria-live="polite"></p>
     <div id="courseRoot" class="lesson"></div>
   </section>
 
@@ -150,7 +152,7 @@
     <p id="exercisePrompt"></p>
     <p class="muted">בדיקה עצמית מול אותה שכבת מונדיאל 2018 — לא מבחן סקאוטינג ואין תשובה מדעית אחת.</p>
     <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
-    <p id="exerciseSummary" class="status" role="status"></p>
+    <p id="exerciseSummary" class="status" role="status" aria-live="polite"></p>
     <ul id="exerciseChecks" class="checks"></ul>
   </section>
 
@@ -429,7 +431,20 @@
 
   function renderExercise(current) {
     const exercise = current.exercise;
-    if (!exercise) return;
+    const applyHint = document.getElementById('applyHint');
+    if (!exercise) {
+      document.getElementById('exercisePrompt').textContent = 'טוען תרגיל מודרך לבחינת בלמים…';
+      document.getElementById('exerciseSummary').textContent = 'אין נתוני תרגיל זמינים עבור השכבה הנוכחית.';
+      document.getElementById('exerciseChecks').innerHTML = '';
+      if (applyHint) applyHint.disabled = true;
+      return;
+    }
+    if (applyHint) {
+      applyHint.disabled = false;
+      applyHint.setAttribute('title', exercise.passed
+        ? 'התרגיל עבר בהצלחה — לחצו כדי להחיל שוב את נקודת ההתחלה'
+        : 'החילו משקלות התחלה כדי לעזור למדד לעבור את תנאי התרגיל');
+    }
     document.getElementById('exercisePrompt').textContent = exercise.prompt;
     document.getElementById('exerciseSummary').textContent = (exercise.passed ? 'עברתם. ' : 'עדיין לא. ') + exercise.summary;
     document.getElementById('exerciseChecks').innerHTML = exercise.checks.map(function (item) {
