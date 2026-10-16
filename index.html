@@ -231,6 +231,7 @@
     <p>ההורדה נשארת במחשב שלכם. אין שליחה לשרת, אין PDF מעוצב, ואין ציטוט שמותר למכור — רק תיעוד לימודי עם קרדיט ל-StatsBomb Open Data.</p>
     <button id="copyMethod" class="secondary" type="button">העתיקו פסקת מתודולוגיה</button>
     <button id="downloadJson" class="secondary" type="button">הורידו JSON מקומי</button>
+    <button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות (CSV)</button>
     <p id="exportStatus" class="status" role="status" aria-live="polite"></p>
     <h3>פסקה לציטוט</h3>
     <p id="methodText" class="export-box"></p>
@@ -450,8 +451,9 @@
     }).join('');
     const keep = spec.compareId || previous;
     if (keep && rows.some(function (row) { return row.id === keep; })) compareSelect.value = keep;
+    compareSelect.disabled = !rows.length || !current.selected;
     if (!radar || !radar.a) {
-      document.getElementById('radarRoot').innerHTML = '';
+      document.getElementById('radarRoot').innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה.</p>';
       document.getElementById('radarTable').innerHTML = '';
       document.getElementById('radarStatus').textContent = 'בחרו שחקן בטבלה כדי לבנות מכ״ם.';
       return;
@@ -499,6 +501,15 @@
 
   function renderExport(current) {
     const bundle = current.exportBundle;
+    const downloadCsv = document.getElementById('downloadCsv');
+    if (downloadCsv) {
+      downloadCsv.disabled = !current.selected;
+      if (current.selected) {
+        downloadCsv.setAttribute('title', 'הורידו ספר ספירות וייחוס (CSV) עבור ' + current.selected.name);
+      } else {
+        downloadCsv.setAttribute('title', 'בחרו שחקן בטבלה כדי לייצא ספר ספירות ב-CSV');
+      }
+    }
     if (!bundle) return;
     document.getElementById('methodText').textContent = bundle.methodologyHe;
     document.getElementById('exportJson').textContent = JSON.stringify(bundle, null, 2);
@@ -529,7 +540,7 @@
     const status = document.getElementById('explorerStatus');
     if (!explorer || !explorer.player) {
       status.textContent = 'בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים.';
-      root.innerHTML = '';
+      root.innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא.</p>';
       receipt.innerHTML = '';
       return;
     }
@@ -848,6 +859,27 @@
     document.getElementById('exportStatus').textContent = tag === 'STATSBOMB_OPEN_DATA'
       ? 'הקובץ ירד למחשב המקומי. Open Data — לא למסחר.'
       : 'הקובץ ירד למחשב המקומי. האחריות לרישיון הנתונים היא עליכם.';
+  });
+  document.getElementById('downloadCsv').addEventListener('click', function () {
+    if (!view || !view.selected) {
+      document.getElementById('exportStatus').textContent = 'בחרו שחקן בטבלה כדי לייצא ספר ספירות ב-CSV.';
+      return;
+    }
+    const csv = ScoutAIDemo.createCsvReportWithProvenance(view.selected, {
+      provenance: view.provenance,
+      source: view.source
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'scoutai-' + (view.selected.id || 'player') + '-provenance.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+    const tag = (view.provenance || 'STATSBOMB_OPEN_DATA');
+    document.getElementById('exportStatus').textContent = tag === 'STATSBOMB_OPEN_DATA'
+      ? 'ספר הספירות (CSV) של ' + view.selected.name + ' ירד למחשב המקומי. Open Data — לא למסחר.'
+      : 'ספר הספירות (CSV) של ' + view.selected.name + ' ירד למחשב המקומי. האחריות לרישיון הנתונים היא עליכם.';
   });
   tableRoot.addEventListener('click', function (event) {
     const row = event.target.closest('tr[data-id]');
