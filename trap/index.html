@@ -11,9 +11,10 @@
     .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
     label{display:block;margin:14px 0 6px;font-weight:700}input,button,select,textarea{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
-    input[type=text]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
+    input[type=text]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
     button.secondary{background:#fff;color:#145c3d;border:2px solid #145c3d;margin-inline-end:8px}
+    .toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.toc a{background:#0f3d26;color:#dff4e7;border-radius:999px;padding:4px 10px;text-decoration:none;font-weight:700;font-size:.85rem}.toc a:hover{background:#145c3d}
     .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700}
     .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
     .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0;accent-color:#145c3d}
@@ -44,11 +45,18 @@
 </head>
 <body>
 <a class="skip" href="#sandbox">דלגו לארגז הפיצ'ר</a>
+<a class="skip" href="#circular">דלגו להוכחה המעגלית</a>
+<a class="skip" href="#falsify">דלגו למבחן ההפרכה</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג השיעור">
     <code>LESSON</code> מלכודת הפיצ'רים המשכנעים — שיעור על מדדים שממציאים צידוק.
     <code>ATTIC_CASE</code> המקרה הוא <code>attic/proof-demo.js</code>, לא ראיה מדעית.
     <code>NO_FACE_MODEL</code> הדף לא מנתח פנים, לא מזהה פרצופים, ואין בו תמונות של אנשים.
+    <nav class="toc" aria-label="מעבר לחלקי השיעור">
+      <a href="#sandbox">ארגז הפיצ'ר</a>
+      <a href="#circular">הוכחה מעגלית</a>
+      <a href="#falsify">מבחן ההפרכה</a>
+    </nav>
     <div class="nav">
       <a href="../">חזרה למעבדת המדד</a>
       <a href="../licence.html">רישיון</a>
@@ -94,7 +102,7 @@
     <h2>2. הוכחה מעגלית</h2>
     <p>שחזור של המקרה מ־<code>attic/proof-demo.js</code>. לא מריצים את מנוע הפנים הישן. מציגים את המספרים שהוקלדו, ומראים איך כיול מייצר «עבר».</p>
     <div id="walkNav" class="lesson-nav" role="toolbar" aria-label="צעדי ההוכחה המעגלית"></div>
-    <div id="walkRoot" class="lesson"></div>
+    <div id="walkRoot" class="lesson" role="region" aria-live="polite" aria-label="שלב ההוכחה המעגלית"></div>
     <div class="sliders">
       <div class="slider-row">
         <label id="wAtticLabel" for="wAttic">משקל הפיצ'ר בשיחזור</label>
@@ -219,7 +227,7 @@
           escapeHtml(row.rank) + ' (' + dir + ' ' + escapeHtml(Math.abs(row.deltaRank)) +
           ' מקומות, Δציון ' + (row.deltaScore > 0 ? '+' : '') + escapeHtml(row.deltaScore) + ')</li>';
       }).join('') + '</ol>'
-      : '<p class="muted">אין תזוזה. העלו משקל או שנו ערכים — אחרת זה רק הסטט.</p>';
+      : '<p class="notice">אין תזוזה בדירוג. העלו את משקל הפיצ\'ר או שנו ערכים בסליידרים כדי לבדוק מי יקפוץ.</p>';
     document.getElementById('rankRoot').innerHTML =
       '<table><caption>דירוג לפי סטט + הפיצ\'ר שהמצאתם</caption><thead><tr>' +
       '<th scope="col">דירוג</th><th scope="col">שחקן</th><th scope="col">סטט</th>' +
@@ -250,10 +258,11 @@
     if (walkIndex >= steps.length) walkIndex = 0;
     document.getElementById('walkNav').innerHTML = steps.map(function (step, i) {
       return '<button type="button" data-step="' + i + '"' +
-        (i === walkIndex ? ' aria-current="step"' : '') + '>' + (i + 1) + '</button>';
+        (i === walkIndex ? ' aria-current="step"' : '') +
+        ' aria-label="שלב ' + (i + 1) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next">הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' + (walkIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' + (walkIndex >= steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const step = steps[walkIndex];
     document.getElementById('walkRoot').innerHTML =
       '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' +
@@ -415,7 +424,7 @@
   });
   document.getElementById('walkNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-step]');
-    if (!button) return;
+    if (!button || button.disabled) return;
     const token = button.getAttribute('data-step');
     if (token === 'next') walkIndex = Math.min(T.WALKTHROUGH_STEPS.length - 1, walkIndex + 1);
     else if (token === 'prev') walkIndex = Math.max(0, walkIndex - 1);

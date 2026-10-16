@@ -205,3 +205,18 @@ test('per-player sliders are built once, then updated in place so a drag or arro
   });
   assert.match(html, /aria-valuenow="' \+ val \+ '"/);
 });
+
+test('trap UI exposes skip links, section TOC, button disabled states, and walk navigation semantics', () => {
+  assert.match(html, /<a class="skip" href="#sandbox">דלגו לארגז הפיצ'ר<\/a>/);
+  assert.match(html, /<a class="skip" href="#circular">דלגו להוכחה המעגלית<\/a>/);
+  assert.match(html, /<a class="skip" href="#falsify">דלגו למבחן ההפרכה<\/a>/);
+  assert.match(html, /<nav class="toc" aria-label="מעבר לחלקי השיעור">/);
+  assert.match(html, /<a href="#sandbox">ארגז הפיצ'ר<\/a>/);
+  assert.match(html, /<a href="#circular">הוכחה מעגלית<\/a>/);
+  assert.match(html, /<a href="#falsify">מבחן ההפרכה<\/a>/);
+  assert.match(html, /button:disabled/);
+  assert.match(html, /aria-label="שלב /);
+  assert.match(html, /data-step="prev"'\s*\+\s*\(walkIndex === 0 \? ' disabled' : ''\)/);
+  assert.match(html, /data-step="next"'\s*\+\s*\(walkIndex >= steps\.length - 1 \? ' disabled' : ''\)/);
+  assert.match(html, /id="walkRoot"\s+class="lesson"\s+role="region"\s+aria-live="polite"/);
+});
