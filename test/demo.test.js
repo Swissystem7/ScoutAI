@@ -395,6 +395,9 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
+  assert.match(html, /aria-label="הציגו את שדה [^"]+ ביומן ספירות האירועים"/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לאתר את השדה/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לבחור שחקן להשוואה/);
 });
 
 const DEFENDERS = {

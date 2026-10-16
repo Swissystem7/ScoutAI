@@ -452,6 +452,13 @@
     const keep = spec.compareId || previous;
     if (keep && rows.some(function (row) { return row.id === keep; })) compareSelect.value = keep;
     compareSelect.disabled = !rows.length || !current.selected;
+    if (!rows.length) {
+      compareSelect.setAttribute('title', 'אין שחקנים זמינים להשוואה');
+    } else if (!current.selected) {
+      compareSelect.setAttribute('title', 'בחרו שחקן בטבלה כדי לבחור שחקן להשוואה');
+    } else {
+      compareSelect.setAttribute('title', 'בחרו שחקן להשוואה מול ' + current.selected.name);
+    }
     if (!radar || !radar.a) {
       document.getElementById('radarRoot').innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה.</p>';
       document.getElementById('radarTable').innerHTML = '';
@@ -523,8 +530,11 @@
           (item.selectedTotal == null ? '—' : item.selectedTotal) +
           (item.selectedPer90 == null ? '' : ' · ' + item.selectedPer90 + '/90') + '.'
         : '';
-      return '<div class="' + (item.usedInScore ? '' : 'unused') + '" id="gloss-' + escapeHtml(item.field || item.type) + '"><dt>' +
-        '<button type="button" class="secondary" data-field="' + escapeHtml(item.field || '') + '">' +
+      const fieldName = item.field || item.type;
+      return '<div class="' + (item.usedInScore ? '' : 'unused') + '" id="gloss-' + escapeHtml(fieldName) + '"><dt>' +
+        '<button type="button" class="secondary" data-field="' + escapeHtml(item.field || '') + '"' +
+        ' title="הציגו את שדה ' + escapeHtml(fieldName) + ' ביומן ספירות האירועים"' +
+        ' aria-label="הציגו את שדה ' + escapeHtml(fieldName) + ' ביומן ספירות האירועים">' +
         escapeHtml(item.type) + ' — ' + escapeHtml(item.he) + '</button>' +
         ' <span class="badge">' + escapeHtml(item.feeds) + '</span>' +
         ' <code>' + escapeHtml(item.filePath || '') + '</code></dt><dd>' +
@@ -944,10 +954,30 @@
     const button = event.target.closest('button[data-field]');
     if (!button) return;
     const field = button.getAttribute('data-field');
+    const explorerSection = document.getElementById('explorer');
+    const explorerStatus = document.getElementById('explorerStatus');
+    const explorerTable = document.getElementById('explorerTable');
+    if (explorerTable) {
+      Array.prototype.slice.call(explorerTable.querySelectorAll('tr.hl')).forEach(function (r) {
+        r.classList.remove('hl');
+      });
+    }
     const row = document.getElementById('field-' + field);
     if (row && row.scrollIntoView) {
       row.classList.add('hl');
+      row.setAttribute('tabindex', '-1');
       row.scrollIntoView({ block: 'center' });
+      row.focus();
+      if (explorerStatus && view && view.selected) {
+        explorerStatus.textContent = 'שדה ' + field + ' מודגש ביומן הספירות של ' + view.selected.name + '.';
+      }
+    } else {
+      if (explorerStatus) {
+        explorerStatus.textContent = 'בחרו שחקן בטבלה כדי לאתר את השדה ' + field + ' ביומן הספירות.';
+      }
+      if (explorerSection && explorerSection.scrollIntoView) {
+        explorerSection.scrollIntoView({ block: 'start' });
+      }
     }
   });
   window.addEventListener('hashchange', function () {
