@@ -383,6 +383,15 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים/);
   assert.match(html, /בחרו שחקן בטבלה כדי לעקוב אחריו כאן/);
+  assert.match(html, /<a href="#ranking">דירוג חי<\/a>/);
+  assert.match(html, /<a href="#lesson">שיעור שקוף<\/a>/);
+  assert.match(html, /<a href="#export">ייצוא המדד<\/a>/);
+  assert.match(html, /<a class="skip" href="#ranking">דלגו לדירוג החי<\/a>/);
+  assert.match(html, /<section class="card" id="ranking">/);
+  assert.match(html, /<section class="card" id="lesson">/);
+  assert.match(html, /<section class="card" id="export">/);
+  assert.match(html, /button:disabled/);
+  assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
 });
 
 const DEFENDERS = {
