@@ -253,11 +253,12 @@
     <input id="userData" type="file" accept=".json,.csv,text/csv,application/json">
     <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
     <div class="actions">
-      <button id="loadUserData" type="button">הריצו על הקובץ שלי</button>
-      <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
-      <button id="restoreOpenData" class="secondary" type="button">חזרו לדמו מונדיאל 2018</button>
+      <button id="loadUserData" type="button" disabled title="בחרו קובץ מקומי ואשרו את הרישיון כדי להריץ">הריצו על הקובץ שלי</button>
+      <button id="clearUserData" class="secondary" type="button" disabled title="לא נבחר קובץ לניקוי">נקו קובץ</button>
+      <button id="loadSynthetic" class="secondary" type="button" title="טענו דוגמה סינתטית להדגמה">טענו דוגמה סינתטית</button>
+      <button id="restoreOpenData" class="secondary" type="button" disabled title="הדמו כבר רץ על נתוני מונדיאל 2018">חזרו לדמו מונדיאל 2018</button>
     </div>
-    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
+    <p id="byodStatus" class="status" role="status" aria-live="polite">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
     <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. CSV: אותן כותרות בשורה הראשונה; המפריד (פסיק, נקודה-פסיק או טאב) מזוהה אוטומטית, כולל קובץ Excel אירופי עם <code>sep=;</code> ופסיק עשרוני. מספרים עם מפריד אלפים (<code>"1,234"</code>, <code>1 234</code>, <code>1'234</code>, <code>1.234.567</code> בקובץ נקודה-פסיק) נקראים כמספרים; תא עם סימון חסר (<code>-</code>, <code>N/A</code>, <code>#N/A</code>, <code>null</code>) נחשב ריק ולא 0, ומדווח פעם אחת לכל עמודה. קובץ בלי דקות קריאות (אין עמודת <code>minutes</code> / Min / דקות, או שכולה ריקה) נטען אבל מדווח: בלי דקות כל רכיב ל-90 הוא 0 ואף שחקן לא עובר את סף הדקות. שחקן בלי דקות בקובץ שכן יש בו דקות (תא ריק, <code>-</code> או ערך שנפסל) מדווח לפי שם: הוא נטען עם 0 דקות ולא יופיע בדירוג, אחרת היה נעלם בשקט. דקות או ספירה שליליות אינן מדידה — התא נחשב חסר ומדווח לפי שחקן; שחקנים עם 0 דקות נספרים. קובץ תקין שבו אף שחקן (או שחקן אחד בלבד) לא עובר את סף הדקות — ייצוא של משחק אחד מגיע ל-90 דקות, והסף הוא 270 — מדווח בטעינה עם הדקות הגבוהות ביותר בקובץ וערך הסף שהיה מכניס שחקנים לדירוג; הסף לא משתנה לבד, ומדגם קטן עדיין משקר. שורות סיכום בסוף הקובץ (<code>Squad Total</code>, <code>Opponent Total</code>, Total, Average, סה"כ, ממוצע) אינן שחקנים: הן מדולגות ומדווחות, אחרת סך הקבוצה היה מדורג ראשון. ייצוא FBref (Get table as CSV) נקרא כמו שהוא: שורת כותרת-העל שמעל הכותרת (Playing Time, Performance…) מדולגת ומדווחת, וכך גם שורת הכותרת שחוזרת כל 25 שחקנים, שאחרת הייתה נטענת כשחקן בשם Player. טבלת FBref בלי עמודת Min (Defensive Actions, Possession, Passing…) נקראת דרך עמודת <code>90s</code>: דקות = 90s × 90, מעוגל לדקה שלמה ומדווח; כשיש גם Min היא עדיפה. שם שחקן שחוזר בקובץ מדווח לפי שם — עותק זהה של שורה, שתי שורות באותה קבוצה (המזהה השני מקבל <code>#2</code>) או שתי קבוצות (מעבר באמצע עונה בייצוא FBref): כל שורה נטענת ומדורגת בנפרד ולא מאוחדת, כי כל אחת נושאת רק חלק מהדקות של השחקן. הקידוד מזוהה מהבייטים: UTF-8 (עם או בלי BOM), UTF-16 של «Unicode Text», ו-CSV של Excel עברי בקידוד windows-1255 — קידוד שאינו UTF-8 מדווח בשורת הסטטוס. שם שמכיל את המפריד חייב מרכאות (<code>"Silva, Thiago"</code>): שורה עם מספר תאים גדול ממספר הכותרות מדולגת ומדווחת, כי כל הסטטיסטיקה שלה הייתה זזה עמודה ימינה. הכותרות נקראות בלי הבדל בין אותיות גדולות לקטנות, רווחים וקווים תחתונים (<code>Key Passes</code> נטען כ-keyPasses), וגם בקיצורים הנפוצים של FBref/Opta (Player, Squad, Pos, Min, Tkl, Int, KP, xG, SoT, Gls, Ast) ובכותרות עבריות בסיסיות (שם, קבוצה, עמדה, דקות); כל התאמה כזו מדווחת בשורת הסטטוס. כותרת שלא זוהתה (למשל <code>tackle</code> או <code>age</code>) לא נטענת ומדווחת עם הצעה לשם הקרוב, כדי שאף שחקן לא יקבל 0 על סטטיסטיקה שהקובץ כן מכיל. עמדה (<code>position</code>): שם מלא באנגלית או בעברית (Center Back, שוער, קשר, חלוץ) או קוד מקובל (GK, CB, LB, CDM, CM, CAM, ST, LW…), כולל קודי Wyscout לפי צד (RCMF, LDMF, RWF, RCB3); עמדה שלא זוהתה נחשבת OT ומדווחת, כי בנרמול לפי עמדה שחקני OT מושווים רק זה לזה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
   </section>
 
@@ -804,6 +805,7 @@
     renderExport(current);
     renderGlossary(current);
     renderCurriculum(current);
+    updateByodButtons();
     persistHash(current.spec);
   }
 
@@ -967,10 +969,40 @@
     }
   });
 
+  function updateByodButtons() {
+    const input = document.getElementById('userData');
+    const file = input && input.files && input.files[0];
+    const attestInput = document.getElementById('userAttest');
+    const attested = attestInput && attestInput.checked;
+    const loadBtn = document.getElementById('loadUserData');
+    const clearBtn = document.getElementById('clearUserData');
+    const restoreBtn = document.getElementById('restoreOpenData');
+    if (loadBtn) {
+      loadBtn.disabled = !file || !attested;
+      if (!file) {
+        loadBtn.setAttribute('title', 'בחרו קובץ מקומי ואשרו את הרישיון כדי להריץ');
+      } else if (!attested) {
+        loadBtn.setAttribute('title', 'סמנו את תיבת אישור הרישיון כדי להריץ');
+      } else {
+        loadBtn.setAttribute('title', 'הריצו את המדד על ' + file.name);
+      }
+    }
+    if (clearBtn) {
+      clearBtn.disabled = !file;
+      clearBtn.setAttribute('title', file ? 'נקו את ' + file.name + ' ואפסו את הבחירה' : 'לא נבחר קובץ לניקוי');
+    }
+    if (restoreBtn) {
+      const isCustomOrSynthetic = view && (view.provenance === 'USER_LICENSED_DATA' || view.provenance === 'SYNTHETIC_EXAMPLE');
+      restoreBtn.disabled = !isCustomOrSynthetic;
+      restoreBtn.setAttribute('title', isCustomOrSynthetic ? 'חזרו לנתוני מונדיאל 2018 המקוריים' : 'הדמו כבר רץ על נתוני מונדיאל 2018');
+    }
+  }
+
   function applyParsedDataset(parsed, statusText) {
     const byodStatus = document.getElementById('byodStatus');
     if (!parsed.ok) {
       byodStatus.textContent = (parsed.errors || []).concat(parsed.warnings || []).join(' ');
+      updateByodButtons();
       return;
     }
     store = ScoutAIDemo.createStore({ players: parsed.players }, {
@@ -987,7 +1019,34 @@
     byodStatus.textContent = (statusText ||
       (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.')) +
       (notes.length ? ' ' + notes.join(' ') : '');
+    updateByodButtons();
   }
+
+  document.getElementById('userData').addEventListener('change', function () {
+    const file = this.files && this.files[0];
+    const status = document.getElementById('byodStatus');
+    if (file) {
+      status.textContent = 'נבחר הקובץ ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB). סמנו אישור רישיון ולחצו על "הריצו על הקובץ שלי".';
+    } else {
+      status.textContent = 'USER_LICENSED_DATA: לא נבחר קובץ.';
+    }
+    updateByodButtons();
+  });
+
+  document.getElementById('userAttest').addEventListener('change', function () {
+    updateByodButtons();
+  });
+
+  document.getElementById('clearUserData').addEventListener('click', function () {
+    const input = document.getElementById('userData');
+    if (input) input.value = '';
+    const attest = document.getElementById('userAttest');
+    if (attest) attest.checked = false;
+    const status = document.getElementById('byodStatus');
+    if (status) status.textContent = 'USER_LICENSED_DATA: בחירת הקובץ נוקתה.';
+    updateByodButtons();
+    if (input && input.focus) input.focus();
+  });
 
   document.getElementById('loadUserData').addEventListener('click', function () {
     const input = document.getElementById('userData');
@@ -996,6 +1055,7 @@
     const byodStatus = document.getElementById('byodStatus');
     if (!file) {
       byodStatus.textContent = 'USER_LICENSED_DATA: לא נבחר קובץ.';
+      updateByodButtons();
       return;
     }
     const reader = new FileReader();
@@ -1011,6 +1071,7 @@
     };
     reader.onerror = function () {
       byodStatus.textContent = 'קריאת הקובץ המקומי נכשלה. דבר לא נשלח.';
+      updateByodButtons();
     };
     reader.readAsArrayBuffer(file);
   });
@@ -1036,8 +1097,10 @@
       document.getElementById('splitSelect').value = 'groups';
       recompute();
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';
+      updateByodButtons();
     }).catch(function (err) {
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: טעינה מחדש נכשלה. ' + (err && err.message ? err.message : err);
+      updateByodButtons();
     });
   });
 </script>
