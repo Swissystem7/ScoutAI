@@ -22,6 +22,8 @@
     .toggle input{width:auto}.up{color:#0f3d26;font-weight:700}.down{color:#8a1f1f;font-weight:700}
     .lesson{display:grid;gap:12px}.lesson-step{background:#f3f6f1;border-radius:12px;padding:14px}
     .lesson-step h3{margin:0 0 6px;font-size:1rem}.lesson-nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+    .lesson-step ol{padding-inline-start:20px;margin:10px 0}
+    .lesson-step ol button{margin-top:0;padding:4px 10px;font-size:.9rem}
     .lesson-nav button{margin-top:0;padding:8px 12px}.lesson-nav button[aria-current="step"]{outline:3px solid #10281d}
     .bars{display:grid;gap:8px;margin-top:10px}.bar-row{display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center}
     .bar-track{background:#d5ddd4;border-radius:999px;height:12px;overflow:hidden}
@@ -74,6 +76,7 @@
 <a class="skip" href="#course">דלגו לשיעור המלא</a>
 <a class="skip" href="#lab">דלגו למעבדת המדד</a>
 <a class="skip" href="#ranking">דלגו לדירוג החי</a>
+<a class="skip" href="#fragility">דלגו למעבדת השבריריות</a>
 <a class="skip" href="#byod">דלגו לנתונים שלכם</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
@@ -766,6 +769,12 @@
   }
 
   function renderFragility(current) {
+    const rows = current.rows || [];
+    if (!rows.length) {
+      selectedSwing.textContent = 'אין שחקנים שעברו את סף הדקות המינימלי.';
+      fragilityRoot.innerHTML = '<p class="notice">אין שחקנים מעל סף הדקות (' + escapeHtml(current.spec.minMinutes) + ' דקות). הורידו את סף הדקות במעבדה כדי לצפות בשבריריות.</p>';
+      return;
+    }
     const selectedId = current.selected && current.selected.id;
     const notes = [];
     (current.fragility || []).forEach(function (variant) {
@@ -776,15 +785,32 @@
       ? (current.selected.name + (notes.length ? ' — ' + notes.join(' · ') : ' — השחקן לא זז בטופ־5 של אף דחיפה +10.'))
       : 'בחרו שחקן בטבלה כדי לעקוב אחריו כאן.';
     fragilityRoot.innerHTML = (current.fragility || []).map(function (variant) {
+      const currentVal = Number(current.spec[variant.key] || 0);
+      const isMax = currentVal >= 100;
+      const btnTitle = isMax
+        ? escapeHtml(variant.label) + ' כבר בערך מקסימלי (100)'
+        : 'בחנו ' + escapeHtml(variant.label) + ' במעבדה (העלו את המשקל ב-10)';
+      const testBtn = '<div class="actions"><button type="button" class="secondary" data-bump="' +
+        escapeHtml(variant.key) + '"' +
+        (isMax ? ' disabled' : '') +
+        ' title="' + btnTitle + '">' +
+        'בחנו ' + escapeHtml(variant.label) + ' במעבדה' +
+        '</button></div>';
       const items = variant.swings.length
         ? '<ol>' + variant.swings.map(function (row) {
-          const mark = row.id === selectedId ? ' ← הנבחר' : '';
-          return '<li>' + escapeHtml(row.name) + ' (' + escapeHtml(row.team || '') + '): #' +
+          const isSelected = row.id === selectedId;
+          const mark = isSelected ? ' <span class="badge">הנבחר</span>' : '';
+          return '<li>' +
+            '<button type="button" class="secondary" data-player-id="' + escapeHtml(row.id) + '"' +
+            ' title="בחרו את ' + escapeHtml(row.name) + ' בטבלה"' +
+            (isSelected ? ' aria-current="true"' : '') + '>' +
+            escapeHtml(row.name) + '</button> ' +
+            '(' + escapeHtml(row.team || '') + '): #' +
             escapeHtml(row.from) + ' → #' + escapeHtml(row.to) + ' (' +
             (row.deltaRank > 0 ? '+' : '') + escapeHtml(row.deltaRank) + ')' + mark + '</li>';
         }).join('') + '</ol>'
         : '<p class="muted">אין תזוזת דירוג ב־+10 הזה — נסו סף דקות אחר.</p>';
-      return '<article class="lesson-step"><h3>' + escapeHtml(variant.label) + '</h3>' + items + '</article>';
+      return '<article class="lesson-step"><h3>' + escapeHtml(variant.label) + '</h3>' + items + testBtn + '</article>';
     }).join('');
   }
 
@@ -939,6 +965,31 @@
     if (!lesson || !lesson.hint) return;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), lesson.hint));
     recompute();
+  });
+  fragilityRoot.addEventListener('click', function (event) {
+    const bumpBtn = event.target.closest('button[data-bump]');
+    if (bumpBtn) {
+      const key = bumpBtn.getAttribute('data-bump');
+      const inputMap = { grit: 'wGrit', involvement: 'wInv', clutch: 'wClutch' };
+      const inputId = inputMap[key];
+      const slider = inputId && document.getElementById(inputId);
+      if (slider) {
+        const nextVal = Math.min(100, Math.round(Number(slider.value || 0) + 10));
+        slider.value = nextVal;
+        recompute();
+      }
+      return;
+    }
+    const playerBtn = event.target.closest('button[data-player-id]');
+    if (playerBtn) {
+      const pid = playerBtn.getAttribute('data-player-id');
+      if (pid) {
+        tableRoot.dataset.selected = pid;
+        recompute();
+        const row = tableRoot.querySelector('tr[data-id="' + pid + '"]');
+        if (row && row.focus) row.focus();
+      }
+    }
   });
   document.getElementById('glossaryRoot').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-field]');
