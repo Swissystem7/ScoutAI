@@ -11,7 +11,8 @@
     .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
     label{display:block;margin:14px 0 6px;font-weight:700}input,button,select{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
-    input[type=file],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
+    input[type=file],input[type=search],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
+    .search-row{margin:14px 0 6px}.search-row label{margin:0 0 6px}.search-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.search-controls input{flex:1;min-width:220px}.search-controls button{margin-top:0}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.actions button{margin-inline-end:8px}.status{min-height:1.5em;font-weight:700}
     .formula{font-size:.95rem;color:#0f3d26;margin:12px 0;font-weight:700}
     .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}caption{text-align:start;font-weight:700;padding:8px 0;color:#17211b}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
@@ -57,7 +58,7 @@
     .receipt li{list-style:none}
     tr.hl td,tr.hl th{background:#fff8e8;outline:2px solid #8a5a00}
     .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    button,select,input[type=file],.toc a,.course-nav button,.lesson-nav button{min-height:44px}
+    button,select,input[type=file],input[type=search],.toc a,.course-nav button,.lesson-nav button{min-height:44px}
     input[type=range]{min-height:32px}
     .toc a{display:inline-flex;align-items:center;padding:8px 10px}
     @media(max-width:650px){
@@ -157,6 +158,13 @@
   <section class="card" id="ranking">
     <h2>דירוג חי לפי המדד שלכם</h2>
     <p>ברירת המחדל: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית, לא למסחר. אחרי טעינת קובץ שלכם התווית משתנה ל־<span class="badge">USER_LICENSED_DATA</span>. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
+    <div class="search-row">
+      <label for="playerSearch">חיפוש שחקן לפי שם או נבחרת</label>
+      <div class="search-controls">
+        <input id="playerSearch" type="search" placeholder="לדוגמה: Kanté, Kane, France, בלגיה..." aria-controls="playerTable" aria-describedby="tableStatus">
+        <button id="clearSearch" class="secondary" type="button" disabled>נקה סינון</button>
+      </div>
+    </div>
     <p id="tableStatus" class="status" role="status" aria-live="polite">טוען את data/wc2018_event_aggregates.json…</p>
     <div id="playerTable" class="table-wrap"></div>
   </section>
@@ -364,13 +372,36 @@
     const rows = current.rows;
     const spec = current.spec;
     const tag = (current.provenance || 'STATSBOMB_OPEN_DATA');
+    const searchInput = document.getElementById('playerSearch');
+    const clearBtn = document.getElementById('clearSearch');
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    if (clearBtn) {
+      clearBtn.disabled = !query;
+      clearBtn.setAttribute('title', query ? 'נקה את סינון הטבלה' : 'הקלידו שם שחקן או נבחרת כדי להפעיל סינון');
+    }
     if (!rows.length) {
       tableStatus.textContent = tag + ': אין שחקנים מעל סף הדקות.';
       tableRoot.innerHTML = '<p class="notice">אין שחקנים שעברו את סף הדקות המינימלי (' + escapeHtml(spec.minMinutes) + ' דקות). הורידו את הסף במעבדת המדד למעלה.</p>';
       return;
     }
-    tableStatus.textContent = tag + ': ' + rows.length + ' שחקנים אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
-    const body = rows.map(function (row) {
+    const filteredRows = query
+      ? rows.filter(function (row) {
+          const name = (row.name || '').toLowerCase();
+          const team = (row.team || '').toLowerCase();
+          return name.indexOf(query) >= 0 || team.indexOf(query) >= 0;
+        })
+      : rows;
+
+    if (!filteredRows.length) {
+      tableStatus.textContent = tag + ': לא נמצאו שחקנים התואמים לחיפוש "' + (searchInput ? searchInput.value.trim() : '') + '".';
+      tableRoot.innerHTML = '<p class="notice">לא נמצאו שחקנים התואמים לחיפוש "' + escapeHtml(searchInput ? searchInput.value.trim() : '') + '" מתוך ' + rows.length + ' שחקנים מעל סף הדקות. לחצו על "נקה סינון" כדי להציג את כל השחקנים.</p>';
+      return;
+    }
+
+    tableStatus.textContent = tag + ': ' +
+      (query ? 'מוצגים ' + filteredRows.length + ' מתוך ' + rows.length + ' שחקנים (סינון: "' + searchInput.value.trim() + '")' : rows.length + ' שחקנים') +
+      ' אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
+    const body = filteredRows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
       const compared = spec.compareId && row.id === spec.compareId;
       const cls = selected ? 'selected' : compared ? 'compared' : '';
@@ -388,12 +419,13 @@
         '<td>' + escapeHtml(row.components.clutch) + '</td>' +
       '</tr>';
     }).join('');
+    const rawQuery = searchInput ? searchInput.value.trim() : '';
     const caption = tag === 'STATSBOMB_OPEN_DATA'
-      ? 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018'
-      : 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag;
+      ? (query ? 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018 (סינון: "' + escapeHtml(rawQuery) + '")' : 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018')
+      : (query ? 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag + ' (סינון: "' + escapeHtml(rawQuery) + '")' : 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag);
     tableRoot.innerHTML =
       '<table aria-describedby="tableStatus">' +
-        '<caption>' + escapeHtml(caption) + '</caption>' +
+        '<caption>' + caption + '</caption>' +
         '<thead><tr>' +
           '<th scope="col">דירוג ושינוי</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">דקות</th>' +
           '<th scope="col">ציון ושינוי</th><th scope="col">Grit</th><th scope="col">Involvement</th><th scope="col">Clutch</th>' +
@@ -829,6 +861,28 @@
   compareSelect.addEventListener('change', recompute);
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
+  const playerSearch = document.getElementById('playerSearch');
+  const clearSearch = document.getElementById('clearSearch');
+  if (playerSearch) {
+    playerSearch.addEventListener('input', function () {
+      if (view) renderTable(view);
+    });
+    playerSearch.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        playerSearch.value = '';
+        if (view) renderTable(view);
+      }
+    });
+  }
+  if (clearSearch) {
+    clearSearch.addEventListener('click', function () {
+      if (playerSearch) {
+        playerSearch.value = '';
+        playerSearch.focus();
+      }
+      if (view) renderTable(view);
+    });
+  }
   document.getElementById('applyHint').addEventListener('click', function () {
     const hint = ScoutAIDemo.DEFENDER_EXERCISE.hint;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), hint));
@@ -979,6 +1033,8 @@
       fileName: parsed.source && parsed.source.dataset
     });
     tableRoot.dataset.selected = '';
+    const searchInput = document.getElementById('playerSearch');
+    if (searchInput) searchInput.value = '';
     if (parsed.provenance !== 'STATSBOMB_OPEN_DATA') {
       document.getElementById('splitSelect').value = 'hash';
     }
@@ -1033,6 +1089,8 @@
     ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
       store = lab.store;
       tableRoot.dataset.selected = '';
+      const searchInput = document.getElementById('playerSearch');
+      if (searchInput) searchInput.value = '';
       document.getElementById('splitSelect').value = 'groups';
       recompute();
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';

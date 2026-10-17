@@ -394,6 +394,9 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
+  assert.match(html, /<input id="playerSearch" type="search"[^>]*aria-controls="playerTable"/);
+  assert.match(html, /<button id="clearSearch" class="secondary" type="button" disabled>נקה סינון<\/button>/);
+  assert.match(html, /לא נמצאו שחקנים התואמים לחיפוש/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
 });
 
