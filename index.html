@@ -213,7 +213,10 @@
       <option value="groups">בתים A–D מול E–H (מומלץ)</option>
       <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
     </select>
-    <p id="validateStatus" class="status" role="status"></p>
+    <div class="actions">
+      <button id="resetValidation" class="secondary" type="button" disabled title="הגדרות האימות כבר בברירת המחדל (בישולים, בתים A–D מול E–H)">איפוס אימות לברירת מחדל</button>
+    </div>
+    <p id="validateStatus" class="status" role="status" aria-live="polite"></p>
     <p id="validateVerdict" class="lab-note" role="status" aria-live="polite"></p>
     <div id="validateStats" class="stats-grid"></div>
     <div id="validateTables" class="table-wrap"></div>
@@ -574,6 +577,17 @@
 
   function renderValidation(current) {
     const report = current.validation;
+    const outcomeSelect = document.getElementById('outcomeSelect');
+    const splitSelect = document.getElementById('splitSelect');
+    const resetValidation = document.getElementById('resetValidation');
+    if (resetValidation) {
+      const isDefault = outcomeSelect && outcomeSelect.value === 'assists' &&
+        splitSelect && splitSelect.value === 'groups';
+      resetValidation.disabled = isDefault;
+      resetValidation.setAttribute('title', isDefault
+        ? 'הגדרות האימות כבר בברירת המחדל (בישולים, בתים A–D מול E–H)'
+        : 'אפסו את יעד החיזוי ושיטת הפיצול לברירת המחדל (בישולים, בתים A–D מול E–H)');
+    }
     if (!report) return;
     document.getElementById('validateStatus').textContent =
       (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
@@ -829,6 +843,17 @@
   compareSelect.addEventListener('change', recompute);
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
+  document.getElementById('resetValidation').addEventListener('click', function () {
+    const outcomeSelect = document.getElementById('outcomeSelect');
+    const splitSelect = document.getElementById('splitSelect');
+    if (outcomeSelect) outcomeSelect.value = 'assists';
+    if (splitSelect) splitSelect.value = 'groups';
+    recompute();
+    const status = document.getElementById('validateStatus');
+    if (status) {
+      status.textContent = 'הגדרות האימות אופסו לברירת המחדל (בישולים, בתים A–D מול E–H). ' + (status.textContent || '');
+    }
+  });
   document.getElementById('applyHint').addEventListener('click', function () {
     const hint = ScoutAIDemo.DEFENDER_EXERCISE.hint;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), hint));
