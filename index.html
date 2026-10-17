@@ -57,7 +57,10 @@
     .receipt li{list-style:none}
     tr.hl td,tr.hl th{background:#fff8e8;outline:2px solid #8a5a00}
     .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    button,select,input[type=file],.toc a,.course-nav button,.lesson-nav button{min-height:44px}
+    .filter-group{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+    .filter-group button{margin-top:0;padding:8px 12px}
+    .filter-group button[aria-pressed="true"]{background:#145c3d;color:#fff;border-color:#145c3d}
+    button,select,input[type=file],.toc a,.course-nav button,.lesson-nav button,.filter-group button{min-height:44px}
     input[type=range]{min-height:32px}
     .toc a{display:inline-flex;align-items:center;padding:8px 10px}
     @media(max-width:650px){
@@ -242,6 +245,12 @@
   <section class="card" id="glossary">
     <h2>מילון סוגי אירועים של StatsBomb</h2>
     <p>כל מונח מקושר לשדה ב־<code>data/wc2018_event_aggregates.json</code> ולערך של השחקן הנבחר. מה שכתוב «לא בנוסחה» קיים בקובץ ולא נכנס לציון — זה חלק מהשיעור.</p>
+    <div class="filter-group" role="group" aria-label="סינון מונחים במילון">
+      <button id="filterGlossAll" class="secondary" type="button" aria-pressed="true" aria-label="הציגו את כל המונחים במילון">כל המונחים (11)</button>
+      <button id="filterGlossUsed" class="secondary" type="button" aria-pressed="false" aria-label="הציגו רק מונחים הנכנסים לנוסחה">נכנס לנוסחה (9)</button>
+      <button id="filterGlossUnused" class="secondary" type="button" aria-pressed="false" aria-label="הציגו רק מונחים שאינם נכנסים לנוסחה">לא בנוסחה (2)</button>
+    </div>
+    <p id="glossaryStatus" class="status" role="status" aria-live="polite">מוצגים כל 11 מונחי המילון. לחצו על כפתור מונח כדי להדגיש את השדה שלו ביומן הספירות.</p>
     <dl id="glossaryRoot" class="glossary"></dl>
   </section>
 
@@ -282,6 +291,7 @@
   let view = null;
   let writingHash = false;
   let lessonIndex = 0;
+  let glossaryFilter = 'all';
   const courseAnswers = {
     unusedField: '',
     per90: '',
@@ -516,15 +526,61 @@
   }
 
   function renderGlossary(current) {
-    const items = current.glossary || ScoutAIDemo.EVENT_GLOSSARY;
-    document.getElementById('glossaryRoot').innerHTML = items.map(function (item) {
+    const rawItems = current.glossary || ScoutAIDemo.EVENT_GLOSSARY;
+    const totalCount = rawItems.length;
+    const usedCount = rawItems.filter(function (it) { return it.usedInScore; }).length;
+    const unusedCount = rawItems.filter(function (it) { return !it.usedInScore; }).length;
+
+    const filterAllBtn = document.getElementById('filterGlossAll');
+    const filterUsedBtn = document.getElementById('filterGlossUsed');
+    const filterUnusedBtn = document.getElementById('filterGlossUnused');
+    if (filterAllBtn) {
+      filterAllBtn.textContent = 'כל המונחים (' + totalCount + ')';
+      filterAllBtn.setAttribute('aria-pressed', glossaryFilter === 'all' ? 'true' : 'false');
+    }
+    if (filterUsedBtn) {
+      filterUsedBtn.textContent = 'נכנס לנוסחה (' + usedCount + ')';
+      filterUsedBtn.setAttribute('aria-pressed', glossaryFilter === 'used' ? 'true' : 'false');
+    }
+    if (filterUnusedBtn) {
+      filterUnusedBtn.textContent = 'לא בנוסחה (' + unusedCount + ')';
+      filterUnusedBtn.setAttribute('aria-pressed', glossaryFilter === 'unused' ? 'true' : 'false');
+    }
+
+    const items = rawItems.filter(function (item) {
+      if (glossaryFilter === 'used') return item.usedInScore;
+      if (glossaryFilter === 'unused') return !item.usedInScore;
+      return true;
+    });
+
+    const statusEl = document.getElementById('glossaryStatus');
+    if (statusEl) {
+      const filterLabel = glossaryFilter === 'used'
+        ? 'מוצגים ' + items.length + ' מתוך ' + totalCount + ' מונחים שנכנסים לנוסחה.'
+        : (glossaryFilter === 'unused'
+          ? 'מוצגים ' + items.length + ' מתוך ' + totalCount + ' מונחים שאינם נכנסים לנוסחה.'
+          : 'מוצגים כל ' + totalCount + ' מונחי המילון.');
+      const playerNote = current.selected ? ' ערכים חיים עבור ' + current.selected.name + '.' : '';
+      statusEl.textContent = filterLabel + playerNote + ' לחצו על כפתור מונח כדי להדגיש את השדה שלו ביומן הספירות.';
+    }
+
+    const root = document.getElementById('glossaryRoot');
+    if (!items.length) {
+      root.innerHTML = '<p class="notice">לא נמצאו מונחים התואמים לסינון הנוכחי.</p>';
+      return;
+    }
+
+    root.innerHTML = items.map(function (item) {
       const live = item.selectedName
         ? ' אצל ' + item.selectedName + ': ' +
           (item.selectedTotal == null ? '—' : item.selectedTotal) +
           (item.selectedPer90 == null ? '' : ' · ' + item.selectedPer90 + '/90') + '.'
         : '';
-      return '<div class="' + (item.usedInScore ? '' : 'unused') + '" id="gloss-' + escapeHtml(item.field || item.type) + '"><dt>' +
-        '<button type="button" class="secondary" data-field="' + escapeHtml(item.field || '') + '">' +
+      const fieldName = item.field || item.type;
+      return '<div class="' + (item.usedInScore ? '' : 'unused') + '" id="gloss-' + escapeHtml(fieldName) + '"><dt>' +
+        '<button type="button" class="secondary" data-field="' + escapeHtml(item.field || '') + '"' +
+        ' title="אתרו את שדה ' + escapeHtml(fieldName) + ' ביומן ספירות האירועים"' +
+        ' aria-label="אתרו את שדה ' + escapeHtml(fieldName) + ' ביומן ספירות האירועים">' +
         escapeHtml(item.type) + ' — ' + escapeHtml(item.he) + '</button>' +
         ' <span class="badge">' + escapeHtml(item.feeds) + '</span>' +
         ' <code>' + escapeHtml(item.filePath || '') + '</code></dt><dd>' +
@@ -940,14 +996,55 @@
     writeSpecToControls(Object.assign({}, readSpecFromControls(), lesson.hint));
     recompute();
   });
+  const filterGlossAll = document.getElementById('filterGlossAll');
+  const filterGlossUsed = document.getElementById('filterGlossUsed');
+  const filterGlossUnused = document.getElementById('filterGlossUnused');
+  if (filterGlossAll) {
+    filterGlossAll.addEventListener('click', function () {
+      glossaryFilter = 'all';
+      if (view) renderGlossary(view);
+    });
+  }
+  if (filterGlossUsed) {
+    filterGlossUsed.addEventListener('click', function () {
+      glossaryFilter = 'used';
+      if (view) renderGlossary(view);
+    });
+  }
+  if (filterGlossUnused) {
+    filterGlossUnused.addEventListener('click', function () {
+      glossaryFilter = 'unused';
+      if (view) renderGlossary(view);
+    });
+  }
   document.getElementById('glossaryRoot').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-field]');
     if (!button) return;
     const field = button.getAttribute('data-field');
+    const explorerSection = document.getElementById('explorer');
+    const explorerStatus = document.getElementById('explorerStatus');
+    const explorerTable = document.getElementById('explorerTable');
+    if (explorerTable) {
+      Array.prototype.slice.call(explorerTable.querySelectorAll('tr.hl')).forEach(function (r) {
+        r.classList.remove('hl');
+      });
+    }
     const row = document.getElementById('field-' + field);
     if (row && row.scrollIntoView) {
       row.classList.add('hl');
+      row.setAttribute('tabindex', '-1');
       row.scrollIntoView({ block: 'center' });
+      row.focus();
+      if (explorerStatus && view && view.selected) {
+        explorerStatus.textContent = 'שדה ' + field + ' מודגש ביומן הספירות של ' + view.selected.name + '.';
+      }
+    } else {
+      if (explorerStatus) {
+        explorerStatus.textContent = 'בחרו שחקן בטבלה כדי לאתר את השדה ' + field + ' ביומן הספירות.';
+      }
+      if (explorerSection && explorerSection.scrollIntoView) {
+        explorerSection.scrollIntoView({ block: 'start' });
+      }
     }
   });
   window.addEventListener('hashchange', function () {
