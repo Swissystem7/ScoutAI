@@ -391,6 +391,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
+  assert.match(html, /id="exerciseSummary"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל/);
+  assert.match(html, /document\.getElementById\('resetExercise'\)\.addEventListener\('click'/);
+  assert.match(html, /התרגיל אופס למדד ברירת המחדל/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
