@@ -74,6 +74,7 @@
 <a class="skip" href="#course">דלגו לשיעור המלא</a>
 <a class="skip" href="#lab">דלגו למעבדת המדד</a>
 <a class="skip" href="#ranking">דלגו לדירוג החי</a>
+<a class="skip" href="#explorer">דלגו לחוקר הספירות</a>
 <a class="skip" href="#byod">דלגו לנתונים שלכם</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג מקור הנתונים">
@@ -193,8 +194,11 @@
     <h2>חוקר ספירות האירועים</h2>
     <p>הקובץ המקומי הוא <strong>ספירות מצטברות</strong> מ-64 משחקים, לא יומן אירוע-אחר-אירוע. כאן רואים את השדות האמיתיים מאחורי הציון של השחקן הנבחר, וגם את מה שנאסף ולא נכנס לנוסחה.</p>
     <p id="explorerStatus" class="lab-note" role="status" aria-live="polite">בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים.</p>
+    <label class="toggle"><input id="filterUsedFields" type="checkbox" aria-controls="explorerTable"> הציגו רק שדות שנכנסים לציון המדד (Grit / Involvement / Clutch)</label>
     <ol id="explorerReceipt" class="receipt"></ol>
-    <div id="explorerTable" class="table-wrap"></div>
+    <div id="explorerTable" class="table-wrap">
+      <p class="notice">בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא.</p>
+    </div>
   </section>
 
   <section class="card" id="validate">
@@ -538,27 +542,44 @@
     const root = document.getElementById('explorerTable');
     const receipt = document.getElementById('explorerReceipt');
     const status = document.getElementById('explorerStatus');
+    const filterUsed = document.getElementById('filterUsedFields');
+    const onlyUsed = filterUsed && filterUsed.checked;
+    if (filterUsed) {
+      filterUsed.disabled = !explorer || !explorer.player;
+      filterUsed.setAttribute('title', !explorer || !explorer.player
+        ? 'בחרו שחקן בטבלה כדי לסנן את שדות יומן הספירות'
+        : (onlyUsed ? 'בטלו את הסינון כדי להציג את כל השדות שנאספו' : 'הציגו רק שדות המשפיעים על ציון המדד'));
+    }
     if (!explorer || !explorer.player) {
       status.textContent = 'בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים.';
       root.innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא.</p>';
       receipt.innerHTML = '';
       return;
     }
-    status.textContent = explorer.honesty;
+    const allRows = explorer.rows || [];
+    const rows = onlyUsed ? allRows.filter(function (row) { return row.usedInScore; }) : allRows;
+    status.textContent = explorer.honesty + (onlyUsed
+      ? ' · מוצגים ' + rows.length + ' שדות שנכנסים לציון.'
+      : ' · מוצגים כל ' + allRows.length + ' השדות (כולל שדות שלא בנוסחה).');
     receipt.innerHTML = (explorer.receipt || []).map(function (item) {
       return '<li><strong>' + escapeHtml(item.step) + ':</strong> ' + escapeHtml(item.detail) + '</li>';
     }).join('');
+    if (!rows.length) {
+      root.innerHTML = '<p class="notice">אין שדות שנכנסים לציון המדד עבור שחקן זה.</p>';
+      return;
+    }
     root.innerHTML =
       '<table aria-describedby="explorerStatus">' +
         '<caption>ספירות מ-' + escapeHtml(explorer.player.name) + ' ב־' +
           escapeHtml(explorer.dataset || (current.source && current.source.dataset) || 'user-upload') +
-          ' · ' + escapeHtml(explorer.provenance || current.provenance || '') + '</caption>' +
+          ' · ' + escapeHtml(explorer.provenance || current.provenance || '') +
+          (onlyUsed ? ' (שדות הציון בלבד)' : '') + '</caption>' +
         '<thead><tr>' +
           '<th scope="col">שדה</th><th scope="col">סוג StatsBomb</th><th scope="col">ספירה</th>' +
           '<th scope="col">/90 מחושב</th><th scope="col">/90 בקובץ</th>' +
           '<th scope="col">תקרה</th><th scope="col">סקייל</th><th scope="col">נכנס ל</th>' +
         '</tr></thead><tbody>' +
-        (explorer.rows || []).map(function (row) {
+        rows.map(function (row) {
           return '<tr id="field-' + escapeHtml(row.key) + '" data-field="' + escapeHtml(row.key) + '"' +
             (row.usedInScore ? '' : ' class="unused"') + '>' +
             '<th scope="row"><code>' + escapeHtml(row.filePath) + '</code><div class="muted">' + escapeHtml(row.label) + '</div></th>' +
@@ -829,6 +850,9 @@
   compareSelect.addEventListener('change', recompute);
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
+  document.getElementById('filterUsedFields').addEventListener('change', function () {
+    if (view) renderExplorer(view);
+  });
   document.getElementById('applyHint').addEventListener('click', function () {
     const hint = ScoutAIDemo.DEFENDER_EXERCISE.hint;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), hint));
@@ -1033,6 +1057,8 @@
     ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
       store = lab.store;
       tableRoot.dataset.selected = '';
+      const filterUsed = document.getElementById('filterUsedFields');
+      if (filterUsed) filterUsed.checked = false;
       document.getElementById('splitSelect').value = 'groups';
       recompute();
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';
