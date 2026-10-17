@@ -73,6 +73,7 @@
 <body>
 <a class="skip" href="#course">דלגו לשיעור המלא</a>
 <a class="skip" href="#lab">דלגו למעבדת המדד</a>
+<a class="skip" href="#exercise">דלגו לתרגיל המודרך</a>
 <a class="skip" href="#ranking">דלגו לדירוג החי</a>
 <a class="skip" href="#byod">דלגו לנתונים שלכם</a>
 <main class="shell">
@@ -83,6 +84,7 @@
     <nav class="toc" aria-label="מעבר לחלקי המעבדה">
       <a href="#course">שיעור מלא</a>
       <a href="#lab">בנה מדד</a>
+      <a href="#exercise">תרגיל מודרך</a>
       <a href="#ranking">דירוג חי</a>
       <a href="#lesson">שיעור שקוף</a>
       <a href="#radar">מכ״ם</a>
@@ -109,7 +111,7 @@
     <h2>שיעור מלא: מאירוע למדד מאומת</h2>
     <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
     <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
-    <p id="courseProgress" class="status" role="status"></p>
+    <p id="courseProgress" class="status" role="status" aria-live="polite"></p>
     <div id="courseRoot" class="lesson"></div>
   </section>
 
@@ -150,7 +152,7 @@
     <p id="exercisePrompt"></p>
     <p class="muted">בדיקה עצמית מול אותה שכבת מונדיאל 2018 — לא מבחן סקאוטינג ואין תשובה מדעית אחת.</p>
     <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
-    <p id="exerciseSummary" class="status" role="status"></p>
+    <p id="exerciseSummary" class="status" role="status" aria-live="polite"></p>
     <ul id="exerciseChecks" class="checks"></ul>
   </section>
 
@@ -213,7 +215,7 @@
       <option value="groups">בתים A–D מול E–H (מומלץ)</option>
       <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
     </select>
-    <p id="validateStatus" class="status" role="status"></p>
+    <p id="validateStatus" class="status" role="status" aria-live="polite"></p>
     <p id="validateVerdict" class="lab-note" role="status" aria-live="polite"></p>
     <div id="validateStats" class="stats-grid"></div>
     <div id="validateTables" class="table-wrap"></div>
@@ -253,11 +255,11 @@
     <input id="userData" type="file" accept=".json,.csv,text/csv,application/json">
     <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
     <div class="actions">
-      <button id="loadUserData" type="button">הריצו על הקובץ שלי</button>
+      <button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי</button>
       <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
-      <button id="restoreOpenData" class="secondary" type="button">חזרו לדמו מונדיאל 2018</button>
+      <button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018</button>
     </div>
-    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
+    <p id="byodStatus" class="status" role="status" aria-live="polite">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
     <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. CSV: אותן כותרות בשורה הראשונה; המפריד (פסיק, נקודה-פסיק או טאב) מזוהה אוטומטית, כולל קובץ Excel אירופי עם <code>sep=;</code> ופסיק עשרוני. מספרים עם מפריד אלפים (<code>"1,234"</code>, <code>1 234</code>, <code>1'234</code>, <code>1.234.567</code> בקובץ נקודה-פסיק) נקראים כמספרים; תא עם סימון חסר (<code>-</code>, <code>N/A</code>, <code>#N/A</code>, <code>null</code>) נחשב ריק ולא 0, ומדווח פעם אחת לכל עמודה. קובץ בלי דקות קריאות (אין עמודת <code>minutes</code> / Min / דקות, או שכולה ריקה) נטען אבל מדווח: בלי דקות כל רכיב ל-90 הוא 0 ואף שחקן לא עובר את סף הדקות. שחקן בלי דקות בקובץ שכן יש בו דקות (תא ריק, <code>-</code> או ערך שנפסל) מדווח לפי שם: הוא נטען עם 0 דקות ולא יופיע בדירוג, אחרת היה נעלם בשקט. דקות או ספירה שליליות אינן מדידה — התא נחשב חסר ומדווח לפי שחקן; שחקנים עם 0 דקות נספרים. קובץ תקין שבו אף שחקן (או שחקן אחד בלבד) לא עובר את סף הדקות — ייצוא של משחק אחד מגיע ל-90 דקות, והסף הוא 270 — מדווח בטעינה עם הדקות הגבוהות ביותר בקובץ וערך הסף שהיה מכניס שחקנים לדירוג; הסף לא משתנה לבד, ומדגם קטן עדיין משקר. שורות סיכום בסוף הקובץ (<code>Squad Total</code>, <code>Opponent Total</code>, Total, Average, סה"כ, ממוצע) אינן שחקנים: הן מדולגות ומדווחות, אחרת סך הקבוצה היה מדורג ראשון. ייצוא FBref (Get table as CSV) נקרא כמו שהוא: שורת כותרת-העל שמעל הכותרת (Playing Time, Performance…) מדולגת ומדווחת, וכך גם שורת הכותרת שחוזרת כל 25 שחקנים, שאחרת הייתה נטענת כשחקן בשם Player. טבלת FBref בלי עמודת Min (Defensive Actions, Possession, Passing…) נקראת דרך עמודת <code>90s</code>: דקות = 90s × 90, מעוגל לדקה שלמה ומדווח; כשיש גם Min היא עדיפה. שם שחקן שחוזר בקובץ מדווח לפי שם — עותק זהה של שורה, שתי שורות באותה קבוצה (המזהה השני מקבל <code>#2</code>) או שתי קבוצות (מעבר באמצע עונה בייצוא FBref): כל שורה נטענת ומדורגת בנפרד ולא מאוחדת, כי כל אחת נושאת רק חלק מהדקות של השחקן. הקידוד מזוהה מהבייטים: UTF-8 (עם או בלי BOM), UTF-16 של «Unicode Text», ו-CSV של Excel עברי בקידוד windows-1255 — קידוד שאינו UTF-8 מדווח בשורת הסטטוס. שם שמכיל את המפריד חייב מרכאות (<code>"Silva, Thiago"</code>): שורה עם מספר תאים גדול ממספר הכותרות מדולגת ומדווחת, כי כל הסטטיסטיקה שלה הייתה זזה עמודה ימינה. הכותרות נקראות בלי הבדל בין אותיות גדולות לקטנות, רווחים וקווים תחתונים (<code>Key Passes</code> נטען כ-keyPasses), וגם בקיצורים הנפוצים של FBref/Opta (Player, Squad, Pos, Min, Tkl, Int, KP, xG, SoT, Gls, Ast) ובכותרות עבריות בסיסיות (שם, קבוצה, עמדה, דקות); כל התאמה כזו מדווחת בשורת הסטטוס. כותרת שלא זוהתה (למשל <code>tackle</code> או <code>age</code>) לא נטענת ומדווחת עם הצעה לשם הקרוב, כדי שאף שחקן לא יקבל 0 על סטטיסטיקה שהקובץ כן מכיל. עמדה (<code>position</code>): שם מלא באנגלית או בעברית (Center Back, שוער, קשר, חלוץ) או קוד מקובל (GK, CB, LB, CDM, CM, CAM, ST, LW…), כולל קודי Wyscout לפי צד (RCMF, LDMF, RWF, RCB3); עמדה שלא זוהתה נחשבת OT ומדווחת, כי בנרמול לפי עמדה שחקני OT מושווים רק זה לזה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
   </section>
 
@@ -438,6 +440,14 @@
         escapeHtml(item.label) +
         '<div class="muted">' + escapeHtml(item.detail) + '</div></li>';
     }).join('');
+    const applyHint = document.getElementById('applyHint');
+    if (applyHint) {
+      const hintActive = current.spec.grit === 70 && current.spec.involvement === 20 && current.spec.clutch === 10 && Boolean(current.spec.normPos);
+      applyHint.disabled = hintActive;
+      applyHint.setAttribute('title', hintActive
+        ? 'נקודת ההתחלה של התרגיל (70/20/10 + נרמול עמדה) כבר מיושמת'
+        : 'הציעו נקודת התחלה (70/20/10 + נרמול עמדה)');
+    }
   }
 
   function renderRadar(current) {
@@ -788,6 +798,35 @@
     }).join('');
   }
 
+  function syncByodControls() {
+    const fileInput = document.getElementById('userData');
+    const attestCheck = document.getElementById('userAttest');
+    const loadBtn = document.getElementById('loadUserData');
+    if (!loadBtn || !fileInput || !attestCheck) return;
+    const hasFile = Boolean(fileInput.files && fileInput.files.length > 0);
+    const isAttested = Boolean(attestCheck.checked);
+    loadBtn.disabled = !hasFile || !isAttested;
+    if (!hasFile) {
+      loadBtn.setAttribute('title', 'בחרו קובץ JSON או CSV מקומי להרצה');
+    } else if (!isAttested) {
+      loadBtn.setAttribute('title', 'סמנו אישור רישיון לפני הרצת הקובץ');
+    } else {
+      loadBtn.setAttribute('title', 'הריצו את המדד על ' + fileInput.files[0].name);
+    }
+  }
+
+  function renderByod(current) {
+    const restoreBtn = document.getElementById('restoreOpenData');
+    if (restoreBtn) {
+      const isOpenData = !current || current.provenance === 'STATSBOMB_OPEN_DATA';
+      restoreBtn.disabled = isOpenData;
+      restoreBtn.setAttribute('title', isOpenData
+        ? 'אתם כבר צופים בדמו מונדיאל 2018 (StatsBomb Open Data)'
+        : 'חזרו לתצוגת דמו מונדיאל 2018');
+    }
+    syncByodControls();
+  }
+
   function renderAll(current) {
     syncSlider('wGrit', current.spec.grit, 'Grit, ' + Math.round(current.spec.grit) + ' אחוז');
     syncSlider('wInv', current.spec.involvement, 'Involvement, ' + Math.round(current.spec.involvement) + ' אחוז');
@@ -804,6 +843,7 @@
     renderExport(current);
     renderGlossary(current);
     renderCurriculum(current);
+    renderByod(current);
     persistHash(current.spec);
   }
 
@@ -1014,6 +1054,8 @@
     };
     reader.readAsArrayBuffer(file);
   });
+  document.getElementById('userData').addEventListener('change', syncByodControls);
+  document.getElementById('userAttest').addEventListener('change', syncByodControls);
 
   document.getElementById('loadSynthetic').addEventListener('click', function () {
     const byodStatus = document.getElementById('byodStatus');
