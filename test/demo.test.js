@@ -391,10 +391,34 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
+  assert.match(html, /<button id="filterGlossAll" class="secondary" type="button" aria-pressed="true"/);
+  assert.match(html, /<button id="filterGlossUsed" class="secondary" type="button" aria-pressed="false"/);
+  assert.match(html, /<button id="filterGlossUnused" class="secondary" type="button" aria-pressed="false"/);
+  assert.match(html, /id="glossaryStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /לא נמצאו מונחים התואמים לסינון הנוכחי/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
+});
+
+test('glossary terms can be filtered by score usage with count badges and live status', () => {
+  const allTerms = EVENT_GLOSSARY;
+  assert.equal(allTerms.length, 11);
+  const used = allTerms.filter((item) => item.usedInScore);
+  const unused = allTerms.filter((item) => !item.usedInScore);
+  assert.equal(used.length, 9);
+  assert.equal(unused.length, 2);
+
+  for (const item of used) {
+    assert.ok(['Grit', 'Involvement', 'Clutch'].includes(item.feeds), `${item.type} should feed a formula component`);
+    assert.ok(item.recipeKey, `${item.type} should have a recipeKey for live calculation`);
+  }
+
+  for (const item of unused) {
+    assert.equal(item.usedInScore, false);
+    assert.ok(item.feeds === 'סף דקות' || item.feeds === 'לא בנוסחה');
+  }
 });
 
 const DEFENDERS = {
