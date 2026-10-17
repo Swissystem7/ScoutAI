@@ -393,6 +393,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
+  assert.match(html, /id="validateStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetValidation" class="secondary" type="button" disabled title="הגדרות האימות כבר בברירת המחדל/);
+  assert.match(html, /document\.getElementById\('resetValidation'\)\.addEventListener\('click'/);
+  assert.match(html, /הגדרות האימות אופסו לברירת המחדל/);
   assert.match(html, /button:disabled/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
 });
