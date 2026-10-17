@@ -395,6 +395,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
+  assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetCourseAnswers" class="secondary" type="button" disabled/);
+  assert.match(html, /טוען את צעדי השיעור המלא/);
+  assert.match(html, /אפסו תשובות לבדיקה עצמית/);
 });
 
 const DEFENDERS = {

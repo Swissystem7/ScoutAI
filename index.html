@@ -109,8 +109,13 @@
     <h2>שיעור מלא: מאירוע למדד מאומת</h2>
     <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
     <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
-    <p id="courseProgress" class="status" role="status"></p>
-    <div id="courseRoot" class="lesson"></div>
+    <p id="courseProgress" class="status" role="status" aria-live="polite">טוען את התקדמות השיעור…</p>
+    <div class="actions">
+      <button id="resetCourseAnswers" class="secondary" type="button" disabled title="עדיין לא הוזנו תשובות לאיפוס">אפסו תשובות לבדיקה עצמית</button>
+    </div>
+    <div id="courseRoot" class="lesson">
+      <p class="notice">טוען את צעדי השיעור המלא מנתוני מונדיאל 2018…</p>
+    </div>
   </section>
 
   <section class="card" id="lab">
@@ -734,17 +739,30 @@
     const passedCount = lessons.filter(function (item) { return item.passed; }).length;
     document.getElementById('courseProgress').textContent =
       passedCount + '/' + lessons.length + ' צעדים עברו. סיום = יושרה, לא ρ גבוה.';
+    const resetBtn = document.getElementById('resetCourseAnswers');
+    if (resetBtn) {
+      const hasAnswers = Object.keys(courseAnswers).some(function (k) { return Boolean(courseAnswers[k]); });
+      resetBtn.disabled = !hasAnswers;
+      resetBtn.setAttribute('title', hasAnswers
+        ? 'אפסו את כל התשובות והתחילו את הבדיקה העצמית מחדש'
+        : 'עדיין לא הוזנו תשובות לאיפוס');
+    }
     document.getElementById('courseNav').innerHTML = lessons.map(function (lesson, i) {
       return '<button type="button" data-course="' + i + '"' +
         (i === idx ? ' aria-current="step"' : '') +
         (lesson.passed ? ' class="done"' : '') +
-        ' aria-label="' + escapeHtml(lesson.title) + '">' + (i + 1) + '</button>';
+        ' aria-label="שלב ' + (i + 1) + ': ' + escapeHtml(lesson.title) + '"' +
+        ' title="שלב ' + (i + 1) + ': ' + escapeHtml(lesson.title) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-course="prev"' + (idx === 0 ? ' disabled' : '') + '>הקודם</button>' +
-      '<button type="button" class="secondary" data-course="next"' + (idx >= lessons.length - 1 ? ' disabled' : '') + '>הבא</button>';
+      '<button type="button" class="secondary" data-course="prev"' +
+      (idx === 0 || !lessons.length ? ' disabled' : '') +
+      ' title="' + (idx === 0 || !lessons.length ? 'אין שלב קודם' : 'עברו לשלב הקודם בשיעור') + '">הקודם</button>' +
+      '<button type="button" class="secondary" data-course="next"' +
+      (idx >= lessons.length - 1 || !lessons.length ? ' disabled' : '') +
+      ' title="' + (idx >= lessons.length - 1 || !lessons.length ? 'אין שלב הבא' : 'עברו לשלב הבא בשיעור') + '">הבא</button>';
     const lesson = lessons[idx];
     if (!lesson) {
-      document.getElementById('courseRoot').innerHTML = '';
+      document.getElementById('courseRoot').innerHTML = '<p class="notice">בחרו שלב בשיעור כדי לראות את ההסבר והתרגיל.</p>';
       return;
     }
     const hintBtn = lesson.hint
@@ -915,7 +933,7 @@
   });
   document.getElementById('courseNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-course]');
-    if (!button || !view) return;
+    if (!button || button.disabled || !view) return;
     const token = button.getAttribute('data-course');
     const max = (ScoutAIDemo.CURRICULUM_LESSONS || []).length - 1;
     let next = view.spec.curriculumIndex || 0;
@@ -927,6 +945,16 @@
     const lesson = ScoutAIDemo.CURRICULUM_LESSONS[next];
     const target = lesson && document.getElementById(lesson.section);
     if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start' });
+  });
+  document.getElementById('resetCourseAnswers').addEventListener('click', function () {
+    Object.keys(courseAnswers).forEach(function (k) { courseAnswers[k] = ''; });
+    const quizSelects = document.querySelectorAll('#courseRoot select');
+    Array.prototype.slice.call(quizSelects).forEach(function (sel) { sel.value = ''; });
+    if (view) renderCurriculum(view);
+    const progressEl = document.getElementById('courseProgress');
+    if (progressEl) {
+      progressEl.textContent = 'התשובות אופסו. ' + progressEl.textContent;
+    }
   });
   document.getElementById('courseRoot').addEventListener('change', function (event) {
     if (!event.target.closest('select')) return;
