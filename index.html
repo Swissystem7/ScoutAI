@@ -157,6 +157,15 @@
   <section class="card" id="ranking">
     <h2>דירוג חי לפי המדד שלכם</h2>
     <p>ברירת המחדל: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית, לא למסחר. אחרי טעינת קובץ שלכם התווית משתנה ל־<span class="badge">USER_LICENSED_DATA</span>. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
+    <label for="posFilter">סינון לפי קבוצת עמדה</label>
+    <select id="posFilter" aria-controls="playerTable">
+      <option value="">כל העמדות (ללא סינון)</option>
+      <option value="GK">שוערים (GK)</option>
+      <option value="DF">שחקני הגנה (DF)</option>
+      <option value="MF">קשרים (MF)</option>
+      <option value="FW">שחקני התקפה וחלוצים (FW)</option>
+      <option value="OT">עמדות אחרות (OT)</option>
+    </select>
     <p id="tableStatus" class="status" role="status" aria-live="polite">טוען את data/wc2018_event_aggregates.json…</p>
     <div id="playerTable" class="table-wrap"></div>
   </section>
@@ -364,13 +373,29 @@
     const rows = current.rows;
     const spec = current.spec;
     const tag = (current.provenance || 'STATSBOMB_OPEN_DATA');
+    const posFilter = document.getElementById('posFilter');
+    const posVal = posFilter ? posFilter.value : '';
+    if (posFilter) {
+      posFilter.disabled = !rows.length;
+      posFilter.setAttribute('title', rows.length
+        ? 'סננו את טבלת הדירוג לפי קבוצת עמדה'
+        : 'אין שחקנים זמינים לסינון');
+    }
     if (!rows.length) {
       tableStatus.textContent = tag + ': אין שחקנים מעל סף הדקות.';
       tableRoot.innerHTML = '<p class="notice">אין שחקנים שעברו את סף הדקות המינימלי (' + escapeHtml(spec.minMinutes) + ' דקות). הורידו את הסף במעבדת המדד למעלה.</p>';
       return;
     }
-    tableStatus.textContent = tag + ': ' + rows.length + ' שחקנים אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
-    const body = rows.map(function (row) {
+    const displayRows = posVal ? ScoutAIDemo.filterByPosition(rows, posVal) : rows;
+    const posLabels = { GK: 'שוערים (GK)', DF: 'שחקני הגנה (DF)', MF: 'קשרים (MF)', FW: 'שחקני התקפה וחלוצים (FW)', OT: 'עמדות אחרות (OT)' };
+    const filterDesc = posVal ? ' · סינון: ' + (posLabels[posVal] || posVal) : '';
+    if (!displayRows.length) {
+      tableStatus.textContent = tag + ': אין שחקנים בעמדה ' + posVal + ' שעוברים את סף הדקות (' + spec.minMinutes + ').';
+      tableRoot.innerHTML = '<p class="notice">אין שחקנים בעמדה זו (' + escapeHtml(posLabels[posVal] || posVal) + ') שעברו את סף הדקות המינימלי (' + escapeHtml(spec.minMinutes) + ' דקות). בחרו עמדה אחרת או הורידו את הסף במעבדת המדד למעלה.</p>';
+      return;
+    }
+    tableStatus.textContent = tag + ': ' + (posVal ? displayRows.length + ' מתוך ' + rows.length : rows.length) + ' שחקנים אחרי סף ' + spec.minMinutes + ' דקות' + filterDesc + '. שכבה אחת לכל הפיצ\'רים.';
+    const body = displayRows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
       const compared = spec.compareId && row.id === spec.compareId;
       const cls = selected ? 'selected' : compared ? 'compared' : '';
@@ -388,9 +413,10 @@
         '<td>' + escapeHtml(row.components.clutch) + '</td>' +
       '</tr>';
     }).join('');
-    const caption = tag === 'STATSBOMB_OPEN_DATA'
+    const captionBase = tag === 'STATSBOMB_OPEN_DATA'
       ? 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018'
       : 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag;
+    const caption = captionBase + (posVal ? ' — ' + (posLabels[posVal] || posVal) : '');
     tableRoot.innerHTML =
       '<table aria-describedby="tableStatus">' +
         '<caption>' + escapeHtml(caption) + '</caption>' +
@@ -826,6 +852,7 @@
     document.getElementById(id).addEventListener('input', recompute);
   });
   document.getElementById('normPos').addEventListener('change', recompute);
+  document.getElementById('posFilter').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
@@ -1033,6 +1060,8 @@
     ScoutAIDemo.loadLabSources(fetch).then(function (lab) {
       store = lab.store;
       tableRoot.dataset.selected = '';
+      const posFilter = document.getElementById('posFilter');
+      if (posFilter) posFilter.value = '';
       document.getElementById('splitSelect').value = 'groups';
       recompute();
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';
