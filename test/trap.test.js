@@ -179,6 +179,23 @@ test('trap page is Hebrew RTL, linked from the homepage, and never scores faces'
   assert.doesNotMatch(html, /https?:\/\//i);
   assert.match(home, /href="trap\/"/);
   assert.match(home, /מלכודת הפיצ['׳']רים המשכנעים/);
+  assert.match(html, /button:disabled/);
+  assert.match(html, /<a class="skip" href="#sandbox">דלגו לארגז הפיצ['׳]ר<\/a>/);
+  assert.match(html, /<a class="skip" href="#circular">דלגו להוכחה מעגלית<\/a>/);
+  assert.match(html, /<a class="skip" href="#falsify">דלגו למבחן ההפרכה<\/a>/);
+  assert.match(html, /<nav class="toc" aria-label="מעבר לחלקי השיעור">/);
+  assert.match(html, /<a href="#sandbox">1\. הוסף פיצ['׳]ר<\/a>/);
+  assert.match(html, /<a href="#circular">2\. הוכחה מעגלית<\/a>/);
+  assert.match(html, /<a href="#falsify">3\. מבחן ההפרכה<\/a>/);
+});
+
+test('trap walkthrough navigation exposes step labels, boundary disabled states, and slider valuetext', () => {
+  assert.match(html, /aria-label="שלב '\s*\+\s*\(i \+ 1\)/);
+  assert.match(html, /data-step="prev"'\s*\+\s*\(walkIndex === 0 \? ' disabled' : ''\)/);
+  assert.match(html, /data-step="next"'\s*\+\s*\(walkIndex >= steps\.length - 1 \? ' disabled' : ''\)/);
+  assert.match(html, /button\.disabled/);
+  assert.match(html, /aria-valuetext="' \+ escapeHtml\(player\.name\) \+ ', ציון מומצא ' \+ val/);
+  assert.match(html, /aria-valuetext="' \+ escapeHtml\(player\.name\) \+ ', פיצ\\['׳]ר מוקלד ' \+ val/);
 });
 
 test('trap runtime has no network, forms, or submission path', () => {
