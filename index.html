@@ -178,6 +178,7 @@
     <p>אותם תשעת הגורמים שנכנסים לנוסחה, אחרי אותן תקרות ל-90 דקות. לא מודל חיצוני ולא רדאר Wyscout.</p>
     <label for="compareSelect">השוו את השחקן הנבחר מול</label>
     <select id="compareSelect"></select>
+    <button id="clearCompare" class="secondary" type="button" disabled>בטלו השוואה</button>
     <p id="radarStatus" class="lab-note" role="status" aria-live="polite">בחרו שחקן בטבלה כדי לבנות מכ״ם.</p>
     <div class="legend">
       <span><span class="swatch" style="background:#145c3d"></span>נבחר</span>
@@ -452,6 +453,15 @@
     const keep = spec.compareId || previous;
     if (keep && rows.some(function (row) { return row.id === keep; })) compareSelect.value = keep;
     compareSelect.disabled = !rows.length || !current.selected;
+    const clearCompare = document.getElementById('clearCompare');
+    if (clearCompare) {
+      clearCompare.disabled = !current.selected || !radar || !radar.b;
+      if (radar && radar.b) {
+        clearCompare.setAttribute('title', 'בטלו את השוואת ' + radar.b.name + ' וחזרו להצגת ' + radar.a.name + ' בלבד');
+      } else {
+        clearCompare.setAttribute('title', 'אין שחקן השוואה פעיל לביטול');
+      }
+    }
     if (!radar || !radar.a) {
       document.getElementById('radarRoot').innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה.</p>';
       document.getElementById('radarTable').innerHTML = '';
@@ -827,6 +837,11 @@
   });
   document.getElementById('normPos').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);
+  document.getElementById('clearCompare').addEventListener('click', function () {
+    compareSelect.value = '';
+    if (view && view.spec) view.spec.compareId = '';
+    recompute();
+  });
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
   document.getElementById('applyHint').addEventListener('click', function () {
