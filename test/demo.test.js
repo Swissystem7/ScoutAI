@@ -383,13 +383,18 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים/);
   assert.match(html, /בחרו שחקן בטבלה כדי לעקוב אחריו כאן/);
+  assert.match(html, /<a href="#exercise">תרגיל מודרך<\/a>/);
   assert.match(html, /<a href="#ranking">דירוג חי<\/a>/);
   assert.match(html, /<a href="#lesson">שיעור שקוף<\/a>/);
   assert.match(html, /<a href="#export">ייצוא המדד<\/a>/);
+  assert.match(html, /<a class="skip" href="#exercise">דלגו לתרגיל המודרך<\/a>/);
   assert.match(html, /<a class="skip" href="#ranking">דלגו לדירוג החי<\/a>/);
+  assert.match(html, /<section class="card" id="exercise">/);
   assert.match(html, /<section class="card" id="ranking">/);
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
+  assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="exerciseSummary"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
