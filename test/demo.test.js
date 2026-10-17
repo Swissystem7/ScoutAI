@@ -389,6 +389,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<a href="#export">ייצוא המדד<\/a>/);
   assert.match(html, /<a class="skip" href="#exercise">דלגו לתרגיל המודרך<\/a>/);
   assert.match(html, /<a class="skip" href="#ranking">דלגו לדירוג החי<\/a>/);
+  assert.match(html, /<a class="skip" href="#fragility">דלגו למעבדת השבריריות<\/a>/);
+  assert.match(html, /data-bump/);
+  assert.match(html, /data-player-id/);
+  assert.match(html, /בחנו.*במעבדה/);
   assert.match(html, /<section class="card" id="ranking">/);
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
