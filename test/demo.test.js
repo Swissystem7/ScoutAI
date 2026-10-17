@@ -387,14 +387,19 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<a href="#lesson">שיעור שקוף<\/a>/);
   assert.match(html, /<a href="#export">ייצוא המדד<\/a>/);
   assert.match(html, /<a class="skip" href="#ranking">דלגו לדירוג החי<\/a>/);
+  assert.match(html, /<a class="skip" href="#lesson">דלגו לשיעור השקוף<\/a>/);
   assert.match(html, /<section class="card" id="ranking">/);
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
+  assert.match(html, /id="lessonStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לראות את שלבי השיעור השקוף/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
+  assert.match(html, /lessonRoot\.innerHTML = '<article class="lesson-step"><h3>בחרו שחקן<\/h3>/);
+  assert.match(html, /aria-label="שלב '\s*\+\s*\(i \+ 1\)\s*\+\s*': '\s*\+\s*escapeHtml\(step\.title\)/);
 });
 
 const DEFENDERS = {
