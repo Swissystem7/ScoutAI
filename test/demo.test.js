@@ -390,7 +390,12 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<section class="card" id="ranking">/);
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
+  assert.match(html, /id="validateStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
+  assert.match(html, /<button id="copyMethod"[^>]*disabled/);
+  assert.match(html, /<button id="downloadJson"[^>]*disabled/);
+  assert.match(html, /הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה/);
+  assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
