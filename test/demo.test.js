@@ -399,6 +399,18 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /id="exerciseSummary"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="byodStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="courseQuizStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetQuiz" class="secondary" type="button" disabled title="[^"]+">נקו את תשובות השיעור<\/button>/);
+  assert.match(html, /השיעור נטען מ־/);
+  assert.match(html, /אין צעד שיעור להצגה כרגע/);
+  assert.match(html, /'צעד '.*' מתוך '/);
+  assert.match(html, /aria-label="' \+ label/);
+  assert.match(html, /title="' \+ label/);
+  assert.match(html, /הצעד הנוכחי/);
+  assert.match(html, /אתם בצעד הראשון/);
+  assert.match(html, /אתם בצעד האחרון/);
+  assert.match(html, /מחקו ' \+ answered \+ ' תשובות/);
+  assert.match(html, /התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום/);
   assert.match(html, /id="validateStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
   assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
