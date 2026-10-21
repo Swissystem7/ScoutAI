@@ -222,3 +222,8 @@ test('per-player sliders are built once, then updated in place so a drag or arro
   });
   assert.match(html, /aria-valuenow="' \+ val \+ '"/);
 });
+
+test('trap walkthrough step is announced and the no-movement state says what to do next', () => {
+  assert.match(html, /id="walkRoot"\s+class="lesson"\s+role="region"\s+aria-live="polite"\s+aria-label="שלב ההוכחה המעגלית"/);
+  assert.match(html, /<p class="notice">אין תזוזה בדירוג\. העלו את משקל הפיצ\\'ר או שנו ערכים בסליידרים/);
+});
