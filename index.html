@@ -230,6 +230,9 @@
       <option value="groups">בתים A–D מול E–H (מומלץ)</option>
       <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
     </select>
+    <div class="actions">
+      <button id="resetValidation" class="secondary" type="button" disabled title="הגדרות האימות כבר בברירת המחדל (בישולים, בתים A–D מול E–H)">איפוס אימות לברירת מחדל</button>
+    </div>
     <p id="validateStatus" class="status" role="status" aria-live="polite">מחשב אימות מול מדגם מוחזק…</p>
     <p id="validateVerdict" class="lab-note" role="status" aria-live="polite"></p>
     <div id="validateStats" class="stats-grid"></div>
@@ -671,6 +674,15 @@
     const splitSelect = document.getElementById('splitSelect');
     if (outcomeSelect) outcomeSelect.disabled = !hasRows;
     if (splitSelect) splitSelect.disabled = !hasRows;
+    const resetValidation = document.getElementById('resetValidation');
+    if (resetValidation) {
+      const isDefault = outcomeSelect && outcomeSelect.value === 'assists' &&
+        splitSelect && splitSelect.value === 'groups';
+      resetValidation.disabled = isDefault || !hasRows;
+      resetValidation.setAttribute('title', isDefault
+        ? 'הגדרות האימות כבר בברירת המחדל (בישולים, בתים A–D מול E–H)'
+        : 'אפסו את יעד החיזוי ושיטת הפיצול לברירת המחדל (בישולים, בתים A–D מול E–H)');
+    }
     const statusEl = document.getElementById('validateStatus');
     const verdictEl = document.getElementById('validateVerdict');
     const statsEl = document.getElementById('validateStats');
@@ -1016,6 +1028,17 @@
   compareSelect.addEventListener('change', recompute);
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
+  document.getElementById('resetValidation').addEventListener('click', function () {
+    const outcomeSelect = document.getElementById('outcomeSelect');
+    const splitSelect = document.getElementById('splitSelect');
+    if (outcomeSelect) outcomeSelect.value = 'assists';
+    if (splitSelect) splitSelect.value = 'groups';
+    recompute();
+    const status = document.getElementById('validateStatus');
+    if (status) {
+      status.textContent = 'הגדרות האימות אופסו לברירת המחדל (בישולים, בתים A–D מול E–H). ' + (status.textContent || '');
+    }
+  });
   const playerSearch = document.getElementById('playerSearch');
   const clearSearch = document.getElementById('clearSearch');
   if (playerSearch) {
