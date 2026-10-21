@@ -415,6 +415,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום/);
   assert.match(html, /id="validateStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
+  assert.match(html, /<button id="clearCompare" class="secondary" type="button" disabled>בטלו השוואה<\/button>/);
+  assert.match(html, /document\.getElementById\('clearCompare'\)\.addEventListener\('click'/);
+  assert.match(html, /clearCompare\.disabled = !current\.selected \|\| !radar \|\| !radar\.b/);
+  assert.match(html, /בטלו את השוואת/);
   assert.match(html, /<button id="copyMethod"[^>]*disabled/);
   assert.match(html, /<button id="downloadJson"[^>]*disabled/);
   assert.match(html, /הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה/);
