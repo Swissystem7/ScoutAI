@@ -103,7 +103,7 @@
     <h2>2. הוכחה מעגלית</h2>
     <p>שחזור של המקרה מ־<code>attic/proof-demo.js</code>. לא מריצים את מנוע הפנים הישן. מציגים את המספרים שהוקלדו, ומראים איך כיול מייצר «עבר».</p>
     <div id="walkNav" class="lesson-nav" role="toolbar" aria-label="צעדי ההוכחה המעגלית"></div>
-    <div id="walkRoot" class="lesson"></div>
+    <div id="walkRoot" class="lesson" role="region" aria-live="polite" aria-label="שלב ההוכחה המעגלית"></div>
     <div class="sliders">
       <div class="slider-row">
         <label id="wAtticLabel" for="wAttic">משקל הפיצ'ר בשיחזור</label>
@@ -228,7 +228,7 @@
           escapeHtml(row.rank) + ' (' + dir + ' ' + escapeHtml(Math.abs(row.deltaRank)) +
           ' מקומות, Δציון ' + (row.deltaScore > 0 ? '+' : '') + escapeHtml(row.deltaScore) + ')</li>';
       }).join('') + '</ol>'
-      : '<p class="muted">אין תזוזה. העלו משקל או שנו ערכים — אחרת זה רק הסטט.</p>';
+      : '<p class="notice">אין תזוזה בדירוג. העלו את משקל הפיצ\'ר או שנו ערכים בסליידרים כדי לבדוק מי יקפוץ.</p>';
     document.getElementById('rankRoot').innerHTML =
       '<table><caption>דירוג לפי סטט + הפיצ\'ר שהמצאתם</caption><thead><tr>' +
       '<th scope="col">דירוג</th><th scope="col">שחקן</th><th scope="col">סטט</th>' +
