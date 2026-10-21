@@ -482,7 +482,14 @@
 
   function renderExercise(current) {
     const exercise = current.exercise;
-    if (!exercise) return;
+    if (!exercise) {
+      document.getElementById('exercisePrompt').textContent = 'טוען תרגיל מודרך לבחינת בלמים…';
+      document.getElementById('exerciseSummary').textContent = 'אין נתוני תרגיל זמינים עבור השכבה הנוכחית.';
+      document.getElementById('exerciseChecks').innerHTML = '';
+      const emptyHint = document.getElementById('applyHint');
+      if (emptyHint) emptyHint.disabled = true;
+      return;
+    }
     document.getElementById('exercisePrompt').textContent = exercise.prompt;
     document.getElementById('exerciseSummary').textContent = (exercise.passed ? 'עברתם. ' : 'עדיין לא. ') + exercise.summary;
     document.getElementById('exerciseChecks').innerHTML = exercise.checks.map(function (item) {

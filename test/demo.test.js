@@ -393,6 +393,8 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /data-bump/);
   assert.match(html, /data-player-id/);
   assert.match(html, /בחנו.*במעבדה/);
+  assert.match(html, /<section class="card" id="exercise">/);
+  assert.match(html, /אין נתוני תרגיל זמינים עבור השכבה הנוכחית/);
   assert.match(html, /<section class="card" id="ranking">/);
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
