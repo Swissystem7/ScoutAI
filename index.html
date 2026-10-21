@@ -151,7 +151,10 @@
     <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון בתוך GK/DF/MF/FW)</label>
     <p id="formulaLine" class="formula"></p>
     <p class="muted">Δ מול מדד הבסיס 40/30/30 בלי נרמול עמדה. שיתוף: המצב נשמר ב־hash של הכתובת — העתיקו מהדפדפן או בלחיצה.</p>
-    <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
+    <div class="actions">
+      <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
+      <button id="resetMetric" class="secondary" type="button" disabled title="המדד כבר מוגדר כברירת המחדל (40/30/30)">איפוס למדד ברירת מחדל (40/30/30)</button>
+    </div>
     <p id="hashStatus" class="status" role="status" aria-live="polite"></p>
   </section>
 
@@ -938,11 +941,26 @@
     syncByodControls();
   }
 
+  function syncLabControls(spec) {
+    const resetBtn = document.getElementById('resetMetric');
+    if (!resetBtn) return;
+    const isDefault = Number(spec.grit) === ScoutAIDemo.DEFAULT_METRIC.grit &&
+      Number(spec.involvement) === ScoutAIDemo.DEFAULT_METRIC.involvement &&
+      Number(spec.clutch) === ScoutAIDemo.DEFAULT_METRIC.clutch &&
+      Number(spec.minMinutes) === ScoutAIDemo.DEFAULT_METRIC.minMinutes &&
+      !spec.normalizePosition;
+    resetBtn.disabled = isDefault;
+    resetBtn.setAttribute('title', isDefault
+      ? 'המדד כבר מוגדר כברירת המחדל (40/30/30, 270 דקות)'
+      : 'אפסו את המשקלות והסף לברירת המחדל (40/30/30, 270 דקות)');
+  }
+
   function renderAll(current) {
     syncSlider('wGrit', current.spec.grit, 'Grit, ' + Math.round(current.spec.grit) + ' אחוז');
     syncSlider('wInv', current.spec.involvement, 'Involvement, ' + Math.round(current.spec.involvement) + ' אחוז');
     syncSlider('wClutch', current.spec.clutch, 'Clutch, ' + Math.round(current.spec.clutch) + ' אחוז');
     syncSlider('minMinutes', current.spec.minMinutes, 'סף דקות, ' + Math.round(current.spec.minMinutes));
+    syncLabControls(current.spec);
     if (current.selected) tableRoot.dataset.selected = current.selected.id;
     renderTable(current);
     renderLesson(current);
@@ -977,6 +995,18 @@
     document.getElementById(id).addEventListener('input', recompute);
   });
   document.getElementById('normPos').addEventListener('change', recompute);
+  document.getElementById('resetMetric').addEventListener('click', function () {
+    const currentSpec = readSpecFromControls();
+    writeSpecToControls(Object.assign({}, currentSpec, {
+      grit: ScoutAIDemo.DEFAULT_METRIC.grit,
+      involvement: ScoutAIDemo.DEFAULT_METRIC.involvement,
+      clutch: ScoutAIDemo.DEFAULT_METRIC.clutch,
+      minMinutes: ScoutAIDemo.DEFAULT_METRIC.minMinutes,
+      normalizePosition: ScoutAIDemo.DEFAULT_METRIC.normalizePosition
+    }));
+    recompute();
+    document.getElementById('hashStatus').textContent = 'המדד אופס בהצלחה לברירת המחדל (40/30/30, 270 דקות).';
+  });
   compareSelect.addEventListener('change', recompute);
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
