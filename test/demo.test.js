@@ -390,6 +390,7 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<a class="skip" href="#exercise">דלגו לתרגיל המודרך<\/a>/);
   assert.match(html, /<a class="skip" href="#ranking">דלגו לדירוג החי<\/a>/);
   assert.match(html, /<a class="skip" href="#fragility">דלגו למעבדת השבריריות<\/a>/);
+  assert.match(html, /<a class="skip" href="#lesson">דלגו לשיעור השקוף<\/a>/);
   assert.match(html, /data-bump/);
   assert.match(html, /data-player-id/);
   assert.match(html, /בחנו.*במעבדה/);
@@ -398,6 +399,8 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<section class="card" id="ranking">/);
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
+  assert.match(html, /id="lessonStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לראות את שלבי השיעור השקוף/);
   assert.match(html, /id="exerciseSummary"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="byodStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
@@ -438,6 +441,8 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<button id="clearSearch" class="secondary" type="button" disabled>נקה סינון<\/button>/);
   assert.match(html, /לא נמצאו שחקנים התואמים לחיפוש/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
+  assert.match(html, /lessonRoot\.innerHTML = '<article class="lesson-step"><h3>בחרו שחקן<\/h3>/);
+  assert.match(html, /aria-label="שלב '\s*\+\s*\(i \+ 1\)\s*\+\s*': '\s*\+\s*escapeHtml\(step\.title\)/);
   assert.match(html, /aria-label="הציגו את שדה [^"]+ ביומן ספירות האירועים"/);
   assert.match(html, /בחרו שחקן בטבלה כדי לאתר את השדה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבחור שחקן להשוואה/);
