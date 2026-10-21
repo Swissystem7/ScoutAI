@@ -432,6 +432,11 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
   assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
   assert.match(html, /<button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי<\/button>/);
+  assert.match(html, /<button id="filterGlossAll" class="secondary" type="button" aria-pressed="true"/);
+  assert.match(html, /<button id="filterGlossUsed" class="secondary" type="button" aria-pressed="false"/);
+  assert.match(html, /<button id="filterGlossUnused" class="secondary" type="button" aria-pressed="false"/);
+  assert.match(html, /id="glossaryStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /לא נמצאו מונחים התואמים לסינון הנוכחי/);
   assert.match(html, /<label for="posFilter">סינון לפי קבוצת עמדה<\/label>/);
   assert.match(html, /<select id="posFilter" aria-controls="playerTable">/);
   assert.match(html, /<option value="UT">/);
@@ -450,6 +455,25 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /aria-label="הציגו את שדה [^"]+ ביומן ספירות האירועים"/);
   assert.match(html, /בחרו שחקן בטבלה כדי לאתר את השדה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבחור שחקן להשוואה/);
+});
+
+test('glossary terms can be filtered by score usage with count badges and live status', () => {
+  const allTerms = EVENT_GLOSSARY;
+  assert.equal(allTerms.length, 11);
+  const used = allTerms.filter((item) => item.usedInScore);
+  const unused = allTerms.filter((item) => !item.usedInScore);
+  assert.equal(used.length, 9);
+  assert.equal(unused.length, 2);
+
+  for (const item of used) {
+    assert.ok(['Grit', 'Involvement', 'Clutch'].includes(item.feeds), `${item.type} should feed a formula component`);
+    assert.ok(item.recipeKey, `${item.type} should have a recipeKey for live calculation`);
+  }
+
+  for (const item of unused) {
+    assert.equal(item.usedInScore, false);
+    assert.ok(item.feeds === 'סף דקות' || item.feeds === 'לא בנוסחה');
+  }
 });
 
 const DEFENDERS = {
