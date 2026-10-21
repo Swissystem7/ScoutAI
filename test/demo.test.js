@@ -421,6 +421,12 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
   assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
   assert.match(html, /<button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי<\/button>/);
+  assert.match(html, /<label for="posFilter">סינון לפי קבוצת עמדה<\/label>/);
+  assert.match(html, /<select id="posFilter" aria-controls="playerTable">/);
+  assert.match(html, /<option value="UT">/);
+  assert.match(html, /document\.getElementById\('posFilter'\)\.addEventListener\('change', recompute\)/);
+  assert.match(html, /ScoutAIDemo\.filterByPosition\(rows, posVal\)/);
+  assert.match(html, /אין שחקנים בעמדה זו/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
