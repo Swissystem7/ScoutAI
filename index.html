@@ -116,12 +116,12 @@
     <h2>שיעור מלא: מאירוע למדד מאומת</h2>
     <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
     <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
-    <p id="courseProgress" class="status" role="status" aria-live="polite" aria-atomic="true"></p>
+    <p id="courseProgress" class="status" role="status" aria-live="polite" aria-atomic="true">טוען את התקדמות השיעור…</p>
     <div class="actions">
       <button id="resetQuiz" class="secondary" type="button" disabled title="אין תשובות למחיקה — ענו קודם על שאלה בשיעור">נקו את תשובות השיעור</button>
     </div>
     <p id="courseQuizStatus" class="status" role="status" aria-live="polite" aria-atomic="true">התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום.</p>
-    <div id="courseRoot" class="lesson"><p class="notice">השיעור נטען מ־<code>data/wc2018_event_aggregates.json</code> בדפדפן. אם הטקסט הזה נשאר, הסקריפט לא רץ — פתחו את הדף משרת מקומי.</p></div>
+    <div id="courseRoot" class="lesson"><p class="notice">טוען את צעדי השיעור המלא מנתוני מונדיאל 2018… השיעור נטען מ־<code>data/wc2018_event_aggregates.json</code> בדפדפן. אם הטקסט הזה נשאר, הסקריפט לא רץ — פתחו את הדף משרת מקומי.</p></div>
   </section>
 
   <section class="card" id="lab">
@@ -923,10 +923,10 @@
         ' title="' + label + (i === idx ? ' (הצעד הנוכחי)' : '') + '"' +
         ' aria-label="' + label + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-course="prev"' + (idx === 0 ? ' disabled' : '') +
-      ' title="' + (idx === 0 ? 'אתם בצעד הראשון' : 'חזרו לצעד ' + idx) + '">הקודם</button>' +
-      '<button type="button" class="secondary" data-course="next"' + (idx >= lessons.length - 1 ? ' disabled' : '') +
-      ' title="' + (idx >= lessons.length - 1 ? 'אתם בצעד האחרון' : 'המשיכו לצעד ' + (idx + 2)) + '">הבא</button>';
+      '<button type="button" class="secondary" data-course="prev"' + (idx <= 0 || !lessons.length ? ' disabled' : '') +
+      ' title="' + (idx <= 0 || !lessons.length ? 'אתם בצעד הראשון' : 'חזרו לצעד ' + idx) + '">הקודם</button>' +
+      '<button type="button" class="secondary" data-course="next"' + (idx >= lessons.length - 1 || !lessons.length ? ' disabled' : '') +
+      ' title="' + (idx >= lessons.length - 1 || !lessons.length ? 'אתם בצעד האחרון' : 'המשיכו לצעד ' + (idx + 2)) + '">הבא</button>';
     const lesson = lessons[idx];
     if (!lesson) {
       document.getElementById('courseRoot').innerHTML =
@@ -1189,7 +1189,7 @@
   });
   document.getElementById('courseNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-course]');
-    if (!button || !view) return;
+    if (!button || button.disabled || !view) return;
     const token = button.getAttribute('data-course');
     const max = (ScoutAIDemo.CURRICULUM_LESSONS || []).length - 1;
     let next = view.spec.curriculumIndex || 0;

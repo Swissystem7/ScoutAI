@@ -407,6 +407,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /id="courseQuizStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="resetQuiz" class="secondary" type="button" disabled title="[^"]+">נקו את תשובות השיעור<\/button>/);
   assert.match(html, /השיעור נטען מ־/);
+  assert.match(html, /טוען את התקדמות השיעור/);
+  assert.match(html, /טוען את צעדי השיעור המלא/);
+  assert.match(html, /!button \|\| button\.disabled \|\| !view/);
+  assert.match(html, /data-course="next"' \+ \(idx >= lessons\.length - 1 \|\| !lessons\.length/);
   assert.match(html, /אין צעד שיעור להצגה כרגע/);
   assert.match(html, /'צעד '.*' מתוך '/);
   assert.match(html, /aria-label="' \+ label/);
