@@ -415,6 +415,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום/);
   assert.match(html, /id="validateStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
+  assert.match(html, /<button id="copyMethod"[^>]*disabled/);
+  assert.match(html, /<button id="downloadJson"[^>]*disabled/);
+  assert.match(html, /הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה/);
+  assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
   assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
   assert.match(html, /<button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי<\/button>/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
