@@ -402,6 +402,9 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /id="lessonStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את שלבי השיעור השקוף/);
   assert.match(html, /id="exerciseSummary"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל/);
+  assert.match(html, /document\.getElementById\('resetExercise'\)\.addEventListener\('click'/);
+  assert.match(html, /התרגיל אופס למדד ברירת המחדל/);
   assert.match(html, /id="byodStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="courseQuizStatus"[^>]*role="status"[^>]*aria-live="polite"/);
