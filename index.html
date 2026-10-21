@@ -167,6 +167,16 @@
   <section class="card" id="ranking">
     <h2>דירוג חי לפי המדד שלכם</h2>
     <p>ברירת המחדל: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית, לא למסחר. אחרי טעינת קובץ שלכם התווית משתנה ל־<span class="badge">USER_LICENSED_DATA</span>. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
+    <label for="posFilter">סינון לפי קבוצת עמדה</label>
+    <select id="posFilter" aria-controls="playerTable">
+      <option value="">כל העמדות (ללא סינון)</option>
+      <option value="GK">שוערים (GK)</option>
+      <option value="DF">שחקני הגנה (DF)</option>
+      <option value="MF">קשרים (MF)</option>
+      <option value="FW">שחקני התקפה וחלוצים (FW)</option>
+      <option value="OT">עמדות אחרות (OT)</option>
+      <option value="UT">עמדות טכניות/לא ידועות (UT)</option>
+    </select>
     <div class="search-row">
       <label for="playerSearch">חיפוש שחקן לפי שם או נבחרת</label>
       <div class="search-controls">
@@ -400,13 +410,30 @@
       clearBtn.disabled = !query;
       clearBtn.setAttribute('title', query ? 'נקה את סינון הטבלה' : 'הקלידו שם שחקן או נבחרת כדי להפעיל סינון');
     }
+    const posFilter = document.getElementById('posFilter');
+    const posVal = posFilter ? posFilter.value : '';
+    if (posFilter) {
+      posFilter.disabled = !rows.length;
+      posFilter.setAttribute('title', rows.length
+        ? 'סננו את טבלת הדירוג לפי קבוצת עמדה'
+        : 'אין שחקנים זמינים לסינון');
+    }
     if (!rows.length) {
       tableStatus.textContent = tag + ': אין שחקנים מעל סף הדקות.';
       tableRoot.innerHTML = '<p class="notice">אין שחקנים שעברו את סף הדקות המינימלי (' + escapeHtml(spec.minMinutes) + ' דקות). הורידו את הסף במעבדת המדד למעלה.</p>';
       return;
     }
+    const displayRows = posVal ? ScoutAIDemo.filterByPosition(rows, posVal) : rows;
+    const posLabels = { GK: 'שוערים (GK)', DF: 'שחקני הגנה (DF)', MF: 'קשרים (MF)', FW: 'שחקני התקפה וחלוצים (FW)', OT: 'עמדות אחרות (OT)', UT: 'עמדות טכניות/לא ידועות (UT)' };
+    const posLabel = posLabels[posVal] || posVal;
+    const filterDesc = posVal ? ' · סינון: ' + posLabel : '';
+    if (!displayRows.length) {
+      tableStatus.textContent = tag + ': אין שחקנים בעמדה ' + posVal + ' שעוברים את סף הדקות (' + spec.minMinutes + ').';
+      tableRoot.innerHTML = '<p class="notice">אין שחקנים בעמדה זו (' + escapeHtml(posLabel) + ') שעברו את סף הדקות המינימלי (' + escapeHtml(spec.minMinutes) + ' דקות). בחרו עמדה אחרת או הורידו את הסף במעבדת המדד למעלה.</p>';
+      return;
+    }
     const filteredRows = query
-      ? rows.filter(function (row) {
+      ? displayRows.filter(function (row) {
           const name = (row.name || '').toLowerCase();
           const team = (row.team || '').toLowerCase();
           return name.indexOf(query) >= 0 || team.indexOf(query) >= 0;
@@ -415,13 +442,13 @@
 
     if (!filteredRows.length) {
       tableStatus.textContent = tag + ': לא נמצאו שחקנים התואמים לחיפוש "' + (searchInput ? searchInput.value.trim() : '') + '".';
-      tableRoot.innerHTML = '<p class="notice">לא נמצאו שחקנים התואמים לחיפוש "' + escapeHtml(searchInput ? searchInput.value.trim() : '') + '" מתוך ' + rows.length + ' שחקנים מעל סף הדקות. לחצו על "נקה סינון" כדי להציג את כל השחקנים.</p>';
+      tableRoot.innerHTML = '<p class="notice">לא נמצאו שחקנים התואמים לחיפוש "' + escapeHtml(searchInput ? searchInput.value.trim() : '') + '" מתוך ' + displayRows.length + ' שחקנים מעל סף הדקות' + escapeHtml(filterDesc) + '. לחצו על "נקה סינון" כדי להציג את כל השחקנים.</p>';
       return;
     }
 
     tableStatus.textContent = tag + ': ' +
-      (query ? 'מוצגים ' + filteredRows.length + ' מתוך ' + rows.length + ' שחקנים (סינון: "' + searchInput.value.trim() + '")' : rows.length + ' שחקנים') +
-      ' אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
+      (query || posVal ? 'מוצגים ' + filteredRows.length + ' מתוך ' + rows.length + ' שחקנים' + (query ? ' (סינון: "' + searchInput.value.trim() + '")' : '') : rows.length + ' שחקנים') +
+      ' אחרי סף ' + spec.minMinutes + ' דקות' + filterDesc + '. שכבה אחת לכל הפיצ\'רים.';
     const body = filteredRows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
       const compared = spec.compareId && row.id === spec.compareId;
@@ -441,9 +468,10 @@
       '</tr>';
     }).join('');
     const rawQuery = searchInput ? searchInput.value.trim() : '';
-    const caption = tag === 'STATSBOMB_OPEN_DATA'
+    const captionBase = tag === 'STATSBOMB_OPEN_DATA'
       ? (query ? 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018 (סינון: "' + escapeHtml(rawQuery) + '")' : 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018')
       : (query ? 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag + ' (סינון: "' + escapeHtml(rawQuery) + '")' : 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag);
+    const caption = captionBase + (posVal ? ' — ' + escapeHtml(posLabel) : '');
     tableRoot.innerHTML =
       '<table aria-describedby="tableStatus">' +
         '<caption>' + caption + '</caption>' +
@@ -1013,6 +1041,7 @@
     document.getElementById(id).addEventListener('input', recompute);
   });
   document.getElementById('normPos').addEventListener('change', recompute);
+  document.getElementById('posFilter').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
@@ -1252,6 +1281,8 @@
     tableRoot.dataset.selected = '';
     const searchInput = document.getElementById('playerSearch');
     if (searchInput) searchInput.value = '';
+    const posFilter = document.getElementById('posFilter');
+    if (posFilter) posFilter.value = '';
     if (parsed.provenance !== 'STATSBOMB_OPEN_DATA') {
       document.getElementById('splitSelect').value = 'hash';
     }
@@ -1310,6 +1341,8 @@
       tableRoot.dataset.selected = '';
       const searchInput = document.getElementById('playerSearch');
       if (searchInput) searchInput.value = '';
+      const posFilter = document.getElementById('posFilter');
+      if (posFilter) posFilter.value = '';
       document.getElementById('splitSelect').value = 'groups';
       recompute();
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';
