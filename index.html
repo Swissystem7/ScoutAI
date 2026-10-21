@@ -247,6 +247,7 @@
     <h2>ייצוא המדד ופסקת מתודולוגיה</h2>
     <p>ההורדה נשארת במחשב שלכם. אין שליחה לשרת, אין PDF מעוצב, ואין ציטוט שמותר למכור — רק תיעוד לימודי עם קרדיט ל-StatsBomb Open Data.</p>
     <button id="copyMethod" class="secondary" type="button" disabled title="הגדירו משקלות במעבדה כדי להעתיק פסקת מתודולוגיה">העתיקו פסקת מתודולוגיה</button>
+    <button id="copyJson" class="secondary" type="button" disabled>העתיקו JSON</button>
     <button id="downloadJson" class="secondary" type="button" disabled title="הגדירו משקלות במעבדה כדי להוריד JSON">הורידו JSON מקומי</button>
     <button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות (CSV)</button>
     <p id="exportStatus" class="status" role="status" aria-live="polite"></p>
@@ -578,10 +579,15 @@
     const bundle = current.exportBundle;
     const downloadCsv = document.getElementById('downloadCsv');
     const copyMethod = document.getElementById('copyMethod');
+    const copyJson = document.getElementById('copyJson');
     const downloadJson = document.getElementById('downloadJson');
     if (copyMethod) {
       copyMethod.disabled = !bundle;
       copyMethod.setAttribute('title', bundle ? 'העתיקו את פסקת המתודולוגיה ללוח' : 'הגדירו משקלות במעבדה כדי להעתיק פסקת מתודולוגיה');
+    }
+    if (copyJson) {
+      copyJson.disabled = !bundle;
+      copyJson.setAttribute('title', bundle ? 'העתיקו את חבילת ה-JSON המקומית ללוח' : 'הגדירו משקלות במעבדה כדי להעתיק JSON');
     }
     if (downloadJson) {
       downloadJson.disabled = !bundle;
@@ -1057,6 +1063,22 @@
       });
     } else {
       status.textContent = 'העתיקו ידנית את הפסקה מהתיבה.';
+    }
+  });
+  document.getElementById('copyJson').addEventListener('click', function () {
+    const text = document.getElementById('exportJson').textContent;
+    const status = document.getElementById('exportStatus');
+    if (!view || !view.exportBundle || !text) {
+      status.textContent = 'אין חבילת ייצוא ב-JSON זמינה להעתקה.';
+      return;
+    }
+    const done = function () { status.textContent = 'חבילת ה-JSON הועתקה ללוח. לא נשלח דבר.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        status.textContent = 'העתיקו ידנית את ה-JSON מהתיבה למטה.';
+      });
+    } else {
+      status.textContent = 'העתיקו ידנית את ה-JSON מהתיבה למטה.';
     }
   });
   document.getElementById('downloadJson').addEventListener('click', function () {
