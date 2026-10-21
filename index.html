@@ -160,7 +160,10 @@
     <h2>תרגיל מודרך</h2>
     <p id="exercisePrompt"></p>
     <p class="muted">בדיקה עצמית מול אותה שכבת מונדיאל 2018 — לא מבחן סקאוטינג ואין תשובה מדעית אחת.</p>
-    <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
+    <div class="actions">
+      <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
+      <button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)">איפוס תרגיל לברירת מחדל (40/30/30)</button>
+    </div>
     <p id="exerciseSummary" class="status" role="status" aria-live="polite"></p>
     <ul id="exerciseChecks" class="checks"></ul>
   </section>
@@ -525,13 +528,32 @@
 
   function renderExercise(current) {
     const exercise = current.exercise;
+    const applyHint = document.getElementById('applyHint');
+    const resetExercise = document.getElementById('resetExercise');
     if (!exercise) {
       document.getElementById('exercisePrompt').textContent = 'טוען תרגיל מודרך לבחינת בלמים…';
       document.getElementById('exerciseSummary').textContent = 'אין נתוני תרגיל זמינים עבור השכבה הנוכחית.';
       document.getElementById('exerciseChecks').innerHTML = '';
-      const emptyHint = document.getElementById('applyHint');
-      if (emptyHint) emptyHint.disabled = true;
+      if (applyHint) applyHint.disabled = true;
+      if (resetExercise) resetExercise.disabled = true;
       return;
+    }
+    const spec = current.spec;
+    const hintApplied = spec && Number(spec.grit) === 70 && Number(spec.involvement) === 20 &&
+      Number(spec.clutch) === 10 && Boolean(spec.normalizePosition);
+    if (applyHint) {
+      applyHint.disabled = hintApplied;
+      applyHint.setAttribute('title', hintApplied
+        ? 'נקודת ההתחלה של התרגיל (70/20/10 + נרמול עמדה) כבר מיושמת'
+        : 'הציעו נקודת התחלה (70/20/10 + נרמול עמדה)');
+    }
+    if (resetExercise) {
+      const isDefault = spec && Number(spec.grit) === 40 && Number(spec.involvement) === 30 &&
+        Number(spec.clutch) === 30 && !spec.normalizePosition;
+      resetExercise.disabled = isDefault;
+      resetExercise.setAttribute('title', isDefault
+        ? 'משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)'
+        : 'אפסו את משקלות המדד לברירת המחדל של המעבדה (40/30/30)');
     }
     document.getElementById('exercisePrompt').textContent = exercise.prompt;
     document.getElementById('exerciseSummary').textContent = (exercise.passed ? 'עברתם. ' : 'עדיין לא. ') + exercise.summary;
@@ -541,14 +563,6 @@
         escapeHtml(item.label) +
         '<div class="muted">' + escapeHtml(item.detail) + '</div></li>';
     }).join('');
-    const applyHint = document.getElementById('applyHint');
-    if (applyHint) {
-      const hintActive = current.spec.grit === 70 && current.spec.involvement === 20 && current.spec.clutch === 10 && Boolean(current.spec.normPos);
-      applyHint.disabled = hintActive;
-      applyHint.setAttribute('title', hintActive
-        ? 'נקודת ההתחלה של התרגיל (70/20/10 + נרמול עמדה) כבר מיושמת'
-        : 'הציעו נקודת התחלה (70/20/10 + נרמול עמדה)');
-    }
   }
 
   function renderRadar(current) {
@@ -1100,6 +1114,24 @@
     const hint = ScoutAIDemo.DEFENDER_EXERCISE.hint;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), hint));
     recompute();
+    const summary = document.getElementById('exerciseSummary');
+    if (summary) {
+      summary.textContent = 'נקודת ההתחלה הוחלה (70/20/10 + נרמול עמדה). ' + (summary.textContent || '');
+    }
+  });
+  document.getElementById('resetExercise').addEventListener('click', function () {
+    const currentSpec = readSpecFromControls();
+    writeSpecToControls(Object.assign({}, currentSpec, {
+      grit: ScoutAIDemo.DEFAULT_METRIC.grit,
+      involvement: ScoutAIDemo.DEFAULT_METRIC.involvement,
+      clutch: ScoutAIDemo.DEFAULT_METRIC.clutch,
+      normalizePosition: false
+    }));
+    recompute();
+    const summary = document.getElementById('exerciseSummary');
+    if (summary) {
+      summary.textContent = 'התרגיל אופס למדד ברירת המחדל (40/30/30). ' + (summary.textContent || '');
+    }
   });
   document.getElementById('copyMethod').addEventListener('click', function () {
     const text = document.getElementById('methodText').textContent;
