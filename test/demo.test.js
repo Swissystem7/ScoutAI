@@ -419,8 +419,9 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<button id="downloadJson"[^>]*disabled/);
   assert.match(html, /הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה/);
   assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
-  assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
-  assert.match(html, /<button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי<\/button>/);
+  assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled[^>]*>חזרו לדמו מונדיאל 2018<\/button>/);
+  assert.match(html, /<button id="loadUserData" type="button" disabled[^>]*>הריצו על הקובץ שלי<\/button>/);
+  assert.match(html, /<button id="clearUserData" class="secondary" type="button" disabled[^>]*>נקו קובץ<\/button>/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
   assert.match(html, /button:disabled/);
