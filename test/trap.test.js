@@ -223,6 +223,17 @@ test('per-player sliders are built once, then updated in place so a drag or arro
   assert.match(html, /aria-valuenow="' \+ val \+ '"/);
 });
 
+test('trap UI exposes falsification reset buttons, dynamic button states, and accessible value labels', () => {
+  assert.match(html, /<button id="resetLabSliders" class="secondary" type="button" disabled>איפוס משקלות מעבדה \(40\/30\/30\)<\/button>/);
+  assert.match(html, /<button id="resetFalsify" class="secondary" type="button" disabled>איפוס תשובות למבחן ההפרכה<\/button>/);
+  assert.match(html, /<button id="resetSandbox" class="secondary" type="button" disabled>איפוס ארגז<\/button>/);
+  assert.match(html, /<button id="resetAttic" class="secondary" type="button" disabled>החזירו ל־50\/50\/50<\/button>/);
+  assert.match(html, /resetLabSliders/);
+  assert.match(html, /resetFalsify/);
+  assert.match(html, /button:disabled/);
+  assert.match(html, /aria-valuetext/);
+});
+
 test('trap walkthrough step is announced and the no-movement state says what to do next', () => {
   assert.match(html, /id="walkRoot"\s+class="lesson"\s+role="region"\s+aria-live="polite"\s+aria-label="שלב ההוכחה המעגלית"/);
   assert.match(html, /<p class="notice">אין תזוזה בדירוג\. העלו את משקל הפיצ\\'ר או שנו ערכים בסליידרים/);
