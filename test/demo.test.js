@@ -440,6 +440,9 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
   assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
   assert.match(html, /<button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי<\/button>/);
+  assert.match(html, /<button id="loadUserData"[^>]*disabled/);
+  assert.match(html, /<button id="clearUserData"[^>]*class="secondary"[^>]*disabled[^>]*>נקו קובץ<\/button>/);
+  assert.match(html, /<button id="restoreOpenData"[^>]*class="secondary"[^>]*disabled[^>]*>חזרו לדמו מונדיאל 2018<\/button>/);
   assert.match(html, /<button id="filterGlossAll" class="secondary" type="button" aria-pressed="true"/);
   assert.match(html, /<button id="filterGlossUsed" class="secondary" type="button" aria-pressed="false"/);
   assert.match(html, /<button id="filterGlossUnused" class="secondary" type="button" aria-pressed="false"/);

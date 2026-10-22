@@ -307,6 +307,7 @@
     <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
     <div class="actions">
       <button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי</button>
+      <button id="clearUserData" class="secondary" type="button" disabled title="לא נבחר קובץ לניקוי">נקו קובץ</button>
       <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
       <button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018</button>
     </div>
@@ -1170,6 +1171,7 @@
     renderExport(current);
     renderGlossary(current);
     renderCurriculum(current);
+    updateByodButtons();
     renderByod(current);
     persistHash(current.spec);
   }
@@ -1505,10 +1507,23 @@
     }
   });
 
+  function updateByodButtons() {
+    const input = document.getElementById('userData');
+    const file = input && input.files && input.files[0];
+    const clearBtn = document.getElementById('clearUserData');
+    if (clearBtn) {
+      clearBtn.disabled = !file;
+      clearBtn.setAttribute('title', file ? 'נקו את ' + file.name + ' ואפסו את הבחירה' : 'לא נבחר קובץ לניקוי');
+    }
+    if (view) renderByod(view);
+    else syncByodControls();
+  }
+
   function applyParsedDataset(parsed, statusText) {
     const byodStatus = document.getElementById('byodStatus');
     if (!parsed.ok) {
       byodStatus.textContent = (parsed.errors || []).concat(parsed.warnings || []).join(' ');
+      updateByodButtons();
       return;
     }
     store = ScoutAIDemo.createStore({ players: parsed.players }, {
@@ -1529,7 +1544,34 @@
     byodStatus.textContent = (statusText ||
       (parsed.provenance + ': ' + parsed.players.length + ' שחקנים. הקובץ נשאר במחשב.')) +
       (notes.length ? ' ' + notes.join(' ') : '');
+    updateByodButtons();
   }
+
+  document.getElementById('userData').addEventListener('change', function () {
+    const file = this.files && this.files[0];
+    const status = document.getElementById('byodStatus');
+    if (file) {
+      status.textContent = 'נבחר הקובץ ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB). סמנו אישור רישיון ולחצו על "הריצו על הקובץ שלי".';
+    } else {
+      status.textContent = 'USER_LICENSED_DATA: לא נבחר קובץ.';
+    }
+    updateByodButtons();
+  });
+
+  document.getElementById('userAttest').addEventListener('change', function () {
+    updateByodButtons();
+  });
+
+  document.getElementById('clearUserData').addEventListener('click', function () {
+    const input = document.getElementById('userData');
+    if (input) input.value = '';
+    const attest = document.getElementById('userAttest');
+    if (attest) attest.checked = false;
+    const status = document.getElementById('byodStatus');
+    if (status) status.textContent = 'USER_LICENSED_DATA: בחירת הקובץ נוקתה.';
+    updateByodButtons();
+    if (input && input.focus) input.focus();
+  });
 
   document.getElementById('loadUserData').addEventListener('click', function () {
     const input = document.getElementById('userData');
@@ -1538,6 +1580,7 @@
     const byodStatus = document.getElementById('byodStatus');
     if (!file) {
       byodStatus.textContent = 'USER_LICENSED_DATA: לא נבחר קובץ.';
+      updateByodButtons();
       return;
     }
     const reader = new FileReader();
@@ -1553,6 +1596,7 @@
     };
     reader.onerror = function () {
       byodStatus.textContent = 'קריאת הקובץ המקומי נכשלה. דבר לא נשלח.';
+      updateByodButtons();
     };
     reader.readAsArrayBuffer(file);
   });
@@ -1586,8 +1630,10 @@
       document.getElementById('splitSelect').value = 'groups';
       recompute();
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';
+      updateByodButtons();
     }).catch(function (err) {
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: טעינה מחדש נכשלה. ' + (err && err.message ? err.message : err);
+      updateByodButtons();
     });
   });
 </script>
