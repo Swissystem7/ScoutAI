@@ -461,6 +461,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<button id="clearSearch" class="secondary" type="button" disabled>נקה סינון<\/button>/);
   assert.match(html, /לא נמצאו שחקנים התואמים לחיפוש/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
+  assert.match(html, /<a class="skip" href="#explorer">דלגו לחוקר הספירות<\/a>/);
+  assert.match(html, /<input id="filterUsedFields" type="checkbox" aria-controls="explorerTable">/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לסנן את שדות יומן הספירות/);
+  assert.match(html, /מוצגים כל .* השדות/);
   assert.match(html, /lessonRoot\.innerHTML = '<article class="lesson-step"><h3>בחרו שחקן<\/h3>/);
   assert.match(html, /aria-label="שלב '\s*\+\s*\(i \+ 1\)\s*\+\s*': '\s*\+\s*escapeHtml\(step\.title\)/);
   assert.match(html, /aria-label="הציגו את שדה [^"]+ ביומן ספירות האירועים"/);
