@@ -405,10 +405,6 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל/);
   assert.match(html, /document\.getElementById\('resetExercise'\)\.addEventListener\('click'/);
   assert.match(html, /התרגיל אופס למדד ברירת המחדל/);
-  assert.match(html, /id="byodStatus"[^>]*role="status"[^>]*aria-live="polite"/);
-  assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
-  assert.match(html, /id="courseQuizStatus"[^>]*role="status"[^>]*aria-live="polite"/);
-  assert.match(html, /<button id="resetQuiz" class="secondary" type="button" disabled title="[^"]+">נקו את תשובות השיעור<\/button>/);
   assert.match(html, /השיעור נטען מ־/);
   assert.match(html, /טוען את התקדמות השיעור/);
   assert.match(html, /טוען את צעדי השיעור המלא/);
@@ -439,6 +435,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
   assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
   assert.match(html, /<button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי<\/button>/);
+  assert.match(html, /id="byodStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="courseQuizStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetQuiz" class="secondary" type="button" disabled title="[^"]+">נקו את תשובות השיעור<\/button>/);
   assert.match(html, /<button id="filterGlossAll" class="secondary" type="button" aria-pressed="true"/);
   assert.match(html, /<button id="filterGlossUsed" class="secondary" type="button" aria-pressed="false"/);
   assert.match(html, /<button id="filterGlossUnused" class="secondary" type="button" aria-pressed="false"/);
