@@ -11,7 +11,8 @@
     .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
     label{display:block;margin:14px 0 6px;font-weight:700}input,button,select{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
-    input[type=file],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
+    input[type=file],input[type=search],select{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
+    .search-row{margin:14px 0 6px}.search-row label{margin:0 0 6px}.search-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.search-controls input{flex:1;min-width:220px}.search-controls button{margin-top:0}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.actions button{margin-inline-end:8px}.status{min-height:1.5em;font-weight:700}
     .formula{font-size:.95rem;color:#0f3d26;margin:12px 0;font-weight:700}
     .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}caption{text-align:start;font-weight:700;padding:8px 0;color:#17211b}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
@@ -22,6 +23,8 @@
     .toggle input{width:auto}.up{color:#0f3d26;font-weight:700}.down{color:#8a1f1f;font-weight:700}
     .lesson{display:grid;gap:12px}.lesson-step{background:#f3f6f1;border-radius:12px;padding:14px}
     .lesson-step h3{margin:0 0 6px;font-size:1rem}.lesson-nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+    .lesson-step ol{padding-inline-start:20px;margin:10px 0}
+    .lesson-step ol button{margin-top:0;padding:4px 10px;font-size:.9rem}
     .lesson-nav button{margin-top:0;padding:8px 12px}.lesson-nav button[aria-current="step"]{outline:3px solid #10281d}
     .bars{display:grid;gap:8px;margin-top:10px}.bar-row{display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center}
     .bar-track{background:#d5ddd4;border-radius:999px;height:12px;overflow:hidden}
@@ -57,7 +60,10 @@
     .receipt li{list-style:none}
     tr.hl td,tr.hl th{background:#fff8e8;outline:2px solid #8a5a00}
     .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    button,select,input[type=file],.toc a,.course-nav button,.lesson-nav button{min-height:44px}
+    .filter-group{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+    .filter-group button{margin-top:0;padding:8px 12px}
+    .filter-group button[aria-pressed="true"]{background:#145c3d;color:#fff;border-color:#145c3d}
+    button,select,input[type=file],input[type=search],.toc a,.course-nav button,.lesson-nav button,.filter-group button{min-height:44px}
     input[type=range]{min-height:32px}
     .toc a{display:inline-flex;align-items:center;padding:8px 10px}
     @media(max-width:650px){
@@ -73,7 +79,10 @@
 <body>
 <a class="skip" href="#course">דלגו לשיעור המלא</a>
 <a class="skip" href="#lab">דלגו למעבדת המדד</a>
+<a class="skip" href="#exercise">דלגו לתרגיל המודרך</a>
 <a class="skip" href="#ranking">דלגו לדירוג החי</a>
+<a class="skip" href="#lesson">דלגו לשיעור השקוף</a>
+<a class="skip" href="#fragility">דלגו למעבדת השבריריות</a>
 <a class="skip" href="#explorer">דלגו לחוקר הספירות</a>
 <a class="skip" href="#byod">דלגו לנתונים שלכם</a>
 <main class="shell">
@@ -84,6 +93,7 @@
     <nav class="toc" aria-label="מעבר לחלקי המעבדה">
       <a href="#course">שיעור מלא</a>
       <a href="#lab">בנה מדד</a>
+      <a href="#exercise">תרגיל מודרך</a>
       <a href="#ranking">דירוג חי</a>
       <a href="#lesson">שיעור שקוף</a>
       <a href="#radar">מכ״ם</a>
@@ -110,8 +120,12 @@
     <h2>שיעור מלא: מאירוע למדד מאומת</h2>
     <p>שמונה צעדים על אותה שכבת מונדיאל 2018. כל צעד כולל תרגיל ובדיקה עצמית. אפשר לדפדף חופשי — הסיום דורש לא להפריז בטענה, לא ρ גבוה.</p>
     <div id="courseNav" class="course-nav" role="toolbar" aria-label="צעדי השיעור המלא"></div>
-    <p id="courseProgress" class="status" role="status"></p>
-    <div id="courseRoot" class="lesson"></div>
+    <p id="courseProgress" class="status" role="status" aria-live="polite" aria-atomic="true">טוען את התקדמות השיעור…</p>
+    <div class="actions">
+      <button id="resetQuiz" class="secondary" type="button" disabled title="אין תשובות למחיקה — ענו קודם על שאלה בשיעור">נקו את תשובות השיעור</button>
+    </div>
+    <p id="courseQuizStatus" class="status" role="status" aria-live="polite" aria-atomic="true">התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום.</p>
+    <div id="courseRoot" class="lesson"><p class="notice">טוען את צעדי השיעור המלא מנתוני מונדיאל 2018… השיעור נטען מ־<code>data/wc2018_event_aggregates.json</code> בדפדפן. אם הטקסט הזה נשאר, הסקריפט לא רץ — פתחו את הדף משרת מקומי.</p></div>
   </section>
 
   <section class="card" id="lab">
@@ -150,14 +164,34 @@
     <h2>תרגיל מודרך</h2>
     <p id="exercisePrompt"></p>
     <p class="muted">בדיקה עצמית מול אותה שכבת מונדיאל 2018 — לא מבחן סקאוטינג ואין תשובה מדעית אחת.</p>
-    <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
-    <p id="exerciseSummary" class="status" role="status"></p>
+    <div class="actions">
+      <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
+      <button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)">איפוס תרגיל לברירת מחדל (40/30/30)</button>
+    </div>
+    <p id="exerciseSummary" class="status" role="status" aria-live="polite"></p>
     <ul id="exerciseChecks" class="checks"></ul>
   </section>
 
   <section class="card" id="ranking">
     <h2>דירוג חי לפי המדד שלכם</h2>
     <p>ברירת המחדל: <span class="badge">STATSBOMB_OPEN_DATA</span> — קובץ סטטי בריפו, ללא רשת חיצונית, לא למסחר. אחרי טעינת קובץ שלכם התווית משתנה ל־<span class="badge">USER_LICENSED_DATA</span>. אין להסיק מסקנה רפואית, חוזית, מקצועית או הנוגעת לגיוס ספורטאים.</p>
+    <label for="posFilter">סינון לפי קבוצת עמדה</label>
+    <select id="posFilter" aria-controls="playerTable">
+      <option value="">כל העמדות (ללא סינון)</option>
+      <option value="GK">שוערים (GK)</option>
+      <option value="DF">שחקני הגנה (DF)</option>
+      <option value="MF">קשרים (MF)</option>
+      <option value="FW">שחקני התקפה וחלוצים (FW)</option>
+      <option value="OT">עמדות אחרות (OT)</option>
+      <option value="UT">עמדות טכניות/לא ידועות (UT)</option>
+    </select>
+    <div class="search-row">
+      <label for="playerSearch">חיפוש שחקן לפי שם או נבחרת</label>
+      <div class="search-controls">
+        <input id="playerSearch" type="search" placeholder="לדוגמה: Kanté, Kane, France, בלגיה..." aria-controls="playerTable" aria-describedby="tableStatus">
+        <button id="clearSearch" class="secondary" type="button" disabled>נקה סינון</button>
+      </div>
+    </div>
     <p id="tableStatus" class="status" role="status" aria-live="polite">טוען את data/wc2018_event_aggregates.json…</p>
     <div id="playerTable" class="table-wrap"></div>
   </section>
@@ -165,6 +199,7 @@
   <section class="card" id="lesson">
     <h2>שיעור שקוף</h2>
     <p>יחידת הלימוד היא <strong>שחקן אחד</strong>, כמו בעיטה אחת בשיעור xG: קודם הגורמים, אחר כך ההסתברות/הציון, ורק אז מה קורה אם משנים מודל.</p>
+    <p id="lessonStatus" class="lab-note" role="status" aria-live="polite">בחרו שחקן בטבלה כדי לראות את שלבי השיעור השקוף.</p>
     <div id="lessonNav" class="lesson-nav" role="toolbar" aria-label="צעדי השיעור השקוף"></div>
     <div id="lessonRoot" class="lesson">
       <article class="lesson-step">
@@ -179,6 +214,7 @@
     <p>אותם תשעת הגורמים שנכנסים לנוסחה, אחרי אותן תקרות ל-90 דקות. לא מודל חיצוני ולא רדאר Wyscout.</p>
     <label for="compareSelect">השוו את השחקן הנבחר מול</label>
     <select id="compareSelect"></select>
+    <button id="clearCompare" class="secondary" type="button" disabled>בטלו השוואה</button>
     <p id="radarStatus" class="lab-note" role="status" aria-live="polite">בחרו שחקן בטבלה כדי לבנות מכ״ם.</p>
     <div class="legend">
       <span><span class="swatch" style="background:#145c3d"></span>נבחר</span>
@@ -217,7 +253,10 @@
       <option value="groups">בתים A–D מול E–H (מומלץ)</option>
       <option value="hash">לפי hash של שם (דטרמיניסטי)</option>
     </select>
-    <p id="validateStatus" class="status" role="status"></p>
+    <div class="actions">
+      <button id="resetValidation" class="secondary" type="button" disabled title="הגדרות האימות כבר בברירת המחדל (בישולים, בתים A–D מול E–H)">איפוס אימות לברירת מחדל</button>
+    </div>
+    <p id="validateStatus" class="status" role="status" aria-live="polite">מחשב אימות מול מדגם מוחזק…</p>
     <p id="validateVerdict" class="lab-note" role="status" aria-live="polite"></p>
     <div id="validateStats" class="stats-grid"></div>
     <div id="validateTables" class="table-wrap"></div>
@@ -233,19 +272,25 @@
   <section class="card" id="export">
     <h2>ייצוא המדד ופסקת מתודולוגיה</h2>
     <p>ההורדה נשארת במחשב שלכם. אין שליחה לשרת, אין PDF מעוצב, ואין ציטוט שמותר למכור — רק תיעוד לימודי עם קרדיט ל-StatsBomb Open Data.</p>
-    <button id="copyMethod" class="secondary" type="button">העתיקו פסקת מתודולוגיה</button>
-    <button id="downloadJson" class="secondary" type="button">הורידו JSON מקומי</button>
+    <button id="copyMethod" class="secondary" type="button" disabled title="הגדירו משקלות במעבדה כדי להעתיק פסקת מתודולוגיה">העתיקו פסקת מתודולוגיה</button>
+    <button id="downloadJson" class="secondary" type="button" disabled title="הגדירו משקלות במעבדה כדי להוריד JSON">הורידו JSON מקומי</button>
     <button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות (CSV)</button>
     <p id="exportStatus" class="status" role="status" aria-live="polite"></p>
     <h3>פסקה לציטוט</h3>
-    <p id="methodText" class="export-box"></p>
+    <p id="methodText" class="export-box">הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה.</p>
     <h3>JSON</h3>
-    <pre id="exportJson" class="export-box" dir="ltr"></pre>
+    <pre id="exportJson" class="export-box" dir="ltr">הגדירו משקלות במעבדה כדי ליצור חבילת ייצוא ב-JSON.</pre>
   </section>
 
   <section class="card" id="glossary">
     <h2>מילון סוגי אירועים של StatsBomb</h2>
     <p>כל מונח מקושר לשדה ב־<code>data/wc2018_event_aggregates.json</code> ולערך של השחקן הנבחר. מה שכתוב «לא בנוסחה» קיים בקובץ ולא נכנס לציון — זה חלק מהשיעור.</p>
+    <div class="filter-group" role="group" aria-label="סינון מונחים במילון">
+      <button id="filterGlossAll" class="secondary" type="button" aria-pressed="true" aria-label="הציגו את כל המונחים במילון">כל המונחים (11)</button>
+      <button id="filterGlossUsed" class="secondary" type="button" aria-pressed="false" aria-label="הציגו רק מונחים הנכנסים לנוסחה">נכנס לנוסחה (9)</button>
+      <button id="filterGlossUnused" class="secondary" type="button" aria-pressed="false" aria-label="הציגו רק מונחים שאינם נכנסים לנוסחה">לא בנוסחה (2)</button>
+    </div>
+    <p id="glossaryStatus" class="status" role="status" aria-live="polite">מוצגים כל 11 מונחי המילון. לחצו על כפתור מונח כדי להדגיש את השדה שלו ביומן הספירות.</p>
     <dl id="glossaryRoot" class="glossary"></dl>
   </section>
 
@@ -257,11 +302,11 @@
     <input id="userData" type="file" accept=".json,.csv,text/csv,application/json">
     <label class="toggle"><input id="userAttest" type="checkbox"> אני מאשר/ת שיש לי רישיון להריץ את הקובץ הזה במחשב שלי, ושהוא אינו StatsBomb Open Data.</label>
     <div class="actions">
-      <button id="loadUserData" type="button">הריצו על הקובץ שלי</button>
+      <button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי</button>
       <button id="loadSynthetic" class="secondary" type="button">טענו דוגמה סינתטית</button>
-      <button id="restoreOpenData" class="secondary" type="button">חזרו לדמו מונדיאל 2018</button>
+      <button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018</button>
     </div>
-    <p id="byodStatus" class="status" role="status">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
+    <p id="byodStatus" class="status" role="status" aria-live="polite">USER_LICENSED_DATA: לא נטען קובץ. הדמו הראשוני הוא STATSBOMB_OPEN_DATA ללימוד בלבד.</p>
     <p class="muted">JSON: מערך שחקנים או עצם עם <code>players</code>. שדות חובה: <code>name</code> ודקות (<code>minutes</code> או <code>totalMinutesProxy</code>). ספירות אופציונליות: pressures, tackles, interceptions, defensiveActions, progressiveActions, keyPasses, passesCompleted, shotXgSum, boxTouches, shotsOnTarget, shots, goals, assists, dribbles, duelsWon. CSV: אותן כותרות בשורה הראשונה; המפריד (פסיק, נקודה-פסיק או טאב) מזוהה אוטומטית, כולל קובץ Excel אירופי עם <code>sep=;</code> ופסיק עשרוני. מספרים עם מפריד אלפים (<code>"1,234"</code>, <code>1 234</code>, <code>1'234</code>, <code>1.234.567</code> בקובץ נקודה-פסיק) נקראים כמספרים; תא עם סימון חסר (<code>-</code>, <code>N/A</code>, <code>#N/A</code>, <code>null</code>) נחשב ריק ולא 0, ומדווח פעם אחת לכל עמודה. קובץ בלי דקות קריאות (אין עמודת <code>minutes</code> / Min / דקות, או שכולה ריקה) נטען אבל מדווח: בלי דקות כל רכיב ל-90 הוא 0 ואף שחקן לא עובר את סף הדקות. שחקן בלי דקות בקובץ שכן יש בו דקות (תא ריק, <code>-</code> או ערך שנפסל) מדווח לפי שם: הוא נטען עם 0 דקות ולא יופיע בדירוג, אחרת היה נעלם בשקט. דקות או ספירה שליליות אינן מדידה — התא נחשב חסר ומדווח לפי שחקן; שחקנים עם 0 דקות נספרים. קובץ תקין שבו אף שחקן (או שחקן אחד בלבד) לא עובר את סף הדקות — ייצוא של משחק אחד מגיע ל-90 דקות, והסף הוא 270 — מדווח בטעינה עם הדקות הגבוהות ביותר בקובץ וערך הסף שהיה מכניס שחקנים לדירוג; הסף לא משתנה לבד, ומדגם קטן עדיין משקר. שורות סיכום בסוף הקובץ (<code>Squad Total</code>, <code>Opponent Total</code>, Total, Average, סה"כ, ממוצע) אינן שחקנים: הן מדולגות ומדווחות, אחרת סך הקבוצה היה מדורג ראשון. ייצוא FBref (Get table as CSV) נקרא כמו שהוא: שורת כותרת-העל שמעל הכותרת (Playing Time, Performance…) מדולגת ומדווחת, וכך גם שורת הכותרת שחוזרת כל 25 שחקנים, שאחרת הייתה נטענת כשחקן בשם Player. טבלת FBref בלי עמודת Min (Defensive Actions, Possession, Passing…) נקראת דרך עמודת <code>90s</code>: דקות = 90s × 90, מעוגל לדקה שלמה ומדווח; כשיש גם Min היא עדיפה. שם שחקן שחוזר בקובץ מדווח לפי שם — עותק זהה של שורה, שתי שורות באותה קבוצה (המזהה השני מקבל <code>#2</code>) או שתי קבוצות (מעבר באמצע עונה בייצוא FBref): כל שורה נטענת ומדורגת בנפרד ולא מאוחדת, כי כל אחת נושאת רק חלק מהדקות של השחקן. הקידוד מזוהה מהבייטים: UTF-8 (עם או בלי BOM), UTF-16 של «Unicode Text», ו-CSV של Excel עברי בקידוד windows-1255 — קידוד שאינו UTF-8 מדווח בשורת הסטטוס. שם שמכיל את המפריד חייב מרכאות (<code>"Silva, Thiago"</code>): שורה עם מספר תאים גדול ממספר הכותרות מדולגת ומדווחת, כי כל הסטטיסטיקה שלה הייתה זזה עמודה ימינה. הכותרות נקראות בלי הבדל בין אותיות גדולות לקטנות, רווחים וקווים תחתונים (<code>Key Passes</code> נטען כ-keyPasses), וגם בקיצורים הנפוצים של FBref/Opta (Player, Squad, Pos, Min, Tkl, Int, KP, xG, SoT, Gls, Ast) ובכותרות עבריות בסיסיות (שם, קבוצה, עמדה, דקות); כל התאמה כזו מדווחת בשורת הסטטוס. כותרת שלא זוהתה (למשל <code>tackle</code> או <code>age</code>) לא נטענת ומדווחת עם הצעה לשם הקרוב, כדי שאף שחקן לא יקבל 0 על סטטיסטיקה שהקובץ כן מכיל. עמדה (<code>position</code>): שם מלא באנגלית או בעברית (Center Back, שוער, קשר, חלוץ) או קוד מקובל (GK, CB, LB, CDM, CM, CAM, ST, LW…), כולל קודי Wyscout לפי צד (RCMF, LDMF, RWF, RCB3); עמדה שלא זוהתה נחשבת OT ומדווחת, כי בנרמול לפי עמדה שחקני OT מושווים רק זה לזה. דוגמה: <code>data/user-dataset.example.json</code>.</p>
   </section>
 
@@ -286,6 +331,7 @@
   let view = null;
   let writingHash = false;
   let lessonIndex = 0;
+  let glossaryFilter = 'all';
   const courseAnswers = {
     unusedField: '',
     per90: '',
@@ -297,6 +343,18 @@
     unusedTerm: '',
     commercial: ''
   };
+  // Quiz <select> id → the courseAnswers key it fills. Shared by sync/read/reset so the three never drift.
+  const QUIZ_FIELDS = Object.freeze({
+    ansUnusedField: 'unusedField',
+    ansPer90: 'per90',
+    ansCap: 'kanteCapped',
+    ansWeights: 'weightsManual',
+    ansBump: 'bumpCanMove',
+    ansSeason: 'splitIsSeason',
+    ansRho: 'whatMatters',
+    ansTerm: 'unusedTerm',
+    ansCommercial: 'commercial'
+  });
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -368,13 +426,53 @@
     const rows = current.rows;
     const spec = current.spec;
     const tag = (current.provenance || 'STATSBOMB_OPEN_DATA');
+    const searchInput = document.getElementById('playerSearch');
+    const clearBtn = document.getElementById('clearSearch');
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    if (clearBtn) {
+      clearBtn.disabled = !query;
+      clearBtn.setAttribute('title', query ? 'נקה את סינון הטבלה' : 'הקלידו שם שחקן או נבחרת כדי להפעיל סינון');
+    }
+    const posFilter = document.getElementById('posFilter');
+    const posVal = posFilter ? posFilter.value : '';
+    if (posFilter) {
+      posFilter.disabled = !rows.length;
+      posFilter.setAttribute('title', rows.length
+        ? 'סננו את טבלת הדירוג לפי קבוצת עמדה'
+        : 'אין שחקנים זמינים לסינון');
+    }
     if (!rows.length) {
       tableStatus.textContent = tag + ': אין שחקנים מעל סף הדקות.';
       tableRoot.innerHTML = '<p class="notice">אין שחקנים שעברו את סף הדקות המינימלי (' + escapeHtml(spec.minMinutes) + ' דקות). הורידו את הסף במעבדת המדד למעלה.</p>';
       return;
     }
-    tableStatus.textContent = tag + ': ' + rows.length + ' שחקנים אחרי סף ' + spec.minMinutes + ' דקות. שכבה אחת לכל הפיצ\'רים.';
-    const body = rows.map(function (row) {
+    const displayRows = posVal ? ScoutAIDemo.filterByPosition(rows, posVal) : rows;
+    const posLabels = { GK: 'שוערים (GK)', DF: 'שחקני הגנה (DF)', MF: 'קשרים (MF)', FW: 'שחקני התקפה וחלוצים (FW)', OT: 'עמדות אחרות (OT)', UT: 'עמדות טכניות/לא ידועות (UT)' };
+    const posLabel = posLabels[posVal] || posVal;
+    const filterDesc = posVal ? ' · סינון: ' + posLabel : '';
+    if (!displayRows.length) {
+      tableStatus.textContent = tag + ': אין שחקנים בעמדה ' + posVal + ' שעוברים את סף הדקות (' + spec.minMinutes + ').';
+      tableRoot.innerHTML = '<p class="notice">אין שחקנים בעמדה זו (' + escapeHtml(posLabel) + ') שעברו את סף הדקות המינימלי (' + escapeHtml(spec.minMinutes) + ' דקות). בחרו עמדה אחרת או הורידו את הסף במעבדת המדד למעלה.</p>';
+      return;
+    }
+    const filteredRows = query
+      ? displayRows.filter(function (row) {
+          const name = (row.name || '').toLowerCase();
+          const team = (row.team || '').toLowerCase();
+          return name.indexOf(query) >= 0 || team.indexOf(query) >= 0;
+        })
+      : rows;
+
+    if (!filteredRows.length) {
+      tableStatus.textContent = tag + ': לא נמצאו שחקנים התואמים לחיפוש "' + (searchInput ? searchInput.value.trim() : '') + '".';
+      tableRoot.innerHTML = '<p class="notice">לא נמצאו שחקנים התואמים לחיפוש "' + escapeHtml(searchInput ? searchInput.value.trim() : '') + '" מתוך ' + displayRows.length + ' שחקנים מעל סף הדקות' + escapeHtml(filterDesc) + '. לחצו על "נקה סינון" כדי להציג את כל השחקנים.</p>';
+      return;
+    }
+
+    tableStatus.textContent = tag + ': ' +
+      (query || posVal ? 'מוצגים ' + filteredRows.length + ' מתוך ' + rows.length + ' שחקנים' + (query ? ' (סינון: "' + searchInput.value.trim() + '")' : '') : rows.length + ' שחקנים') +
+      ' אחרי סף ' + spec.minMinutes + ' דקות' + filterDesc + '. שכבה אחת לכל הפיצ\'רים.';
+    const body = filteredRows.map(function (row) {
       const selected = spec.selectedId && row.id === spec.selectedId;
       const compared = spec.compareId && row.id === spec.compareId;
       const cls = selected ? 'selected' : compared ? 'compared' : '';
@@ -392,12 +490,14 @@
         '<td>' + escapeHtml(row.components.clutch) + '</td>' +
       '</tr>';
     }).join('');
-    const caption = tag === 'STATSBOMB_OPEN_DATA'
-      ? 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018'
-      : 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag;
+    const rawQuery = searchInput ? searchInput.value.trim() : '';
+    const captionBase = tag === 'STATSBOMB_OPEN_DATA'
+      ? (query ? 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018 (סינון: "' + escapeHtml(rawQuery) + '")' : 'דירוג שחקנים לפי המדד הנוכחי, מונדיאל 2018')
+      : (query ? 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag + ' (סינון: "' + escapeHtml(rawQuery) + '")' : 'דירוג שחקנים לפי המדד הנוכחי, שכבת ' + tag);
+    const caption = captionBase + (posVal ? ' — ' + escapeHtml(posLabel) : '');
     tableRoot.innerHTML =
       '<table aria-describedby="tableStatus">' +
-        '<caption>' + escapeHtml(caption) + '</caption>' +
+        '<caption>' + caption + '</caption>' +
         '<thead><tr>' +
           '<th scope="col">דירוג ושינוי</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">דקות</th>' +
           '<th scope="col">ציון ושינוי</th><th scope="col">Grit</th><th scope="col">Involvement</th><th scope="col">Clutch</th>' +
@@ -406,16 +506,28 @@
 
   function renderLesson(current) {
     const steps = current.lesson || [];
+    const statusEl = document.getElementById('lessonStatus');
     if (lessonIndex >= steps.length) lessonIndex = 0;
     lessonNav.innerHTML = steps.map(function (step, i) {
-      return '<button type="button" data-step="' + i + '"' + (i === lessonIndex ? ' aria-current="step"' : '') + ' aria-label="שלב ' + (i + 1) + '">' + (i + 1) + '</button>';
+      return '<button type="button" data-step="' + i + '"' +
+        (i === lessonIndex ? ' aria-current="step"' : '') +
+        ' aria-label="שלב ' + (i + 1) + ': ' + escapeHtml(step.title) + '"' +
+        ' title="שלב ' + (i + 1) + ': ' + escapeHtml(step.title) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev"' + (lessonIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next"' + (lessonIndex >= steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' +
+      (lessonIndex === 0 || !steps.length ? ' disabled' : '') +
+      ' title="' + (lessonIndex === 0 || !steps.length ? 'אין שלב קודם' : 'עברו לשלב הקודם בשיעור') + '">הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' +
+      (lessonIndex >= steps.length - 1 || !steps.length ? ' disabled' : '') +
+      ' title="' + (lessonIndex >= steps.length - 1 || !steps.length ? 'אין שלב הבא' : 'עברו לשלב הבא בשיעור') + '">הבא</button>';
     const step = steps[lessonIndex];
     if (!step) {
-      lessonRoot.innerHTML = '';
+      if (statusEl) statusEl.textContent = 'בחרו שחקן בטבלה כדי לראות את שלבי השיעור השקוף.';
+      lessonRoot.innerHTML = '<article class="lesson-step"><h3>בחרו שחקן</h3><p>לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב ממספרים גולמיים.</p></article>';
       return;
+    }
+    if (statusEl && current.selected) {
+      statusEl.textContent = current.selected.name + ' — שלב ' + (lessonIndex + 1) + ' מתוך ' + steps.length + ': ' + step.title + '.';
     }
     const bars = (current.contributions || []).map(function (item) {
       return '<div class="bar-row"><span>' + escapeHtml(item.label) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + Math.min(100, item.share) + '%"></div></div><span>' + escapeHtml(item.share) + '</span></div>';
@@ -433,7 +545,33 @@
 
   function renderExercise(current) {
     const exercise = current.exercise;
-    if (!exercise) return;
+    const applyHint = document.getElementById('applyHint');
+    const resetExercise = document.getElementById('resetExercise');
+    if (!exercise) {
+      document.getElementById('exercisePrompt').textContent = 'טוען תרגיל מודרך לבחינת בלמים…';
+      document.getElementById('exerciseSummary').textContent = 'אין נתוני תרגיל זמינים עבור השכבה הנוכחית.';
+      document.getElementById('exerciseChecks').innerHTML = '';
+      if (applyHint) applyHint.disabled = true;
+      if (resetExercise) resetExercise.disabled = true;
+      return;
+    }
+    const spec = current.spec;
+    const hintApplied = spec && Number(spec.grit) === 70 && Number(spec.involvement) === 20 &&
+      Number(spec.clutch) === 10 && Boolean(spec.normalizePosition);
+    if (applyHint) {
+      applyHint.disabled = hintApplied;
+      applyHint.setAttribute('title', hintApplied
+        ? 'נקודת ההתחלה של התרגיל (70/20/10 + נרמול עמדה) כבר מיושמת'
+        : 'הציעו נקודת התחלה (70/20/10 + נרמול עמדה)');
+    }
+    if (resetExercise) {
+      const isDefault = spec && Number(spec.grit) === 40 && Number(spec.involvement) === 30 &&
+        Number(spec.clutch) === 30 && !spec.normalizePosition;
+      resetExercise.disabled = isDefault;
+      resetExercise.setAttribute('title', isDefault
+        ? 'משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)'
+        : 'אפסו את משקלות המדד לברירת המחדל של המעבדה (40/30/30)');
+    }
     document.getElementById('exercisePrompt').textContent = exercise.prompt;
     document.getElementById('exerciseSummary').textContent = (exercise.passed ? 'עברתם. ' : 'עדיין לא. ') + exercise.summary;
     document.getElementById('exerciseChecks').innerHTML = exercise.checks.map(function (item) {
@@ -456,6 +594,22 @@
     const keep = spec.compareId || previous;
     if (keep && rows.some(function (row) { return row.id === keep; })) compareSelect.value = keep;
     compareSelect.disabled = !rows.length || !current.selected;
+    if (!rows.length) {
+      compareSelect.setAttribute('title', 'אין שחקנים זמינים להשוואה');
+    } else if (!current.selected) {
+      compareSelect.setAttribute('title', 'בחרו שחקן בטבלה כדי לבחור שחקן להשוואה');
+    } else {
+      compareSelect.setAttribute('title', 'בחרו שחקן להשוואה מול ' + current.selected.name);
+    }
+    const clearCompare = document.getElementById('clearCompare');
+    if (clearCompare) {
+      clearCompare.disabled = !current.selected || !radar || !radar.b;
+      if (radar && radar.b) {
+        clearCompare.setAttribute('title', 'בטלו את השוואת ' + radar.b.name + ' וחזרו להצגת ' + radar.a.name + ' בלבד');
+      } else {
+        clearCompare.setAttribute('title', 'אין שחקן השוואה פעיל לביטול');
+      }
+    }
     if (!radar || !radar.a) {
       document.getElementById('radarRoot').innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה.</p>';
       document.getElementById('radarTable').innerHTML = '';
@@ -506,6 +660,16 @@
   function renderExport(current) {
     const bundle = current.exportBundle;
     const downloadCsv = document.getElementById('downloadCsv');
+    const copyMethod = document.getElementById('copyMethod');
+    const downloadJson = document.getElementById('downloadJson');
+    if (copyMethod) {
+      copyMethod.disabled = !bundle;
+      copyMethod.setAttribute('title', bundle ? 'העתיקו את פסקת המתודולוגיה ללוח' : 'הגדירו משקלות במעבדה כדי להעתיק פסקת מתודולוגיה');
+    }
+    if (downloadJson) {
+      downloadJson.disabled = !bundle;
+      downloadJson.setAttribute('title', bundle ? 'הורידו קובץ JSON של הגדרת המדד' : 'הגדירו משקלות במעבדה כדי להוריד JSON');
+    }
     if (downloadCsv) {
       downloadCsv.disabled = !current.selected;
       if (current.selected) {
@@ -514,21 +678,71 @@
         downloadCsv.setAttribute('title', 'בחרו שחקן בטבלה כדי לייצא ספר ספירות ב-CSV');
       }
     }
-    if (!bundle) return;
+    if (!bundle) {
+      document.getElementById('methodText').textContent = 'הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה.';
+      document.getElementById('exportJson').textContent = 'הגדירו משקלות במעבדה כדי ליצור חבילת ייצוא ב-JSON.';
+      return;
+    }
     document.getElementById('methodText').textContent = bundle.methodologyHe;
     document.getElementById('exportJson').textContent = JSON.stringify(bundle, null, 2);
   }
 
   function renderGlossary(current) {
-    const items = current.glossary || ScoutAIDemo.EVENT_GLOSSARY;
-    document.getElementById('glossaryRoot').innerHTML = items.map(function (item) {
+    const rawItems = current.glossary || ScoutAIDemo.EVENT_GLOSSARY;
+    const totalCount = rawItems.length;
+    const usedCount = rawItems.filter(function (it) { return it.usedInScore; }).length;
+    const unusedCount = rawItems.filter(function (it) { return !it.usedInScore; }).length;
+
+    const filterAllBtn = document.getElementById('filterGlossAll');
+    const filterUsedBtn = document.getElementById('filterGlossUsed');
+    const filterUnusedBtn = document.getElementById('filterGlossUnused');
+    if (filterAllBtn) {
+      filterAllBtn.textContent = 'כל המונחים (' + totalCount + ')';
+      filterAllBtn.setAttribute('aria-pressed', glossaryFilter === 'all' ? 'true' : 'false');
+    }
+    if (filterUsedBtn) {
+      filterUsedBtn.textContent = 'נכנס לנוסחה (' + usedCount + ')';
+      filterUsedBtn.setAttribute('aria-pressed', glossaryFilter === 'used' ? 'true' : 'false');
+    }
+    if (filterUnusedBtn) {
+      filterUnusedBtn.textContent = 'לא בנוסחה (' + unusedCount + ')';
+      filterUnusedBtn.setAttribute('aria-pressed', glossaryFilter === 'unused' ? 'true' : 'false');
+    }
+
+    const items = rawItems.filter(function (item) {
+      if (glossaryFilter === 'used') return item.usedInScore;
+      if (glossaryFilter === 'unused') return !item.usedInScore;
+      return true;
+    });
+
+    const statusEl = document.getElementById('glossaryStatus');
+    if (statusEl) {
+      const filterLabel = glossaryFilter === 'used'
+        ? 'מוצגים ' + items.length + ' מתוך ' + totalCount + ' מונחים שנכנסים לנוסחה.'
+        : (glossaryFilter === 'unused'
+          ? 'מוצגים ' + items.length + ' מתוך ' + totalCount + ' מונחים שאינם נכנסים לנוסחה.'
+          : 'מוצגים כל ' + totalCount + ' מונחי המילון.');
+      const playerNote = current.selected ? ' ערכים חיים עבור ' + current.selected.name + '.' : '';
+      statusEl.textContent = filterLabel + playerNote + ' לחצו על כפתור מונח כדי להדגיש את השדה שלו ביומן הספירות.';
+    }
+
+    const root = document.getElementById('glossaryRoot');
+    if (!items.length) {
+      root.innerHTML = '<p class="notice">לא נמצאו מונחים התואמים לסינון הנוכחי.</p>';
+      return;
+    }
+
+    root.innerHTML = items.map(function (item) {
       const live = item.selectedName
         ? ' אצל ' + item.selectedName + ': ' +
           (item.selectedTotal == null ? '—' : item.selectedTotal) +
           (item.selectedPer90 == null ? '' : ' · ' + item.selectedPer90 + '/90') + '.'
         : '';
-      return '<div class="' + (item.usedInScore ? '' : 'unused') + '" id="gloss-' + escapeHtml(item.field || item.type) + '"><dt>' +
-        '<button type="button" class="secondary" data-field="' + escapeHtml(item.field || '') + '">' +
+      const fieldName = item.field || item.type;
+      return '<div class="' + (item.usedInScore ? '' : 'unused') + '" id="gloss-' + escapeHtml(fieldName) + '"><dt>' +
+        '<button type="button" class="secondary" data-field="' + escapeHtml(item.field || '') + '"' +
+        ' title="הציגו את שדה ' + escapeHtml(fieldName) + ' ביומן ספירות האירועים"' +
+        ' aria-label="הציגו את שדה ' + escapeHtml(fieldName) + ' ביומן ספירות האירועים">' +
         escapeHtml(item.type) + ' — ' + escapeHtml(item.he) + '</button>' +
         ' <span class="badge">' + escapeHtml(item.feeds) + '</span>' +
         ' <code>' + escapeHtml(item.filePath || '') + '</code></dt><dd>' +
@@ -595,13 +809,37 @@
 
   function renderValidation(current) {
     const report = current.validation;
-    if (!report) return;
-    document.getElementById('validateStatus').textContent =
+    const hasRows = current.rows && current.rows.length > 0;
+    const outcomeSelect = document.getElementById('outcomeSelect');
+    const splitSelect = document.getElementById('splitSelect');
+    if (outcomeSelect) outcomeSelect.disabled = !hasRows;
+    if (splitSelect) splitSelect.disabled = !hasRows;
+    const resetValidation = document.getElementById('resetValidation');
+    if (resetValidation) {
+      const isDefault = outcomeSelect && outcomeSelect.value === 'assists' &&
+        splitSelect && splitSelect.value === 'groups';
+      resetValidation.disabled = isDefault || !hasRows;
+      resetValidation.setAttribute('title', isDefault
+        ? 'הגדרות האימות כבר בברירת המחדל (בישולים, בתים A–D מול E–H)'
+        : 'אפסו את יעד החיזוי ושיטת הפיצול לברירת המחדל (בישולים, בתים A–D מול E–H)');
+    }
+    const statusEl = document.getElementById('validateStatus');
+    const verdictEl = document.getElementById('validateVerdict');
+    const statsEl = document.getElementById('validateStats');
+    const tablesEl = document.getElementById('validateTables');
+    if (!report || !hasRows) {
+      statusEl.textContent = 'אין שחקנים שעוברים את סף הדקות לאימות.';
+      verdictEl.textContent = 'הורידו את סף הדקות במעבדה כדי לאמת את המדד מול מדגם מוחזק.';
+      statsEl.innerHTML = '';
+      tablesEl.innerHTML = '<p class="notice">הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות מול מדגם מוחזק.</p>';
+      return;
+    }
+    statusEl.textContent =
       (report.leaky ? 'דליפה. ' : 'יעד לא בנוסחה. ') + report.splitLabel +
       ' · אימון n=' + report.train.n + ' ρ=' + report.train.rho +
       ' · מבחן n=' + report.test.n + ' ρ=' + report.test.rho +
       (report.rhoDrop == null ? '' : ' · Δρ=' + report.rhoDrop);
-    document.getElementById('validateVerdict').textContent = report.verdict + ' ' + report.honesty;
+    verdictEl.textContent = report.verdict + ' ' + report.honesty;
     function rhoLine(label, stats) {
       const cr = stats.componentRho || {};
       return '<article class="lesson-step"><h3>' + label + '</h3>' +
@@ -704,40 +942,57 @@
   }
 
   function syncQuizControls(lesson) {
-    const map = {
-      ansUnusedField: 'unusedField',
-      ansPer90: 'per90',
-      ansCap: 'kanteCapped',
-      ansWeights: 'weightsManual',
-      ansBump: 'bumpCanMove',
-      ansSeason: 'splitIsSeason',
-      ansRho: 'whatMatters',
-      ansTerm: 'unusedTerm',
-      ansCommercial: 'commercial'
-    };
-    Object.keys(map).forEach(function (id) {
+    Object.keys(QUIZ_FIELDS).forEach(function (id) {
       const el = document.getElementById(id);
-      if (el && courseAnswers[map[id]]) el.value = courseAnswers[map[id]];
+      if (el && courseAnswers[QUIZ_FIELDS[id]]) el.value = courseAnswers[QUIZ_FIELDS[id]];
     });
   }
 
   function readQuizAnswers() {
-    const map = [
-      ['ansUnusedField', 'unusedField'],
-      ['ansPer90', 'per90'],
-      ['ansCap', 'kanteCapped'],
-      ['ansWeights', 'weightsManual'],
-      ['ansBump', 'bumpCanMove'],
-      ['ansSeason', 'splitIsSeason'],
-      ['ansRho', 'whatMatters'],
-      ['ansTerm', 'unusedTerm'],
-      ['ansCommercial', 'commercial']
-    ];
-    map.forEach(function (pair) {
-      const el = document.getElementById(pair[0]);
-      if (el) courseAnswers[pair[1]] = el.value;
+    Object.keys(QUIZ_FIELDS).forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) courseAnswers[QUIZ_FIELDS[id]] = el.value;
     });
     return courseAnswers;
+  }
+
+  function answeredCount() {
+    return Object.keys(courseAnswers).filter(function (key) {
+      return Boolean(courseAnswers[key]);
+    }).length;
+  }
+
+  // Keeps the reset button and the live status honest about how many quiz answers are stored.
+  function syncQuizStatus(justReset) {
+    const total = Object.keys(courseAnswers).length;
+    const answered = answeredCount();
+    const btn = document.getElementById('resetQuiz');
+    if (btn) {
+      btn.disabled = answered === 0;
+      btn.setAttribute('title', answered
+        ? 'מחקו ' + answered + ' תשובות שסומנו בשיעור'
+        : 'אין תשובות למחיקה — ענו קודם על שאלה בשיעור');
+    }
+    const status = document.getElementById('courseQuizStatus');
+    if (!status) return;
+    if (justReset) {
+      status.textContent = 'תשובות השיעור נמחקו. כל ' + total + ' השאלות פתוחות מחדש.';
+      return;
+    }
+    status.textContent = (answered
+      ? answered + '/' + total + ' שאלות נענו.'
+      : 'לא נענתה אף שאלה מתוך ' + total + '.') +
+      ' התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום.';
+  }
+
+  // Clears the DOM <select>s first: renderCurriculum re-reads them, so an un-cleared
+  // select on the visible lesson would write its old answer straight back in.
+  function resetQuizAnswers() {
+    Object.keys(QUIZ_FIELDS).forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    Object.keys(courseAnswers).forEach(function (key) { courseAnswers[key] = ''; });
   }
 
   function renderCurriculum(current) {
@@ -753,19 +1008,29 @@
     const idx = Math.min(lessons.length - 1, Math.max(0, current.spec.curriculumIndex || 0));
     document.getElementById('course').dataset.step = String(idx);
     const passedCount = lessons.filter(function (item) { return item.passed; }).length;
-    document.getElementById('courseProgress').textContent =
-      passedCount + '/' + lessons.length + ' צעדים עברו. סיום = יושרה, לא ρ גבוה.';
+    document.getElementById('courseProgress').textContent = lessons.length
+      ? 'צעד ' + (idx + 1) + ' מתוך ' + lessons.length + ' · ' +
+        passedCount + '/' + lessons.length + ' צעדים עברו. סיום = יושרה, לא ρ גבוה.'
+      : 'אין צעדי שיעור להצגה.';
+    syncQuizStatus();
     document.getElementById('courseNav').innerHTML = lessons.map(function (lesson, i) {
+      const state = lesson.passed ? 'עבר' : 'לא עבר';
+      const label = 'צעד ' + (i + 1) + ' מתוך ' + lessons.length + ': ' +
+        escapeHtml(lesson.title) + ' — ' + state;
       return '<button type="button" data-course="' + i + '"' +
         (i === idx ? ' aria-current="step"' : '') +
         (lesson.passed ? ' class="done"' : '') +
-        ' aria-label="' + escapeHtml(lesson.title) + '">' + (i + 1) + '</button>';
+        ' title="' + label + (i === idx ? ' (הצעד הנוכחי)' : '') + '"' +
+        ' aria-label="' + label + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-course="prev"' + (idx === 0 ? ' disabled' : '') + '>הקודם</button>' +
-      '<button type="button" class="secondary" data-course="next"' + (idx >= lessons.length - 1 ? ' disabled' : '') + '>הבא</button>';
+      '<button type="button" class="secondary" data-course="prev"' + (idx <= 0 || !lessons.length ? ' disabled' : '') +
+      ' title="' + (idx <= 0 || !lessons.length ? 'אתם בצעד הראשון' : 'חזרו לצעד ' + idx) + '">הקודם</button>' +
+      '<button type="button" class="secondary" data-course="next"' + (idx >= lessons.length - 1 || !lessons.length ? ' disabled' : '') +
+      ' title="' + (idx >= lessons.length - 1 || !lessons.length ? 'אתם בצעד האחרון' : 'המשיכו לצעד ' + (idx + 2)) + '">הבא</button>';
     const lesson = lessons[idx];
     if (!lesson) {
-      document.getElementById('courseRoot').innerHTML = '';
+      document.getElementById('courseRoot').innerHTML =
+        '<p class="notice">אין צעד שיעור להצגה כרגע. טענו מחדש את הדף או חזרו לדמו מונדיאל 2018.</p>';
       return;
     }
     const hintBtn = lesson.hint
@@ -787,6 +1052,12 @@
   }
 
   function renderFragility(current) {
+    const rows = current.rows || [];
+    if (!rows.length) {
+      selectedSwing.textContent = 'אין שחקנים שעברו את סף הדקות המינימלי.';
+      fragilityRoot.innerHTML = '<p class="notice">אין שחקנים מעל סף הדקות (' + escapeHtml(current.spec.minMinutes) + ' דקות). הורידו את סף הדקות במעבדה כדי לצפות בשבריריות.</p>';
+      return;
+    }
     const selectedId = current.selected && current.selected.id;
     const notes = [];
     (current.fragility || []).forEach(function (variant) {
@@ -797,16 +1068,62 @@
       ? (current.selected.name + (notes.length ? ' — ' + notes.join(' · ') : ' — השחקן לא זז בטופ־5 של אף דחיפה +10.'))
       : 'בחרו שחקן בטבלה כדי לעקוב אחריו כאן.';
     fragilityRoot.innerHTML = (current.fragility || []).map(function (variant) {
+      const currentVal = Number(current.spec[variant.key] || 0);
+      const isMax = currentVal >= 100;
+      const btnTitle = isMax
+        ? escapeHtml(variant.label) + ' כבר בערך מקסימלי (100)'
+        : 'בחנו ' + escapeHtml(variant.label) + ' במעבדה (העלו את המשקל ב-10)';
+      const testBtn = '<div class="actions"><button type="button" class="secondary" data-bump="' +
+        escapeHtml(variant.key) + '"' +
+        (isMax ? ' disabled' : '') +
+        ' title="' + btnTitle + '">' +
+        'בחנו ' + escapeHtml(variant.label) + ' במעבדה' +
+        '</button></div>';
       const items = variant.swings.length
         ? '<ol>' + variant.swings.map(function (row) {
-          const mark = row.id === selectedId ? ' ← הנבחר' : '';
-          return '<li>' + escapeHtml(row.name) + ' (' + escapeHtml(row.team || '') + '): #' +
+          const isSelected = row.id === selectedId;
+          const mark = isSelected ? ' <span class="badge">הנבחר</span>' : '';
+          return '<li>' +
+            '<button type="button" class="secondary" data-player-id="' + escapeHtml(row.id) + '"' +
+            ' title="בחרו את ' + escapeHtml(row.name) + ' בטבלה"' +
+            (isSelected ? ' aria-current="true"' : '') + '>' +
+            escapeHtml(row.name) + '</button> ' +
+            '(' + escapeHtml(row.team || '') + '): #' +
             escapeHtml(row.from) + ' → #' + escapeHtml(row.to) + ' (' +
             (row.deltaRank > 0 ? '+' : '') + escapeHtml(row.deltaRank) + ')' + mark + '</li>';
         }).join('') + '</ol>'
         : '<p class="muted">אין תזוזת דירוג ב־+10 הזה — נסו סף דקות אחר.</p>';
-      return '<article class="lesson-step"><h3>' + escapeHtml(variant.label) + '</h3>' + items + '</article>';
+      return '<article class="lesson-step"><h3>' + escapeHtml(variant.label) + '</h3>' + items + testBtn + '</article>';
     }).join('');
+  }
+
+  function syncByodControls() {
+    const fileInput = document.getElementById('userData');
+    const attestCheck = document.getElementById('userAttest');
+    const loadBtn = document.getElementById('loadUserData');
+    if (!loadBtn || !fileInput || !attestCheck) return;
+    const hasFile = Boolean(fileInput.files && fileInput.files.length > 0);
+    const isAttested = Boolean(attestCheck.checked);
+    loadBtn.disabled = !hasFile || !isAttested;
+    if (!hasFile) {
+      loadBtn.setAttribute('title', 'בחרו קובץ JSON או CSV מקומי להרצה');
+    } else if (!isAttested) {
+      loadBtn.setAttribute('title', 'סמנו אישור רישיון לפני הרצת הקובץ');
+    } else {
+      loadBtn.setAttribute('title', 'הריצו את המדד על ' + fileInput.files[0].name);
+    }
+  }
+
+  function renderByod(current) {
+    const restoreBtn = document.getElementById('restoreOpenData');
+    if (restoreBtn) {
+      const isOpenData = !current || current.provenance === 'STATSBOMB_OPEN_DATA';
+      restoreBtn.disabled = isOpenData;
+      restoreBtn.setAttribute('title', isOpenData
+        ? 'אתם כבר צופים בדמו מונדיאל 2018 (StatsBomb Open Data)'
+        : 'חזרו לתצוגת דמו מונדיאל 2018');
+    }
+    syncByodControls();
   }
 
   function renderAll(current) {
@@ -825,6 +1142,7 @@
     renderExport(current);
     renderGlossary(current);
     renderCurriculum(current);
+    renderByod(current);
     persistHash(current.spec);
   }
 
@@ -847,20 +1165,81 @@
     document.getElementById(id).addEventListener('input', recompute);
   });
   document.getElementById('normPos').addEventListener('change', recompute);
+  document.getElementById('posFilter').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);
+  document.getElementById('clearCompare').addEventListener('click', function () {
+    compareSelect.value = '';
+    if (view && view.spec) view.spec.compareId = '';
+    recompute();
+  });
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
   document.getElementById('filterUsedFields').addEventListener('change', function () {
     if (view) renderExplorer(view);
   });
+  document.getElementById('resetValidation').addEventListener('click', function () {
+    const outcomeSelect = document.getElementById('outcomeSelect');
+    const splitSelect = document.getElementById('splitSelect');
+    if (outcomeSelect) outcomeSelect.value = 'assists';
+    if (splitSelect) splitSelect.value = 'groups';
+    recompute();
+    const status = document.getElementById('validateStatus');
+    if (status) {
+      status.textContent = 'הגדרות האימות אופסו לברירת המחדל (בישולים, בתים A–D מול E–H). ' + (status.textContent || '');
+    }
+  });
+  const playerSearch = document.getElementById('playerSearch');
+  const clearSearch = document.getElementById('clearSearch');
+  if (playerSearch) {
+    playerSearch.addEventListener('input', function () {
+      if (view) renderTable(view);
+    });
+    playerSearch.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        playerSearch.value = '';
+        if (view) renderTable(view);
+      }
+    });
+  }
+  if (clearSearch) {
+    clearSearch.addEventListener('click', function () {
+      if (playerSearch) {
+        playerSearch.value = '';
+        playerSearch.focus();
+      }
+      if (view) renderTable(view);
+    });
+  }
   document.getElementById('applyHint').addEventListener('click', function () {
     const hint = ScoutAIDemo.DEFENDER_EXERCISE.hint;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), hint));
     recompute();
+    const summary = document.getElementById('exerciseSummary');
+    if (summary) {
+      summary.textContent = 'נקודת ההתחלה הוחלה (70/20/10 + נרמול עמדה). ' + (summary.textContent || '');
+    }
+  });
+  document.getElementById('resetExercise').addEventListener('click', function () {
+    const currentSpec = readSpecFromControls();
+    writeSpecToControls(Object.assign({}, currentSpec, {
+      grit: ScoutAIDemo.DEFAULT_METRIC.grit,
+      involvement: ScoutAIDemo.DEFAULT_METRIC.involvement,
+      clutch: ScoutAIDemo.DEFAULT_METRIC.clutch,
+      normalizePosition: false
+    }));
+    recompute();
+    const summary = document.getElementById('exerciseSummary');
+    if (summary) {
+      summary.textContent = 'התרגיל אופס למדד ברירת המחדל (40/30/30). ' + (summary.textContent || '');
+    }
   });
   document.getElementById('copyMethod').addEventListener('click', function () {
     const text = document.getElementById('methodText').textContent;
     const status = document.getElementById('exportStatus');
+    if (!view || !view.exportBundle || !text) {
+      status.textContent = 'אין פסקת מתודולוגיה זמינה להעתקה.';
+      return;
+    }
     const done = function () { status.textContent = 'פסקת המתודולוגיה הועתקה. לא נשלח דבר.'; };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(function () {
@@ -871,7 +1250,10 @@
     }
   });
   document.getElementById('downloadJson').addEventListener('click', function () {
-    if (!view || !view.exportBundle) return;
+    if (!view || !view.exportBundle) {
+      document.getElementById('exportStatus').textContent = 'אין חבילת ייצוא זמינה להורדה.';
+      return;
+    }
     const blob = new Blob([JSON.stringify(view.exportBundle, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -930,7 +1312,7 @@
   });
   lessonNav.addEventListener('click', function (event) {
     const button = event.target.closest('button[data-step]');
-    if (!button || !view) return;
+    if (!button || button.disabled || !view) return;
     const token = button.getAttribute('data-step');
     if (token === 'next') lessonIndex = Math.min((view.lesson || []).length - 1, lessonIndex + 1);
     else if (token === 'prev') lessonIndex = Math.max(0, lessonIndex - 1);
@@ -939,7 +1321,7 @@
   });
   document.getElementById('courseNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-course]');
-    if (!button || !view) return;
+    if (!button || button.disabled || !view) return;
     const token = button.getAttribute('data-course');
     const max = (ScoutAIDemo.CURRICULUM_LESSONS || []).length - 1;
     let next = view.spec.curriculumIndex || 0;
@@ -957,6 +1339,16 @@
     readQuizAnswers();
     if (view) renderCurriculum(view);
   });
+  document.getElementById('resetQuiz').addEventListener('click', function () {
+    resetQuizAnswers();
+    if (view) renderCurriculum(view);
+    // renderCurriculum just reset the status to the idle text; say what actually happened.
+    syncQuizStatus(true);
+    // The button disables itself once there is nothing left to clear, so hand focus to the
+    // first question of the visible lesson instead of dropping it on <body>.
+    const firstSelect = document.getElementById('courseRoot').querySelector('select');
+    if (firstSelect && firstSelect.focus) firstSelect.focus();
+  });
   document.getElementById('courseRoot').addEventListener('click', function (event) {
     if (!event.target.closest('#courseHint') || !view) return;
     const lesson = ScoutAIDemo.CURRICULUM_LESSONS[view.spec.curriculumIndex || 0];
@@ -964,14 +1356,80 @@
     writeSpecToControls(Object.assign({}, readSpecFromControls(), lesson.hint));
     recompute();
   });
+  fragilityRoot.addEventListener('click', function (event) {
+    const bumpBtn = event.target.closest('button[data-bump]');
+    if (bumpBtn) {
+      const key = bumpBtn.getAttribute('data-bump');
+      const inputMap = { grit: 'wGrit', involvement: 'wInv', clutch: 'wClutch' };
+      const inputId = inputMap[key];
+      const slider = inputId && document.getElementById(inputId);
+      if (slider) {
+        const nextVal = Math.min(100, Math.round(Number(slider.value || 0) + 10));
+        slider.value = nextVal;
+        recompute();
+      }
+      return;
+    }
+    const playerBtn = event.target.closest('button[data-player-id]');
+    if (playerBtn) {
+      const pid = playerBtn.getAttribute('data-player-id');
+      if (pid) {
+        tableRoot.dataset.selected = pid;
+        recompute();
+        const row = tableRoot.querySelector('tr[data-id="' + pid + '"]');
+        if (row && row.focus) row.focus();
+      }
+    }
+  });
+  const filterGlossAll = document.getElementById('filterGlossAll');
+  const filterGlossUsed = document.getElementById('filterGlossUsed');
+  const filterGlossUnused = document.getElementById('filterGlossUnused');
+  if (filterGlossAll) {
+    filterGlossAll.addEventListener('click', function () {
+      glossaryFilter = 'all';
+      if (view) renderGlossary(view);
+    });
+  }
+  if (filterGlossUsed) {
+    filterGlossUsed.addEventListener('click', function () {
+      glossaryFilter = 'used';
+      if (view) renderGlossary(view);
+    });
+  }
+  if (filterGlossUnused) {
+    filterGlossUnused.addEventListener('click', function () {
+      glossaryFilter = 'unused';
+      if (view) renderGlossary(view);
+    });
+  }
   document.getElementById('glossaryRoot').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-field]');
     if (!button) return;
     const field = button.getAttribute('data-field');
+    const explorerSection = document.getElementById('explorer');
+    const explorerStatus = document.getElementById('explorerStatus');
+    const explorerTable = document.getElementById('explorerTable');
+    if (explorerTable) {
+      Array.prototype.slice.call(explorerTable.querySelectorAll('tr.hl')).forEach(function (r) {
+        r.classList.remove('hl');
+      });
+    }
     const row = document.getElementById('field-' + field);
     if (row && row.scrollIntoView) {
       row.classList.add('hl');
+      row.setAttribute('tabindex', '-1');
       row.scrollIntoView({ block: 'center' });
+      row.focus();
+      if (explorerStatus && view && view.selected) {
+        explorerStatus.textContent = 'שדה ' + field + ' מודגש ביומן הספירות של ' + view.selected.name + '.';
+      }
+    } else {
+      if (explorerStatus) {
+        explorerStatus.textContent = 'בחרו שחקן בטבלה כדי לאתר את השדה ' + field + ' ביומן הספירות.';
+      }
+      if (explorerSection && explorerSection.scrollIntoView) {
+        explorerSection.scrollIntoView({ block: 'start' });
+      }
     }
   });
   window.addEventListener('hashchange', function () {
@@ -1003,6 +1461,10 @@
       fileName: parsed.source && parsed.source.dataset
     });
     tableRoot.dataset.selected = '';
+    const searchInput = document.getElementById('playerSearch');
+    if (searchInput) searchInput.value = '';
+    const posFilter = document.getElementById('posFilter');
+    if (posFilter) posFilter.value = '';
     if (parsed.provenance !== 'STATSBOMB_OPEN_DATA') {
       document.getElementById('splitSelect').value = 'hash';
     }
@@ -1038,6 +1500,8 @@
     };
     reader.readAsArrayBuffer(file);
   });
+  document.getElementById('userData').addEventListener('change', syncByodControls);
+  document.getElementById('userAttest').addEventListener('change', syncByodControls);
 
   document.getElementById('loadSynthetic').addEventListener('click', function () {
     const byodStatus = document.getElementById('byodStatus');
@@ -1059,6 +1523,10 @@
       tableRoot.dataset.selected = '';
       const filterUsed = document.getElementById('filterUsedFields');
       if (filterUsed) filterUsed.checked = false;
+      const searchInput = document.getElementById('playerSearch');
+      if (searchInput) searchInput.value = '';
+      const posFilter = document.getElementById('posFilter');
+      if (posFilter) posFilter.value = '';
       document.getElementById('splitSelect').value = 'groups';
       recompute();
       byodStatus.textContent = 'STATSBOMB_OPEN_DATA: חזרתם לדמו מונדיאל 2018. לימוד בלבד, לא למסחר.';

@@ -37,3 +37,25 @@ for (const [file, self] of Object.entries(PAGES)) {
     assert.deepEqual(missing, [], `${file} has no link to ${missing.join(', ')}`);
   });
 }
+
+test('offer.html exposes accessible section landmarks, table of contents, and skip links', () => {
+  const html = fs.readFileSync(path.join(root, 'offer.html'), 'utf8');
+  assert.match(html, /<a class="skip" href="#offer">דלגו להצעה<\/a>/);
+  assert.match(html, /<a class="skip" href="#scope">דלגו למה נמכר<\/a>/);
+  assert.match(html, /<a class="skip" href="#pricing">דלגו למחיר המוצע<\/a>/);
+  assert.match(html, /<a class="skip" href="#deliverables">דלגו למה מקבלים<\/a>/);
+  assert.match(html, /<a class="skip" href="#contact">דלגו לאיך פונים<\/a>/);
+  assert.match(html, /<nav class="toc" aria-label="מעבר לחלקי ההצעה">/);
+  assert.match(html, /<a href="#offer">הסדנה<\/a>/);
+  assert.match(html, /<a href="#scope">מה נמכר<\/a>/);
+  assert.match(html, /<a href="#pricing">מחיר מוצע<\/a>/);
+  assert.match(html, /<a href="#deliverables">מה מקבלים<\/a>/);
+  assert.match(html, /<a href="#contact">איך פונים<\/a>/);
+  assert.match(html, /<a href="#disclosure">גילוי נאות<\/a>/);
+  assert.match(html, /<section class="card" id="scope">/);
+  assert.match(html, /<section class="card" id="pricing">/);
+  assert.match(html, /<section class="card" id="deliverables">/);
+  assert.match(html, /<section class="card" id="contact">/);
+  assert.match(html, /<section class="card" id="disclosure">/);
+  assert.match(html, /min-height:\s*44px/);
+});
