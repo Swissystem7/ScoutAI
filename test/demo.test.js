@@ -385,16 +385,113 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /בחרו שחקן בטבלה כדי לעקוב אחריו כאן/);
   assert.match(html, /<a href="#ranking">דירוג חי<\/a>/);
   assert.match(html, /<a href="#lesson">שיעור שקוף<\/a>/);
+  assert.match(html, /<a href="#exercise">תרגיל מודרך<\/a>/);
   assert.match(html, /<a href="#export">ייצוא המדד<\/a>/);
+  assert.match(html, /<a class="skip" href="#exercise">דלגו לתרגיל המודרך<\/a>/);
   assert.match(html, /<a class="skip" href="#ranking">דלגו לדירוג החי<\/a>/);
+  assert.match(html, /<a class="skip" href="#fragility">דלגו למעבדת השבריריות<\/a>/);
+  assert.match(html, /<a class="skip" href="#lesson">דלגו לשיעור השקוף<\/a>/);
+  assert.match(html, /data-bump/);
+  assert.match(html, /data-player-id/);
+  assert.match(html, /בחנו.*במעבדה/);
+  assert.match(html, /<section class="card" id="exercise">/);
+  assert.match(html, /אין נתוני תרגיל זמינים עבור השכבה הנוכחית/);
   assert.match(html, /<section class="card" id="ranking">/);
   assert.match(html, /<section class="card" id="lesson">/);
   assert.match(html, /<section class="card" id="export">/);
+  assert.match(html, /id="lessonStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לראות את שלבי השיעור השקוף/);
+  assert.match(html, /id="exerciseSummary"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל/);
+  assert.match(html, /document\.getElementById\('resetExercise'\)\.addEventListener\('click'/);
+  assert.match(html, /התרגיל אופס למדד ברירת המחדל/);
+  assert.match(html, /id="byodStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="courseQuizStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /<button id="resetQuiz" class="secondary" type="button" disabled title="[^"]+">נקו את תשובות השיעור<\/button>/);
+  assert.match(html, /השיעור נטען מ־/);
+  assert.match(html, /טוען את התקדמות השיעור/);
+  assert.match(html, /טוען את צעדי השיעור המלא/);
+  assert.match(html, /!button \|\| button\.disabled \|\| !view/);
+  assert.match(html, /data-course="next"' \+ \(idx >= lessons\.length - 1 \|\| !lessons\.length/);
+  assert.match(html, /אין צעד שיעור להצגה כרגע/);
+  assert.match(html, /'צעד '.*' מתוך '/);
+  assert.match(html, /aria-label="' \+ label/);
+  assert.match(html, /title="' \+ label/);
+  assert.match(html, /הצעד הנוכחי/);
+  assert.match(html, /אתם בצעד הראשון/);
+  assert.match(html, /אתם בצעד האחרון/);
+  assert.match(html, /מחקו ' \+ answered \+ ' תשובות/);
+  assert.match(html, /התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום/);
+  assert.match(html, /id="validateStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
+  assert.match(html, /<button id="resetMetric" class="secondary" type="button" disabled title="המדד כבר מוגדר כברירת המחדל \(40\/30\/30\)">איפוס למדד ברירת מחדל \(40\/30\/30\)<\/button>/);
+  assert.match(html, /document\.getElementById\('resetMetric'\)\.addEventListener\('click'/);
+  assert.match(html, /המדד אופס בהצלחה לברירת המחדל/);
+  assert.match(html, /<button id="clearCompare" class="secondary" type="button" disabled>בטלו השוואה<\/button>/);
+  assert.match(html, /document\.getElementById\('clearCompare'\)\.addEventListener\('click'/);
+  assert.match(html, /clearCompare\.disabled = !current\.selected \|\| !radar \|\| !radar\.b/);
+  assert.match(html, /בטלו את השוואת/);
+  assert.match(html, /<button id="copyMethod"[^>]*disabled/);
+  assert.match(html, /<button id="downloadJson"[^>]*disabled/);
+  assert.match(html, /<button id="copyJson" class="secondary" type="button" disabled>העתיקו JSON<\/button>/);
+  assert.match(html, /העתיקו את חבילת ה-JSON המקומית ללוח/);
+  assert.match(html, /הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה/);
+  assert.match(html, /הורידו את סף הדקות במעבדה כדי לחשב קורלציה ואימות/);
+  assert.match(html, /<button id="restoreOpenData" class="secondary" type="button" disabled>חזרו לדמו מונדיאל 2018<\/button>/);
+  assert.match(html, /<button id="loadUserData" type="button" disabled>הריצו על הקובץ שלי<\/button>/);
+  assert.match(html, /<button id="loadUserData"[^>]*disabled/);
+  assert.match(html, /<button id="clearUserData"[^>]*class="secondary"[^>]*disabled[^>]*>נקו קובץ<\/button>/);
+  assert.match(html, /<button id="restoreOpenData"[^>]*class="secondary"[^>]*disabled[^>]*>חזרו לדמו מונדיאל 2018<\/button>/);
+  assert.match(html, /<button id="filterGlossAll" class="secondary" type="button" aria-pressed="true"/);
+  assert.match(html, /<button id="filterGlossUsed" class="secondary" type="button" aria-pressed="false"/);
+  assert.match(html, /<button id="filterGlossUnused" class="secondary" type="button" aria-pressed="false"/);
+  assert.match(html, /id="glossaryStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /לא נמצאו מונחים התואמים לסינון הנוכחי/);
+  assert.match(html, /<label for="posFilter">סינון לפי קבוצת עמדה<\/label>/);
+  assert.match(html, /<select id="posFilter" aria-controls="playerTable">/);
+  assert.match(html, /<option value="UT">/);
+  assert.match(html, /document\.getElementById\('posFilter'\)\.addEventListener\('change', recompute\)/);
+  assert.match(html, /ScoutAIDemo\.filterByPosition\(rows, posVal\)/);
+  assert.match(html, /אין שחקנים בעמדה זו/);
   assert.match(html, /בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה/);
   assert.match(html, /בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא/);
+  assert.match(html, /<button id="resetValidation" class="secondary" type="button" disabled title="הגדרות האימות כבר בברירת המחדל/);
+  assert.match(html, /document\.getElementById\('resetValidation'\)\.addEventListener\('click'/);
+  assert.match(html, /הגדרות האימות אופסו לברירת המחדל/);
   assert.match(html, /button:disabled/);
+  assert.match(html, /<input id="playerSearch" type="search"[^>]*aria-controls="playerTable"/);
+  assert.match(html, /<button id="clearSearch" class="secondary" type="button" disabled>נקה סינון<\/button>/);
+  assert.match(html, /לא נמצאו שחקנים התואמים לחיפוש/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
+  assert.match(html, /<a class="skip" href="#explorer">דלגו לחוקר הספירות<\/a>/);
+  assert.match(html, /<input id="filterUsedFields" type="checkbox" aria-controls="explorerTable">/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לסנן את שדות יומן הספירות/);
+  assert.match(html, /מוצגים כל .* השדות/);
+  assert.match(html, /lessonRoot\.innerHTML = '<article class="lesson-step"><h3>בחרו שחקן<\/h3>/);
+  assert.match(html, /aria-label="שלב '\s*\+\s*\(i \+ 1\)\s*\+\s*': '\s*\+\s*escapeHtml\(step\.title\)/);
+  assert.match(html, /aria-label="הציגו את שדה [^"]+ ביומן ספירות האירועים"/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לאתר את השדה/);
+  assert.match(html, /בחרו שחקן בטבלה כדי לבחור שחקן להשוואה/);
+});
+
+test('glossary terms can be filtered by score usage with count badges and live status', () => {
+  const allTerms = EVENT_GLOSSARY;
+  assert.equal(allTerms.length, 11);
+  const used = allTerms.filter((item) => item.usedInScore);
+  const unused = allTerms.filter((item) => !item.usedInScore);
+  assert.equal(used.length, 9);
+  assert.equal(unused.length, 2);
+
+  for (const item of used) {
+    assert.ok(['Grit', 'Involvement', 'Clutch'].includes(item.feeds), `${item.type} should feed a formula component`);
+    assert.ok(item.recipeKey, `${item.type} should have a recipeKey for live calculation`);
+  }
+
+  for (const item of unused) {
+    assert.equal(item.usedInScore, false);
+    assert.ok(item.feeds === 'סף דקות' || item.feeds === 'לא בנוסחה');
+  }
 });
 
 const DEFENDERS = {

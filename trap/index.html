@@ -11,9 +11,10 @@
     .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
     .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p{line-height:1.65}
     label{display:block;margin:14px 0 6px;font-weight:700}input,button,select,textarea{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
-    input[type=text]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}
+    input[type=text]{width:100%}button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:14px}button:disabled{opacity:0.6;cursor:not-allowed}
     .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
     button.secondary{background:#fff;color:#145c3d;border:2px solid #145c3d;margin-inline-end:8px}
+    .toc{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}.toc a{color:#dff4e7;font-weight:700;text-decoration:underline}
     .nav{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 0}.nav a{color:#dff4e7;font-weight:700}
     .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:220px 1fr 52px;gap:10px;align-items:center}
     .slider-row label{margin:0}.slider-row input[type=range]{width:100%;padding:0;border:0;accent-color:#145c3d}
@@ -37,19 +38,27 @@
     footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
     .archive{direction:ltr;text-align:left;background:#f3f6f1;border-radius:12px;padding:12px;overflow:auto;font-size:.85rem;white-space:pre-wrap}
     .status{min-height:1.5em;font-weight:700}
-    button,select,input[type=text],.nav a{min-height:44px}
-    .nav a{display:inline-flex;align-items:center}
+    button,select,input[type=text],.nav a,.toc a{min-height:44px}
+    .nav a,.toc a{display:inline-flex;align-items:center}
+    .toc a{padding:8px 10px}
     @media(max-width:650px){.slider-row{grid-template-columns:1fr}.banner{position:static;padding:12px}.shell{padding:12px}}
   </style>
 </head>
 <body>
 <a class="skip" href="#sandbox">דלגו לארגז הפיצ'ר</a>
+<a class="skip" href="#circular">דלגו להוכחה מעגלית</a>
+<a class="skip" href="#falsify">דלגו למבחן ההפרכה</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג השיעור">
     <code>LESSON</code> מלכודת הפיצ'רים המשכנעים — שיעור על מדדים שממציאים צידוק.
     <code>ATTIC_CASE</code> המקרה הוא <code>attic/proof-demo.js</code>, לא ראיה מדעית.
     <code>NO_FACE_MODEL</code> הדף לא מנתח פנים, לא מזהה פרצופים, ואין בו תמונות של אנשים.
-    <div class="nav">
+    <nav class="toc" aria-label="מעבר לחלקי השיעור">
+      <a href="#sandbox">1. הוסף פיצ'ר</a>
+      <a href="#circular">2. הוכחה מעגלית</a>
+      <a href="#falsify">3. מבחן ההפרכה</a>
+    </nav>
+    <div class="nav" aria-label="ניווט חיצוני">
       <a href="../">חזרה למעבדת המדד</a>
       <a href="../licence.html">רישיון</a>
       <a href="../offer.html">סדנה</a>
@@ -79,7 +88,7 @@
     <p class="muted">בסיס = סטט בלבד (משקל 0). Δ הוא השינוי מול הבסיס הזה.</p>
     <div class="actions">
       <button id="boostLow" class="secondary" type="button">מלכודת מוכנה: חזקו את החלשים בסטט</button>
-      <button id="resetSandbox" class="secondary" type="button">איפוס ארגז</button>
+      <button id="resetSandbox" class="secondary" type="button" disabled>איפוס ארגז</button>
     </div>
     <p id="sandboxStatus" class="status" role="status" aria-live="polite"></p>
     <h3>ערכים שהקלדתם</h3>
@@ -94,7 +103,7 @@
     <h2>2. הוכחה מעגלית</h2>
     <p>שחזור של המקרה מ־<code>attic/proof-demo.js</code>. לא מריצים את מנוע הפנים הישן. מציגים את המספרים שהוקלדו, ומראים איך כיול מייצר «עבר».</p>
     <div id="walkNav" class="lesson-nav" role="toolbar" aria-label="צעדי ההוכחה המעגלית"></div>
-    <div id="walkRoot" class="lesson"></div>
+    <div id="walkRoot" class="lesson" role="region" aria-live="polite" aria-label="שלב ההוכחה המעגלית"></div>
     <div class="sliders">
       <div class="slider-row">
         <label id="wAtticLabel" for="wAttic">משקל הפיצ'ר בשיחזור</label>
@@ -106,7 +115,7 @@
     <div id="atticValueSliders" class="sliders"></div>
     <div class="actions">
       <button id="applyArchive" class="secondary" type="button">החילו את המספרים שהוקלדו בארכיון</button>
-      <button id="resetAttic" class="secondary" type="button">החזירו ל־50/50/50</button>
+      <button id="resetAttic" class="secondary" type="button" disabled>החזירו ל־50/50/50</button>
     </div>
     <p id="atticProof" class="status" role="status" aria-live="polite"></p>
     <div id="atticRank" class="table-wrap"></div>
@@ -139,6 +148,10 @@
       </div>
     </div>
     <ul id="checkRoot" class="checks"></ul>
+    <div class="actions">
+      <button id="resetLabSliders" class="secondary" type="button" disabled>איפוס משקלות מעבדה (40/30/30)</button>
+      <button id="resetFalsify" class="secondary" type="button" disabled>איפוס תשובות למבחן ההפרכה</button>
+    </div>
     <p id="checkSummary" class="status" role="status" aria-live="polite"></p>
   </section>
 
@@ -203,12 +216,12 @@
         return '<div class="slider-row">' +
           '<label for="v-' + escapeHtml(player.id) + '">' + escapeHtml(player.name) +
           '<div class="muted">סטט ' + escapeHtml(player.statScore) + ' · ' + escapeHtml(player.note) + '</div></label>' +
-          '<input id="v-' + escapeHtml(player.id) + '" data-id="' + escapeHtml(player.id) + '" type="range" min="0" max="100" value="' + val + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + val + '">' +
+          '<input id="v-' + escapeHtml(player.id) + '" data-id="' + escapeHtml(player.id) + '" type="range" min="0" max="100" value="' + val + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + val + '" aria-valuetext="' + escapeHtml(player.name) + ', ציון מומצא ' + val + '">' +
           '<strong id="v-' + escapeHtml(player.id) + 'Val">' + val + '</strong></div>';
       }).join('');
     } else {
       T.SANDBOX_PLAYERS.forEach(function (player) {
-        syncRange('v-' + player.id, spec.values[player.id]);
+        syncRange('v-' + player.id, spec.values[player.id], player.name + ', ציון מומצא ' + spec.values[player.id]);
       });
     }
     const swings = view.swings;
@@ -219,7 +232,7 @@
           escapeHtml(row.rank) + ' (' + dir + ' ' + escapeHtml(Math.abs(row.deltaRank)) +
           ' מקומות, Δציון ' + (row.deltaScore > 0 ? '+' : '') + escapeHtml(row.deltaScore) + ')</li>';
       }).join('') + '</ol>'
-      : '<p class="muted">אין תזוזה. העלו משקל או שנו ערכים — אחרת זה רק הסטט.</p>';
+      : '<p class="notice">אין תזוזה בדירוג. העלו את משקל הפיצ\'ר או שנו ערכים בסליידרים כדי לבדוק מי יקפוץ.</p>';
     document.getElementById('rankRoot').innerHTML =
       '<table><caption>דירוג לפי סטט + הפיצ\'ר שהמצאתם</caption><thead><tr>' +
       '<th scope="col">דירוג</th><th scope="col">שחקן</th><th scope="col">סטט</th>' +
@@ -242,6 +255,24 @@
           return row.name + ' (+' + row.deltaRank + ')';
         }).join(', ') + '.'
         : 'יש משקל לפיצ\'ר, אבל הערכים עדיין לא מזיזים דירוג.');
+    const boostLow = document.getElementById('boostLow');
+    const resetSandbox = document.getElementById('resetSandbox');
+    if (boostLow) {
+      const isBoosted = spec.weight === 70 && spec.name === 'מלכודת: אופי של מי שהסטט פספס';
+      boostLow.disabled = isBoosted;
+      boostLow.setAttribute('title', isBoosted
+        ? 'מלכודת חיזוק החלשים כבר מוחלת'
+        : 'מלכודת מוכנה: חזקו את החלשים בסטט');
+    }
+    if (resetSandbox) {
+      const isClean = !sandboxTouched && spec.weight === 0 &&
+        spec.name === 'נחישות בלתי ניתנת למדידה' &&
+        T.SANDBOX_PLAYERS.every(function (p) { return sandboxValues[p.id] === 50; });
+      resetSandbox.disabled = isClean;
+      resetSandbox.setAttribute('title', isClean
+        ? 'ארגז הפיצ\'ר כבר בברירת המחדל'
+        : 'איפוס כל נתוני ארגז הפיצ\'ר');
+    }
     renderFalsify();
   }
 
@@ -250,10 +281,11 @@
     if (walkIndex >= steps.length) walkIndex = 0;
     document.getElementById('walkNav').innerHTML = steps.map(function (step, i) {
       return '<button type="button" data-step="' + i + '"' +
-        (i === walkIndex ? ' aria-current="step"' : '') + '>' + (i + 1) + '</button>';
+        (i === walkIndex ? ' aria-current="step"' : '') +
+        ' aria-label="שלב ' + (i + 1) + ': ' + escapeHtml(step.title) + '">' + (i + 1) + '</button>';
     }).join('') +
-      '<button type="button" class="secondary" data-step="prev">הקודם</button>' +
-      '<button type="button" class="secondary" data-step="next">הבא</button>';
+      '<button type="button" class="secondary" data-step="prev"' + (walkIndex === 0 ? ' disabled' : '') + '>הקודם</button>' +
+      '<button type="button" class="secondary" data-step="next"' + (walkIndex >= steps.length - 1 ? ' disabled' : '') + '>הבא</button>';
     const step = steps[walkIndex];
     document.getElementById('walkRoot').innerHTML =
       '<article class="lesson-step"><h3>' + escapeHtml(step.title) + '</h3><p>' +
@@ -277,12 +309,12 @@
           escapeHtml(player.momentumRaw) + ' · ממוצע מוקלד ' + escapeHtml(player.archivedInvented) +
           '</div></label>' +
           '<input id="a-' + escapeHtml(player.id) + '" data-attic="' + escapeHtml(player.id) +
-          '" type="range" min="0" max="100" value="' + val + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + val + '">' +
+          '" type="range" min="0" max="100" value="' + val + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + val + '" aria-valuetext="' + escapeHtml(player.name) + ', פיצ\'ר מוקלד ' + val + '">' +
           '<strong id="a-' + escapeHtml(player.id) + 'Val">' + val + '</strong></div>';
       }).join('');
     } else {
       T.ATTIC_PLAYERS.forEach(function (player) {
-        syncRange('a-' + player.id, atticValues[player.id]);
+        syncRange('a-' + player.id, atticValues[player.id], player.name + ', פיצ\'ר מוקלד ' + atticValues[player.id]);
       });
     }
     document.getElementById('atticProof').textContent = view.proofLine + ' ' + view.formula;
@@ -309,6 +341,24 @@
       }).join('\n\n') +
       '\n\nassertion: ' + T.ATTIC_SOURCE.assertion +
       '\n' + T.ATTIC_SOURCE.review;
+    const applyArchive = document.getElementById('applyArchive');
+    const resetAttic = document.getElementById('resetAttic');
+    if (applyArchive) {
+      const isArchiveApplied = spec.weight === 80 && walkIndex === 3 &&
+        atticValues.kante === 85 && atticValues.vardy === 80 && atticValues.flashy === 20;
+      applyArchive.disabled = isArchiveApplied;
+      applyArchive.setAttribute('title', isArchiveApplied
+        ? 'מספרי הארכיון כבר מוחלים (משקל 80)'
+        : 'החילו את המספרים שהוקלדו בארכיון');
+    }
+    if (resetAttic) {
+      const isCleanAttic = spec.weight === 0 && !document.getElementById('atticUpside').checked &&
+        atticValues.kante === 50 && atticValues.vardy === 50 && atticValues.flashy === 50;
+      resetAttic.disabled = isCleanAttic;
+      resetAttic.setAttribute('title', isCleanAttic
+        ? 'שחזור הארכיון כבר בברירת המחדל (50/50/50)'
+        : 'החזירו ל־50/50/50');
+    }
   }
 
   function renderFalsify() {
@@ -353,6 +403,24 @@
         '<div class="muted">' + escapeHtml(item.why) + ' ' + escapeHtml(item.detail) + '</div></li>';
     }).join('');
     document.getElementById('checkSummary').textContent = report.summary;
+    const resetLabSliders = document.getElementById('resetLabSliders');
+    if (resetLabSliders) {
+      const isLabDefault = Number(document.getElementById('labGrit').value) === 40 &&
+        Number(document.getElementById('labInv').value) === 30 &&
+        Number(document.getElementById('labClutch').value) === 30;
+      resetLabSliders.disabled = isLabDefault;
+      resetLabSliders.setAttribute('title', isLabDefault
+        ? 'משקלות המעבדה כבר בברירת המחדל (40/30/30)'
+        : 'החזירו את משקלות המעבדה ל־40/30/30');
+    }
+    const resetFalsify = document.getElementById('resetFalsify');
+    if (resetFalsify) {
+      const hasAnswers = Object.keys(answers).length > 0;
+      resetFalsify.disabled = !hasAnswers;
+      resetFalsify.setAttribute('title', hasAnswers
+        ? 'איפוס כל התשובות הידניות במבחן ההפרכה'
+        : 'אין תשובות ידניות לאיפוס — הבדיקה מציגה ערכים מוסקים');
+    }
   }
 
   function bindDynamic() {
@@ -415,7 +483,7 @@
   });
   document.getElementById('walkNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-step]');
-    if (!button) return;
+    if (!button || button.disabled) return;
     const token = button.getAttribute('data-step');
     if (token === 'next') walkIndex = Math.min(T.WALKTHROUGH_STEPS.length - 1, walkIndex + 1);
     else if (token === 'prev') walkIndex = Math.max(0, walkIndex - 1);
@@ -424,6 +492,16 @@
   });
   ['labGrit', 'labInv', 'labClutch'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', renderFalsify);
+  });
+  document.getElementById('resetLabSliders').addEventListener('click', function () {
+    document.getElementById('labGrit').value = 40;
+    document.getElementById('labInv').value = 30;
+    document.getElementById('labClutch').value = 30;
+    renderFalsify();
+  });
+  document.getElementById('resetFalsify').addEventListener('click', function () {
+    answers = {};
+    renderFalsify();
   });
 
   renderSandbox();
