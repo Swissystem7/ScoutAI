@@ -38,6 +38,30 @@ for (const [file, self] of Object.entries(PAGES)) {
   });
 }
 
+test('licence.html exposes accessible section landmarks, table of contents, and skip links', () => {
+  const html = fs.readFileSync(path.join(root, 'licence.html'), 'utf8');
+  assert.match(html, /<a class="skip" href="#licence-overview">דלגו לסקירת הרישיון<\/a>/);
+  assert.match(html, /<a class="skip" href="#quotes">דלגו לציטוטים מההסכם<\/a>/);
+  assert.match(html, /<a class="skip" href="#allowed">דלגו למה מותר<\/a>/);
+  assert.match(html, /<a class="skip" href="#prohibited">דלגו למה אסור<\/a>/);
+  assert.match(html, /<a class="skip" href="#layers">דלגו לשכבות הרישיון<\/a>/);
+  assert.match(html, /<a class="skip" href="#enforcement">דלגו לאכיפה בדמו<\/a>/);
+  assert.match(html, /<nav class="toc" aria-label="מעבר לחלקי הרישיון">/);
+  assert.match(html, /<a href="#licence-overview">סקירת הרישיון<\/a>/);
+  assert.match(html, /<a href="#quotes">ציטוטים מההסכם<\/a>/);
+  assert.match(html, /<a href="#allowed">מה מותר<\/a>/);
+  assert.match(html, /<a href="#prohibited">מה אסור<\/a>/);
+  assert.match(html, /<a href="#layers">שכבות רישיון<\/a>/);
+  assert.match(html, /<a href="#enforcement">אכיפה בדמו<\/a>/);
+  assert.match(html, /<section class="card" id="licence-overview">/);
+  assert.match(html, /<section class="card" id="quotes">/);
+  assert.match(html, /<section class="card" id="allowed">/);
+  assert.match(html, /<section class="card" id="prohibited">/);
+  assert.match(html, /<section class="card" id="layers">/);
+  assert.match(html, /<section class="card" id="enforcement">/);
+  assert.match(html, /min-height:\s*44px/);
+});
+
 test('offer.html exposes accessible section landmarks, table of contents, and skip links', () => {
   const html = fs.readFileSync(path.join(root, 'offer.html'), 'utf8');
   assert.match(html, /<a class="skip" href="#offer">דלגו להצעה<\/a>/);
