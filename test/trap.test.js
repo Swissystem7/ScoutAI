@@ -232,6 +232,15 @@ test('trap UI exposes falsification reset buttons, dynamic button states, and ac
   assert.match(html, /resetFalsify/);
   assert.match(html, /button:disabled/);
   assert.match(html, /aria-valuetext/);
+  assert.match(html, /ארגז.*אופס לברירת המחדל/);
+  assert.match(html, /מלכודת חיזוק החלשים הוחלה/);
+  assert.match(html, /מספרי הארכיון הוחלו/);
+  assert.match(html, /שחזור הארכיון אופס ל־50\/50\/50/);
+  assert.match(html, /משקלות המעבדה אופסו ל־40\/30\/30/);
+  assert.match(html, /תשובות מבחן ההפרכה אופסו/);
+  assert.match(html, /איפוס כל נתוני ארגז/);
+  assert.match(html, /boostBtn && boostBtn\.focus/);
+  assert.match(html, /labGrit && labGrit\.focus/);
 });
 
 test('trap walkthrough step is announced and the no-movement state says what to do next', () => {

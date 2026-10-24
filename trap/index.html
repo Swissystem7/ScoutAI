@@ -263,6 +263,9 @@
       boostLow.setAttribute('title', isBoosted
         ? 'מלכודת חיזוק החלשים כבר מוחלת'
         : 'מלכודת מוכנה: חזקו את החלשים בסטט');
+      boostLow.setAttribute('aria-label', isBoosted
+        ? 'מלכודת חיזוק החלשים כבר מוחלת (משקל 70)'
+        : 'מלכודת מוכנה: חזקו את החלשים בסטט');
     }
     if (resetSandbox) {
       const isClean = !sandboxTouched && spec.weight === 0 &&
@@ -272,6 +275,9 @@
       resetSandbox.setAttribute('title', isClean
         ? 'ארגז הפיצ\'ר כבר בברירת המחדל'
         : 'איפוס כל נתוני ארגז הפיצ\'ר');
+      resetSandbox.setAttribute('aria-label', isClean
+        ? 'ארגז הפיצ\'ר כבר בברירת המחדל'
+        : 'איפוס כל נתוני ארגז הפיצ\'ר לברירת המחדל');
     }
     renderFalsify();
   }
@@ -350,6 +356,9 @@
       applyArchive.setAttribute('title', isArchiveApplied
         ? 'מספרי הארכיון כבר מוחלים (משקל 80)'
         : 'החילו את המספרים שהוקלדו בארכיון');
+      applyArchive.setAttribute('aria-label', isArchiveApplied
+        ? 'מספרי הארכיון כבר מוחלים (משקל 80)'
+        : 'החילו את המספרים שהוקלדו בארכיון');
     }
     if (resetAttic) {
       const isCleanAttic = spec.weight === 0 && !document.getElementById('atticUpside').checked &&
@@ -358,6 +367,9 @@
       resetAttic.setAttribute('title', isCleanAttic
         ? 'שחזור הארכיון כבר בברירת המחדל (50/50/50)'
         : 'החזירו ל־50/50/50');
+      resetAttic.setAttribute('aria-label', isCleanAttic
+        ? 'שחזור הארכיון כבר בברירת המחדל (50/50/50)'
+        : 'החזירו את שחזור הארכיון ל־50/50/50');
     }
   }
 
@@ -412,6 +424,9 @@
       resetLabSliders.setAttribute('title', isLabDefault
         ? 'משקלות המעבדה כבר בברירת המחדל (40/30/30)'
         : 'החזירו את משקלות המעבדה ל־40/30/30');
+      resetLabSliders.setAttribute('aria-label', isLabDefault
+        ? 'משקלות המעבדה כבר בברירת המחדל (40/30/30)'
+        : 'איפוס משקלות מעבדה לברירת המחדל (40/30/30)');
     }
     const resetFalsify = document.getElementById('resetFalsify');
     if (resetFalsify) {
@@ -420,6 +435,9 @@
       resetFalsify.setAttribute('title', hasAnswers
         ? 'איפוס כל התשובות הידניות במבחן ההפרכה'
         : 'אין תשובות ידניות לאיפוס — הבדיקה מציגה ערכים מוסקים');
+      resetFalsify.setAttribute('aria-label', hasAnswers
+        ? 'איפוס כל התשובות הידניות במבחן ההפרכה'
+        : 'איפוס כל התשובות הידניות במבחן ההפרכה');
     }
   }
 
@@ -456,6 +474,12 @@
     document.getElementById('wInvented').value = 0;
     sandboxTouched = false;
     renderSandbox();
+    const sandboxStatus = document.getElementById('sandboxStatus');
+    if (sandboxStatus) {
+      sandboxStatus.textContent = 'ארגז הפיצ\'ר אופס לברירת המחדל. ' + (sandboxStatus.textContent || '');
+    }
+    const boostBtn = document.getElementById('boostLow');
+    if (boostBtn && boostBtn.focus) boostBtn.focus();
   });
   document.getElementById('boostLow').addEventListener('click', function () {
     T.SANDBOX_PLAYERS.forEach(function (player) {
@@ -465,6 +489,12 @@
     document.getElementById('wInvented').value = 70;
     sandboxTouched = true;
     renderSandbox();
+    const sandboxStatus = document.getElementById('sandboxStatus');
+    if (sandboxStatus) {
+      sandboxStatus.textContent = 'מלכודת חיזוק החלשים הוחלה (משקל 70). ' + (sandboxStatus.textContent || '');
+    }
+    const resetBtn = document.getElementById('resetSandbox');
+    if (resetBtn && !resetBtn.disabled && resetBtn.focus) resetBtn.focus();
   });
   document.getElementById('wAttic').addEventListener('input', renderWalk);
   document.getElementById('atticUpside').addEventListener('change', renderWalk);
@@ -474,12 +504,24 @@
     document.getElementById('wAttic').value = 80;
     walkIndex = 3;
     renderWalk();
+    const atticProof = document.getElementById('atticProof');
+    if (atticProof) {
+      atticProof.textContent = 'מספרי הארכיון הוחלו (משקל 80). ' + (atticProof.textContent || '');
+    }
+    const resetBtn = document.getElementById('resetAttic');
+    if (resetBtn && !resetBtn.disabled && resetBtn.focus) resetBtn.focus();
   });
   document.getElementById('resetAttic').addEventListener('click', function () {
     atticValues = { kante: 50, vardy: 50, flashy: 50 };
     document.getElementById('wAttic').value = 0;
     document.getElementById('atticUpside').checked = false;
     renderWalk();
+    const atticProof = document.getElementById('atticProof');
+    if (atticProof) {
+      atticProof.textContent = 'שחזור הארכיון אופס ל־50/50/50. ' + (atticProof.textContent || '');
+    }
+    const applyBtn = document.getElementById('applyArchive');
+    if (applyBtn && applyBtn.focus) applyBtn.focus();
   });
   document.getElementById('walkNav').addEventListener('click', function (event) {
     const button = event.target.closest('button[data-step]');
@@ -489,6 +531,8 @@
     else if (token === 'prev') walkIndex = Math.max(0, walkIndex - 1);
     else walkIndex = Number(token) || 0;
     renderWalk();
+    const currentStepBtn = document.getElementById('walkNav').querySelector('button[aria-current="step"]');
+    if (currentStepBtn && currentStepBtn.focus) currentStepBtn.focus();
   });
   ['labGrit', 'labInv', 'labClutch'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', renderFalsify);
@@ -498,10 +542,22 @@
     document.getElementById('labInv').value = 30;
     document.getElementById('labClutch').value = 30;
     renderFalsify();
+    const checkSummary = document.getElementById('checkSummary');
+    if (checkSummary) {
+      checkSummary.textContent = 'משקלות המעבדה אופסו ל־40/30/30. ' + (checkSummary.textContent || '');
+    }
+    const labGrit = document.getElementById('labGrit');
+    if (labGrit && labGrit.focus) labGrit.focus();
   });
   document.getElementById('resetFalsify').addEventListener('click', function () {
     answers = {};
     renderFalsify();
+    const checkSummary = document.getElementById('checkSummary');
+    if (checkSummary) {
+      checkSummary.textContent = 'תשובות מבחן ההפרכה אופסו. ' + (checkSummary.textContent || '');
+    }
+    const firstRadio = document.getElementById('checkRoot').querySelector('input[type=radio]');
+    if (firstRadio && firstRadio.focus) firstRadio.focus();
   });
 
   renderSandbox();
