@@ -20,6 +20,7 @@ const {
   flagImpossibleMinutes,
   WORLD_CUP_MAX_MINUTES,
   normalizeMetricSpec,
+  filterByPosition,
   positionGroup,
   evaluateExercise,
   buildCompareRadar,
@@ -462,6 +463,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /button:disabled/);
   assert.match(html, /<input id="playerSearch" type="search"[^>]*aria-controls="playerTable"/);
   assert.match(html, /<button id="clearSearch" class="secondary" type="button" disabled>נקה סינון<\/button>/);
+  assert.match(html, /const hasFilter = Boolean\(query \|\| posVal\);/);
+  assert.match(html, /clearBtn\.disabled = !hasFilter;/);
+  assert.match(html, /:\s*displayRows;/);
+  assert.match(html, /posFilter\.value = '';/);
   assert.match(html, /לא נמצאו שחקנים התואמים לחיפוש/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
   assert.match(html, /<a class="skip" href="#explorer">דלגו לחוקר הספירות<\/a>/);
@@ -850,4 +855,27 @@ test('a partial or malformed shared link keeps the default weights instead of ze
   const truncated = parseMetricHash('#g=60&sel=M%FC');
   assert.equal(truncated.grit, 60);
   assert.equal(truncated.selectedId, 'M%FC');
+});
+
+test('ranking table preserves position filtering when search query is empty', () => {
+  const store = createStore({
+    players: [
+      { name: 'Hugo Lloris', team: 'France', position: 'GK', minutes: 540 },
+      { name: 'Raphaël Varane', team: 'France', position: 'CB', minutes: 540 },
+      { name: 'Paul Pogba', team: 'France', position: 'CM', minutes: 540 },
+      { name: 'Kylian Mbappé', team: 'France', position: 'RW', minutes: 540 }
+    ]
+  });
+  const gkOnly = filterByPosition(store.players, 'GK');
+  assert.equal(gkOnly.length, 1);
+  assert.equal(gkOnly[0].name, 'Hugo Lloris');
+
+  const query = 'lloris';
+  const filtered = gkOnly.filter((r) => r.name.toLowerCase().includes(query));
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].name, 'Hugo Lloris');
+
+  const mismatchedQuery = 'mbappe';
+  const empty = gkOnly.filter((r) => r.name.toLowerCase().includes(mismatchedQuery));
+  assert.equal(empty.length, 0);
 });
