@@ -851,3 +851,22 @@ test('a partial or malformed shared link keeps the default weights instead of ze
   assert.equal(truncated.grit, 60);
   assert.equal(truncated.selectedId, 'M%FC');
 });
+
+test('event explorer exports its table as CSV with the score-fields filter and provenance', () => {
+  const { createExplorerCsv, EXPLORER_CSV_COLUMNS } = require('../demo.js');
+  const store = createStore(require('../data/wc2018_event_aggregates.json'));
+  const kante = store.players.find(row => /Kant/.test(row.name));
+  const explorer = buildEventExplorer(kante);
+  const all = createExplorerCsv(explorer).trim().split('\n');
+  assert.equal(all[0], EXPLORER_CSV_COLUMNS.join(','));
+  assert.equal(all.length - 1, explorer.rows.length);
+  const press = all.find(line => line.startsWith('pressures,'));
+  assert.match(press, /,183,621,26\.52,/);
+  assert.match(press, /,STATSBOMB_OPEN_DATA,data\/wc2018_event_aggregates\.json$/);
+  const used = createExplorerCsv(explorer, { onlyUsed: true }).trim().split('\n');
+  assert.equal(used.length - 1, explorer.rows.filter(row => row.usedInScore).length);
+  assert.ok(!used.some(line => line.startsWith('dribbles,')));
+  assert.equal(createExplorerCsv(buildEventExplorer(null)).trim(), EXPLORER_CSV_COLUMNS.join(','));
+  assert.match(html, /<button id="downloadExplorerCsv"[^>]*disabled/);
+  assert.match(html, /id="explorerCsvStatus"[^>]*role="status"[^>]*aria-live="polite"/);
+});

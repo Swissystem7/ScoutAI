@@ -2288,6 +2288,43 @@
     return lines.join('\n') + '\n';
   }
 
+  const EXPLORER_CSV_COLUMNS = Object.freeze([
+    'fieldKey', 'label', 'statsbombType', 'total', 'minutes', 'per90', 'per90File',
+    'cap', 'capped', 'scaled', 'feeds', 'usedInScore', 'filePath', 'player', 'team', 'provenance', 'dataset'
+  ]);
+
+  // The explorer table as a sheet: the same rows (and the same "score
+  // fields only" filter) the user is looking at, with provenance on every
+  // line so a copied row never loses where its count came from.
+  function createExplorerCsv(explorer, options) {
+    const lines = [csvRow(EXPLORER_CSV_COLUMNS)];
+    if (!explorer || !explorer.player) return lines.join('\n') + '\n';
+    const onlyUsed = !!(options && options.onlyUsed);
+    (explorer.rows || []).forEach(function (row) {
+      if (onlyUsed && !row.usedInScore) return;
+      lines.push(csvRow([
+        row.key,
+        row.label,
+        row.type,
+        row.total,
+        row.minutes,
+        row.per90,
+        row.per90File,
+        row.cap,
+        row.capped ? 'true' : 'false',
+        row.scaled,
+        row.feeds,
+        row.usedInScore ? 'true' : 'false',
+        row.filePath,
+        explorer.player.name,
+        explorer.player.team,
+        explorer.provenance,
+        explorer.dataset
+      ]));
+    });
+    return lines.join('\n') + '\n';
+  }
+
   // FBref's "Get table as CSV" output is the layout most of the header
   // aliases exist for, and it is not a plain sheet: a group-header line
   // (",,,,Playing Time,Playing Time,Performance,...") sits above the real
@@ -2628,6 +2665,8 @@
     exportMetricBundle: exportMetricBundle,
     createCsvReportWithProvenance: createCsvReportWithProvenance,
     PROVENANCE_LEDGER_COLUMNS: PROVENANCE_LEDGER_COLUMNS,
+    createExplorerCsv: createExplorerCsv,
+    EXPLORER_CSV_COLUMNS: EXPLORER_CSV_COLUMNS,
     EVENT_COLUMNS: EVENT_COLUMNS,
     OUTCOMES: OUTCOMES,
     WC2018_GROUPS: WC2018_GROUPS,
