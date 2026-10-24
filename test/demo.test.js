@@ -432,6 +432,10 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /document\.getElementById\('clearCompare'\)\.addEventListener\('click'/);
   assert.match(html, /clearCompare\.disabled = !current\.selected \|\| !radar \|\| !radar\.b/);
   assert.match(html, /בטלו את השוואת/);
+  assert.match(html, /clearCompare\.setAttribute\('aria-label',/);
+  assert.match(html, /השוואת.*בוטלה/);
+  assert.match(html, /compareSelect && !compareSelect\.disabled && compareSelect\.focus/);
+  assert.match(html, /אין שחקנים שעברו את סף הדקות המינימלי לבניית מכ״ם/);
   assert.match(html, /<button id="copyMethod"[^>]*disabled/);
   assert.match(html, /<button id="downloadJson"[^>]*disabled/);
   assert.match(html, /<button id="copyJson" class="secondary" type="button" disabled>העתיקו JSON<\/button>/);
