@@ -463,6 +463,11 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<input id="playerSearch" type="search"[^>]*aria-controls="playerTable"/);
   assert.match(html, /<button id="clearSearch" class="secondary" type="button" disabled>נקה סינון<\/button>/);
   assert.match(html, /לא נמצאו שחקנים התואמים לחיפוש/);
+  assert.match(html, /return name\.indexOf\(query\) >= 0 \|\| team\.indexOf\(query\) >= 0;\s*\}\)\s*: displayRows;/);
+  assert.doesNotMatch(html, /team\.indexOf\(query\) >= 0;\s*\}\)\s*: rows;/);
+  assert.match(html, /clearBtn\.disabled = !hasFilter;/);
+  assert.match(html, /נקה את סינון העמדה והחיפוש בטבלה/);
+  assert.match(html, /clearSearch\.addEventListener\('click', function \(\) \{\s*const posFilter = document\.getElementById\('posFilter'\);\s*if \(posFilter\) posFilter\.value = '';/);
   assert.match(html, /בחרו שחקן.*לחצו על שורה בטבלה כדי לראות איך הציון שלו מורכב/s);
   assert.match(html, /<a class="skip" href="#explorer">דלגו לחוקר הספירות<\/a>/);
   assert.match(html, /<input id="filterUsedFields" type="checkbox" aria-controls="explorerTable">/);
