@@ -435,12 +435,13 @@
     const searchInput = document.getElementById('playerSearch');
     const clearBtn = document.getElementById('clearSearch');
     const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
-    if (clearBtn) {
-      clearBtn.disabled = !query;
-      clearBtn.setAttribute('title', query ? 'נקה את סינון הטבלה' : 'הקלידו שם שחקן או נבחרת כדי להפעיל סינון');
-    }
     const posFilter = document.getElementById('posFilter');
     const posVal = posFilter ? posFilter.value : '';
+    if (clearBtn) {
+      const hasFilter = !!(query || posVal);
+      clearBtn.disabled = !hasFilter;
+      clearBtn.setAttribute('title', hasFilter ? 'נקה את סינון העמדה והחיפוש בטבלה' : 'בחרו עמדה או הקלידו שם שחקן או נבחרת כדי להפעיל סינון');
+    }
     if (posFilter) {
       posFilter.disabled = !rows.length;
       posFilter.setAttribute('title', rows.length
@@ -467,7 +468,7 @@
           const team = (row.team || '').toLowerCase();
           return name.indexOf(query) >= 0 || team.indexOf(query) >= 0;
         })
-      : rows;
+      : displayRows;
 
     if (!filteredRows.length) {
       tableStatus.textContent = tag + ': לא נמצאו שחקנים התואמים לחיפוש "' + (searchInput ? searchInput.value.trim() : '') + '".';
@@ -1246,6 +1247,8 @@
   }
   if (clearSearch) {
     clearSearch.addEventListener('click', function () {
+      const posFilter = document.getElementById('posFilter');
+      if (posFilter) posFilter.value = '';
       if (playerSearch) {
         playerSearch.value = '';
         playerSearch.focus();
