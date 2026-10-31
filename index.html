@@ -217,7 +217,7 @@
     <h2>מכ״ם השוואה מרכיבים גולמיים</h2>
     <p>אותם תשעת הגורמים שנכנסים לנוסחה, אחרי אותן תקרות ל-90 דקות. לא מודל חיצוני ולא רדאר Wyscout.</p>
     <label for="compareSelect">השוו את השחקן הנבחר מול</label>
-    <select id="compareSelect"></select>
+    <select id="compareSelect" aria-controls="radarRoot radarTable" aria-describedby="radarStatus"></select>
     <button id="clearCompare" class="secondary" type="button" disabled>בטלו השוואה</button>
     <p id="radarStatus" class="lab-note" role="status" aria-live="polite">בחרו שחקן בטבלה כדי לבנות מכ״ם.</p>
     <div class="legend">
@@ -618,9 +618,17 @@
       clearCompare.disabled = !current.selected || !radar || !radar.b;
       if (radar && radar.b) {
         clearCompare.setAttribute('title', 'בטלו את השוואת ' + radar.b.name + ' וחזרו להצגת ' + radar.a.name + ' בלבד');
+        clearCompare.setAttribute('aria-label', 'בטלו את השוואת ' + radar.b.name + ' וחזרו להצגת ' + radar.a.name + ' בלבד');
       } else {
         clearCompare.setAttribute('title', 'אין שחקן השוואה פעיל לביטול');
+        clearCompare.setAttribute('aria-label', 'אין שחקן השוואה פעיל לביטול');
       }
+    }
+    if (!rows.length) {
+      document.getElementById('radarRoot').innerHTML = '<p class="notice">אין שחקנים מעל סף הדקות (' + escapeHtml(current.spec.minMinutes) + ' דקות). הורידו את סף הדקות במעבדה כדי לבנות מכ״ם השוואה.</p>';
+      document.getElementById('radarTable').innerHTML = '';
+      document.getElementById('radarStatus').textContent = 'אין שחקנים שעברו את סף הדקות המינימלי לבניית מכ״ם.';
+      return;
     }
     if (!radar || !radar.a) {
       document.getElementById('radarRoot').innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לבנות מכ״ם השוואה.</p>';
@@ -1267,9 +1275,17 @@
   document.getElementById('posFilter').addEventListener('change', recompute);
   compareSelect.addEventListener('change', recompute);
   document.getElementById('clearCompare').addEventListener('click', function () {
+    const prevB = view && view.radar && view.radar.b ? view.radar.b.name : '';
     compareSelect.value = '';
     if (view && view.spec) view.spec.compareId = '';
     recompute();
+    const radarStatus = document.getElementById('radarStatus');
+    if (radarStatus && prevB) {
+      radarStatus.textContent = 'השוואת ' + prevB + ' בוטלה. ' + (radarStatus.textContent || '');
+    }
+    if (compareSelect && !compareSelect.disabled && compareSelect.focus) {
+      compareSelect.focus();
+    }
   });
   document.getElementById('outcomeSelect').addEventListener('change', recompute);
   document.getElementById('splitSelect').addEventListener('change', recompute);
