@@ -158,7 +158,7 @@
     <p id="formulaLine" class="formula"></p>
     <p class="muted">Δ מול מדד הבסיס 40/30/30 בלי נרמול עמדה. שיתוף: המצב נשמר ב־hash של הכתובת — העתיקו מהדפדפן או בלחיצה.</p>
     <div class="actions">
-      <button id="copyHash" class="secondary" type="button">העתיקו קישור למדד שלי</button>
+      <button id="copyHash" class="secondary" type="button" title="העתיקו קישור ישיר עם הגדרות המדד הנוכחיות (hash מקומי)">העתיקו קישור למדד שלי</button>
       <button id="resetMetric" class="secondary" type="button" disabled title="המדד כבר מוגדר כברירת המחדל (40/30/30)">איפוס למדד ברירת מחדל (40/30/30)</button>
     </div>
     <p id="hashStatus" class="status" role="status" aria-live="polite"></p>
@@ -1020,6 +1020,24 @@
     Object.keys(courseAnswers).forEach(function (key) { courseAnswers[key] = ''; });
   }
 
+  function isCourseHintApplied(current, hint) {
+    if (!hint || !current || !current.spec) return false;
+    const spec = current.spec;
+    return Object.keys(hint).every(function (key) {
+      if (key === 'selectedId') {
+        const currentId = (current.selected && current.selected.id) || spec.selectedId;
+        return currentId === hint.selectedId;
+      }
+      if (key === 'normalizePosition') {
+        return Boolean(spec.normalizePosition) === Boolean(hint.normalizePosition);
+      }
+      if (typeof hint[key] === 'number') {
+        return Number(spec[key]) === Number(hint[key]);
+      }
+      return String(spec[key] || '') === String(hint[key] || '');
+    });
+  }
+
   function renderCurriculum(current) {
     const answers = readQuizAnswers();
     const lessons = ScoutAIDemo.evaluateCurriculum({
@@ -1058,8 +1076,19 @@
         '<p class="notice">אין צעד שיעור להצגה כרגע. טענו מחדש את הדף או חזרו לדמו מונדיאל 2018.</p>';
       return;
     }
+    const hintApplied = Boolean(lesson.hint && isCourseHintApplied(current, lesson.hint));
+    const hintTitle = !lesson.hint ? '' : (hintApplied
+      ? 'נקודת ההתחלה של השיעור כבר מיושמת'
+      : (lesson.id === 'caps'
+        ? 'בחרו את N\'Golo Kanté להדגמת תקרות שרירותיות'
+        : (lesson.id === 'defenders'
+          ? 'הציעו נקודת התחלה (70/20/10 + נרמול עמדה)'
+          : 'הציעו נקודת התחלה לשיעור')));
     const hintBtn = lesson.hint
-      ? '<button type="button" class="secondary" id="courseHint">הציעו נקודת התחלה לשיעור</button>'
+      ? '<button type="button" class="secondary" id="courseHint"' +
+        (hintApplied ? ' disabled' : '') +
+        ' title="' + escapeHtml(hintTitle) + '">' +
+        'הציעו נקודת התחלה לשיעור</button>'
       : '';
     document.getElementById('courseRoot').innerHTML =
       '<article class="lesson-step"><h3>' + escapeHtml(lesson.title) + '</h3>' +
@@ -1449,6 +1478,12 @@
     if (!lesson || !lesson.hint) return;
     writeSpecToControls(Object.assign({}, readSpecFromControls(), lesson.hint));
     recompute();
+    const progress = document.getElementById('courseProgress');
+    if (progress) {
+      progress.textContent = 'הוחלה נקודת התחלה לשיעור ' + ((view.spec.curriculumIndex || 0) + 1) + '. ' + (progress.textContent || '');
+    }
+    const firstSelect = document.getElementById('courseRoot').querySelector('select');
+    if (firstSelect && firstSelect.focus) firstSelect.focus();
   });
   fragilityRoot.addEventListener('click', function (event) {
     const bumpBtn = event.target.closest('button[data-bump]');

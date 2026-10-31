@@ -423,8 +423,13 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /אתם בצעד האחרון/);
   assert.match(html, /מחקו ' \+ answered \+ ' תשובות/);
   assert.match(html, /התשובות נשמרות בדפדפן בלבד ואינן נשלחות לשום מקום/);
+  assert.match(html, /id="courseHint"/);
+  assert.match(html, /נקודת ההתחלה של השיעור כבר מיושמת/);
+  assert.match(html, /הוחלה נקודת התחלה לשיעור/);
+  assert.match(html, /isCourseHintApplied/);
   assert.match(html, /id="validateStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /<button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות \(CSV\)<\/button>/);
+  assert.match(html, /<button id="copyHash" class="secondary" type="button" title="[^"]+">העתיקו קישור למדד שלי<\/button>/);
   assert.match(html, /<button id="resetMetric" class="secondary" type="button" disabled title="המדד כבר מוגדר כברירת המחדל \(40\/30\/30\)">איפוס למדד ברירת מחדל \(40\/30\/30\)<\/button>/);
   assert.match(html, /document\.getElementById\('resetMetric'\)\.addEventListener\('click'/);
   assert.match(html, /המדד אופס בהצלחה לברירת המחדל/);
