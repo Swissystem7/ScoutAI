@@ -235,6 +235,8 @@
     <p>הקובץ המקומי הוא <strong>ספירות מצטברות</strong> מ-64 משחקים, לא יומן אירוע-אחר-אירוע. כאן רואים את השדות האמיתיים מאחורי הציון של השחקן הנבחר, וגם את מה שנאסף ולא נכנס לנוסחה.</p>
     <p id="explorerStatus" class="lab-note" role="status" aria-live="polite">בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים.</p>
     <label class="toggle"><input id="filterUsedFields" type="checkbox" aria-controls="explorerTable"> הציגו רק שדות שנכנסים לציון המדד (Grit / Involvement / Clutch)</label>
+    <button id="downloadExplorerCsv" class="secondary" type="button" disabled title="בחרו שחקן בטבלה כדי לייצא את חוקר הספירות ב-CSV" aria-describedby="explorerCsvStatus">הורידו את הטבלה (CSV)</button>
+    <p id="explorerCsvStatus" class="status" role="status" aria-live="polite"></p>
     <ol id="explorerReceipt" class="receipt"></ol>
     <div id="explorerTable" class="table-wrap">
       <p class="notice">בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא.</p>
@@ -780,6 +782,13 @@
         ? 'בחרו שחקן בטבלה כדי לסנן את שדות יומן הספירות'
         : (onlyUsed ? 'בטלו את הסינון כדי להציג את כל השדות שנאספו' : 'הציגו רק שדות המשפיעים על ציון המדד'));
     }
+    const csvBtn = document.getElementById('downloadExplorerCsv');
+    if (csvBtn) {
+      csvBtn.disabled = !explorer || !explorer.player;
+      csvBtn.setAttribute('title', !explorer || !explorer.player
+        ? 'בחרו שחקן בטבלה כדי לייצא את חוקר הספירות ב-CSV'
+        : 'הורידו את ' + (onlyUsed ? 'שדות הציון' : 'כל השדות') + ' של ' + explorer.player.name + ' כקובץ CSV');
+    }
     if (!explorer || !explorer.player) {
       status.textContent = 'בחרו שחקן בטבלה כדי לראות את הספירות מאחורי המספרים.';
       root.innerHTML = '<p class="notice">בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא.</p>';
@@ -1220,6 +1229,29 @@
   document.getElementById('splitSelect').addEventListener('change', recompute);
   document.getElementById('filterUsedFields').addEventListener('change', function () {
     if (view) renderExplorer(view);
+  });
+  document.getElementById('downloadExplorerCsv').addEventListener('click', function () {
+    const csvStatus = document.getElementById('explorerCsvStatus');
+    if (!view || !view.explorer || !view.explorer.player) {
+      csvStatus.textContent = 'בחרו שחקן בטבלה כדי לייצא את חוקר הספירות ב-CSV.';
+      return;
+    }
+    const filterUsed = document.getElementById('filterUsedFields');
+    const onlyUsed = !!(filterUsed && filterUsed.checked);
+    const csv = ScoutAIDemo.createExplorerCsv(view.explorer, { onlyUsed: onlyUsed });
+    // BOM so Excel opens the Hebrew labels as UTF-8.
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'scoutai-' + (view.explorer.player.id || 'player') + '-explorer' + (onlyUsed ? '-score-fields' : '') + '.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+    const fieldCount = csv.trim().split('\n').length - 1;
+    csvStatus.textContent = fieldCount + ' שדות של ' + view.explorer.player.name + ' ירדו כ-CSV למחשב המקומי. ' +
+      ((view.explorer.provenance || 'STATSBOMB_OPEN_DATA') === 'STATSBOMB_OPEN_DATA'
+        ? 'Open Data — לא למסחר.'
+        : 'האחריות לרישיון הנתונים היא עליכם.');
   });
   document.getElementById('resetValidation').addEventListener('click', function () {
     const outcomeSelect = document.getElementById('outcomeSelect');
