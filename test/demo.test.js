@@ -405,6 +405,12 @@ test('UI exposes keyboard sliders, table semantics, focus, contrast, and RTL', (
   assert.match(html, /<button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל/);
   assert.match(html, /document\.getElementById\('resetExercise'\)\.addEventListener\('click'/);
   assert.match(html, /התרגיל אופס למדד ברירת המחדל/);
+  assert.match(html, /<button id="resetFragility" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל \(40\/30\/30\)">איפוס משקלות לברירת מחדל \(40\/30\/30\)<\/button>/);
+  assert.match(html, /document\.getElementById\('resetFragility'\)\.addEventListener\('click'/);
+  assert.match(html, /משקלות המדד אופסו לברירת המחדל \(40\/30\/30\)/);
+  assert.match(html, /'בחנו ' \+ escapeHtml\(variant\.label\) \+ ' במעבדה/);
+  assert.match(html, /aria-label="' \+ btnAria \+ '"/);
+  assert.match(html, /משקל ' \+ \(labelMap\[key\] \|\| key\) \+ ' הועלה ב-10/);
   assert.match(html, /id="byodStatus"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="courseProgress"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="courseQuizStatus"[^>]*role="status"[^>]*aria-live="polite"/);
