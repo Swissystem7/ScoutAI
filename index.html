@@ -153,6 +153,11 @@
         <input id="minMinutes" type="range" min="90" max="630" step="30" value="270" aria-labelledby="minMinutesLabel" aria-valuemin="90" aria-valuemax="630" aria-valuenow="270" aria-valuetext="סף דקות, 270">
         <strong id="minMinutesVal" aria-hidden="true">270</strong>
       </div>
+      <div class="slider-row">
+        <label id="panimWeightLabel" for="panimWeight">זיהוי שחקנים לפי חכמת הפנים (PanimGuide)</label>
+        <input id="panimWeight" type="range" min="0" max="100" step="5" value="0" aria-labelledby="panimWeightLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="חכמת פנים, 0 אחוז">
+        <strong id="panimWeightVal" aria-hidden="true">0</strong>
+      </div>
     </div>
     <label class="toggle"><input id="normPos" type="checkbox"> נרמול לפי עמדה (אחוזון בתוך GK/DF/MF/FW)</label>
     <p id="formulaLine" class="formula"></p>
@@ -380,6 +385,7 @@
       grit: document.getElementById('wGrit').value,
       involvement: document.getElementById('wInv').value,
       clutch: document.getElementById('wClutch').value,
+      panimWeight: document.getElementById('panimWeight') ? document.getElementById('panimWeight').value : 0,
       minMinutes: document.getElementById('minMinutes').value,
       normalizePosition: document.getElementById('normPos').checked,
       selectedId: tableRoot.dataset.selected || '',
@@ -395,6 +401,10 @@
     document.getElementById('wGrit').value = metric.grit;
     document.getElementById('wInv').value = metric.involvement;
     document.getElementById('wClutch').value = metric.clutch;
+    if (document.getElementById('panimWeight')) {
+      document.getElementById('panimWeight').value = metric.panimWeight || 0;
+      syncSlider('panimWeight', metric.panimWeight || 0, 'חכמת פנים, ' + Math.round(metric.panimWeight || 0) + ' אחוז');
+    }
     document.getElementById('minMinutes').value = metric.minMinutes;
     document.getElementById('normPos').checked = metric.normalizePosition;
     syncSlider('wGrit', metric.grit, 'Grit, ' + Math.round(metric.grit) + ' אחוז');
@@ -500,6 +510,7 @@
         '<td>' + escapeHtml(row.components.grit) + '</td>' +
         '<td>' + escapeHtml(row.components.involvement) + '</td>' +
         '<td>' + escapeHtml(row.components.clutch) + '</td>' +
+        '<td><span class="badge">PanimGuide</span> <strong>' + escapeHtml(row.panimScore) + '</strong><div class="muted">+' + escapeHtml(row.panimBoost) + ' סיכוי</div></td>' +
       '</tr>';
     }).join('');
     const rawQuery = searchInput ? searchInput.value.trim() : '';
@@ -513,6 +524,7 @@
         '<thead><tr>' +
           '<th scope="col">דירוג ושינוי</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">דקות</th>' +
           '<th scope="col">ציון ושינוי</th><th scope="col">Grit</th><th scope="col">Involvement</th><th scope="col">Clutch</th>' +
+          '<th scope="col">חכמת פנים (Panim)</th>' +
         '</tr></thead><tbody>' + body + '</tbody></table>';
   }
 
@@ -1183,6 +1195,7 @@
       Number(spec.involvement) === ScoutAIDemo.DEFAULT_METRIC.involvement &&
       Number(spec.clutch) === ScoutAIDemo.DEFAULT_METRIC.clutch &&
       Number(spec.minMinutes) === ScoutAIDemo.DEFAULT_METRIC.minMinutes &&
+      !Number(spec.panimWeight) &&
       !spec.normalizePosition;
     resetBtn.disabled = isDefault;
     resetBtn.setAttribute('title', isDefault
@@ -1223,6 +1236,9 @@
     syncSlider('wGrit', current.spec.grit, 'Grit, ' + Math.round(current.spec.grit) + ' אחוז');
     syncSlider('wInv', current.spec.involvement, 'Involvement, ' + Math.round(current.spec.involvement) + ' אחוז');
     syncSlider('wClutch', current.spec.clutch, 'Clutch, ' + Math.round(current.spec.clutch) + ' אחוז');
+    if (document.getElementById('panimWeight')) {
+      syncSlider('panimWeight', current.spec.panimWeight || 0, 'חכמת פנים, ' + Math.round(current.spec.panimWeight || 0) + ' אחוז');
+    }
     syncSlider('minMinutes', current.spec.minMinutes, 'סף דקות, ' + Math.round(current.spec.minMinutes));
     syncLabControls(current.spec);
     if (current.selected) tableRoot.dataset.selected = current.selected.id;
@@ -1256,8 +1272,9 @@
     tableRoot.innerHTML = '<p class="notice">' + escapeHtml(err && err.message ? err.message : err) + '</p>';
   });
 
-  ['wGrit', 'wInv', 'wClutch', 'minMinutes'].forEach(function (id) {
-    document.getElementById(id).addEventListener('input', recompute);
+  ['wGrit', 'wInv', 'wClutch', 'panimWeight', 'minMinutes'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', recompute);
   });
   document.getElementById('normPos').addEventListener('change', recompute);
   document.getElementById('resetMetric').addEventListener('click', function () {
@@ -1266,6 +1283,7 @@
       grit: ScoutAIDemo.DEFAULT_METRIC.grit,
       involvement: ScoutAIDemo.DEFAULT_METRIC.involvement,
       clutch: ScoutAIDemo.DEFAULT_METRIC.clutch,
+      panimWeight: ScoutAIDemo.DEFAULT_METRIC.panimWeight || 0,
       minMinutes: ScoutAIDemo.DEFAULT_METRIC.minMinutes,
       normalizePosition: ScoutAIDemo.DEFAULT_METRIC.normalizePosition
     }));
