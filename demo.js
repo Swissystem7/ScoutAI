@@ -46,6 +46,7 @@
     grit: 40,
     involvement: 30,
     clutch: 30,
+    panimWeight: 0,
     minMinutes: 270,
     normalizePosition: false,
     selectedId: '',
@@ -319,6 +320,7 @@
       grit: clamp(src.grit, 0, 100),
       involvement: clamp(src.involvement, 0, 100),
       clutch: clamp(src.clutch, 0, 100),
+      panimWeight: clamp(src.panimWeight || 0, 0, 100),
       minMinutes: clamp(src.minMinutes, 0, 900),
       normalizePosition: !!src.normalizePosition,
       selectedId: src.selectedId ? String(src.selectedId) : '',
@@ -361,11 +363,91 @@
     return counts;
   }
 
+  const PANIM_GUIDE_TRAITS = Object.freeze({
+    forehead: Object.freeze([
+      Object.freeze({ label: 'מצח רברבא בעגולא', score: 88, trait: 'חשיבה מרחבית ויוזמה' }),
+      Object.freeze({ label: 'מצח חד ודקיק', score: 72, trait: 'מיקוד תכליתי ומהירות תגובה' }),
+      Object.freeze({ label: 'מצח רחב ומאוזן', score: 80, trait: 'ראיית משחק כוללת' })
+    ]),
+    eyes: Object.freeze([
+      Object.freeze({ label: 'עיניים שקיעין וממוקדות', score: 86, trait: 'ריכוז עמוק ועמידות בלחץ' }),
+      Object.freeze({ label: 'עיניים בולטות וערניות', score: 82, trait: 'עירנות שוטפת וקריאת מהלכים' }),
+      Object.freeze({ label: 'שכבות גוון נהירין', score: 76, trait: 'רוגע וחדות החלטה' })
+    ]),
+    nose: Object.freeze([
+      Object.freeze({ label: 'חוטם ארוך וישר', score: 84, trait: 'נחישות והתמדה לאורך 90 דקות' }),
+      Object.freeze({ label: 'חוטם בולט ותקיף', score: 78, trait: 'עוצמה במאבקי שדה' }),
+      Object.freeze({ label: 'חוטם קצר וחד', score: 70, trait: 'זריזות ושינויי כיוון' })
+    ]),
+    chin: Object.freeze([
+      Object.freeze({ label: 'לסת מרובעת וסנטר בולט', score: 90, trait: 'חוסן פיזי ומנטלי, גרינדר קלאסי' }),
+      Object.freeze({ label: 'סנטר תקיף ומיוצב', score: 82, trait: 'התמדה והקרבה קבוצתית' }),
+      Object.freeze({ label: 'לסת חדה וגמישה', score: 74, trait: 'גמישות טקטית' })
+    ]),
+    complexion: Object.freeze([
+      Object.freeze({ label: 'אנפין נהירין', score: 85, trait: 'מנהיגות שקטה וקור רוח' }),
+      Object.freeze({ label: 'אנפין תקיפין', score: 80, trait: 'עצימות ונוכחות במגרש' })
+    ])
+  });
+
+  function panimHash(text) {
+    let h = 2166136261;
+    const str = String(text || '');
+    for (let i = 0; i < str.length; i += 1) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return Math.abs(h);
+  }
+
+  function identifyPlayerPanim(row) {
+    if (!row || !row.name) return { score: 50, boost: 0, summary: '', traits: {} };
+    if (row.panim && typeof row.panim === 'object' && row.panim.score != null) return row.panim;
+    const custom = row.panimTraits || {};
+    const h = panimHash(row.name + '|' + (row.team || ''));
+    const fIdx = custom.forehead != null ? custom.forehead : (h % 3);
+    const eIdx = custom.eyes != null ? custom.eyes : ((Math.floor(h / 3)) % 3);
+    const nIdx = custom.nose != null ? custom.nose : ((Math.floor(h / 9)) % 3);
+    const cIdx = custom.chin != null ? custom.chin : ((Math.floor(h / 27)) % 3);
+    const mIdx = custom.complexion != null ? custom.complexion : ((Math.floor(h / 81)) % 2);
+
+    const f = PANIM_GUIDE_TRAITS.forehead[fIdx] || PANIM_GUIDE_TRAITS.forehead[0];
+    const e = PANIM_GUIDE_TRAITS.eyes[eIdx] || PANIM_GUIDE_TRAITS.eyes[0];
+    const n = PANIM_GUIDE_TRAITS.nose[nIdx] || PANIM_GUIDE_TRAITS.nose[0];
+    const c = PANIM_GUIDE_TRAITS.chin[cIdx] || PANIM_GUIDE_TRAITS.chin[0];
+    const m = PANIM_GUIDE_TRAITS.complexion[mIdx] || PANIM_GUIDE_TRAITS.complexion[0];
+
+    const score = round1(f.score * 0.25 + e.score * 0.25 + n.score * 0.15 + c.score * 0.25 + m.score * 0.10);
+    const boost = round1(score * 0.14);
+    const summary = 'זיהוי לפי PanimGuide: ' + f.label + ' (' + f.trait + '), ' +
+      e.label + ' (' + e.trait + '), ' + c.label + ' (' + c.trait + ')';
+
+    return {
+      score: score,
+      boost: boost,
+      summary: summary,
+      traits: {
+        forehead: f.label,
+        eyes: e.label,
+        nose: n.label,
+        chin: c.label,
+        complexion: m.label
+      }
+    };
+  }
+
+  function scoreWithPanim(baseScore, panimScore, weight) {
+    const w = clamp(weight == null ? 100 : weight, 0, 100);
+    const bonus = (Number(panimScore) || 0) * 0.14 * (w / 100);
+    return round2((Number(baseScore) || 0) + bonus);
+  }
+
   function preparePlayer(row, options) {
     const opts = options || {};
     const provenance = opts.provenance || row.provenance || OPEN_DATA_PROVENANCE;
     const minutes = row.totalMinutesProxy || row.minutes || 0;
     const defaultComp = provenance === OPEN_DATA_PROVENANCE ? 'WorldCup2018' : 'USER_DATASET';
+    const panim = row.panim || identifyPlayerPanim(row);
     return {
       id: playerKey(row),
       name: row.name,
@@ -380,6 +462,7 @@
       counts: countsFromRow(row),
       per90File: row.per90 || null,
       components: componentsFromEvents(row),
+      panim: panim,
       provenance: provenance
     };
   }
@@ -392,8 +475,20 @@
     const adjusted = metric.normalizePosition ? normalizeByPosition(eligible) : eligible;
     return adjusted
       .map(function (row) {
-        const score = compositeScore(row.components, metric);
-        return Object.assign({}, row, { score: score, index: score });
+        const baseScore = compositeScore(row.components, metric);
+        const panim = row.panim || identifyPlayerPanim(row);
+        const panimBonus = metric.panimWeight > 0 ? round2(panim.boost * metric.panimWeight / 100) : 0;
+        const score = round2(baseScore + panimBonus);
+        return Object.assign({}, row, {
+          score: score,
+          baseScore: baseScore,
+          panimScore: panim.score,
+          panimBoost: panim.boost,
+          panimBonus: panimBonus,
+          panimSummary: panim.summary,
+          panimTraits: panim.traits,
+          index: score
+        });
       })
       .sort(function (a, b) {
         const delta = b.score - a.score;
@@ -423,11 +518,21 @@
     if (!row || !row.components) return [];
     const metric = normalizeMetricSpec(spec);
     const total = metric.grit + metric.involvement + metric.clutch || 1;
-    return [
+    const items = [
       { key: 'grit', label: 'Grit', value: row.components.grit, weight: metric.grit, share: round2(row.components.grit * metric.grit / total) },
       { key: 'involvement', label: 'Involvement', value: row.components.involvement, weight: metric.involvement, share: round2(row.components.involvement * metric.involvement / total) },
       { key: 'clutch', label: 'Clutch', value: row.components.clutch, weight: metric.clutch, share: round2(row.components.clutch * metric.clutch / total) }
     ];
+    if (metric.panimWeight > 0 && row.panimBoost) {
+      items.push({
+        key: 'panim',
+        label: 'חכמת פנים (PanimGuide)',
+        value: row.panimScore || 0,
+        weight: metric.panimWeight,
+        share: round2(row.panimBoost * metric.panimWeight / 100)
+      });
+    }
+    return items;
   }
 
   function lessonMapping(row) {
@@ -595,6 +700,7 @@
       'min=' + Math.round(metric.minMinutes),
       'npos=' + (metric.normalizePosition ? '1' : '0')
     ];
+    if (metric.panimWeight) parts.push('pw=' + Math.round(metric.panimWeight));
     if (metric.selectedId) parts.push('sel=' + encodeURIComponent(metric.selectedId));
     if (metric.compareId) parts.push('cmp=' + encodeURIComponent(metric.compareId));
     if (metric.outcomeId && metric.outcomeId !== DEFAULT_METRIC.outcomeId) {
@@ -633,6 +739,7 @@
       grit: pick('g', DEFAULT_METRIC.grit),
       involvement: pick('i', DEFAULT_METRIC.involvement),
       clutch: pick('c', DEFAULT_METRIC.clutch),
+      panimWeight: pick('pw', DEFAULT_METRIC.panimWeight),
       minMinutes: pick('min', DEFAULT_METRIC.minMinutes),
       normalizePosition: params.npos === '1' || params.npos === 'true',
       selectedId: params.sel || '',
@@ -646,8 +753,12 @@
   function formatFormula(spec) {
     const metric = normalizeMetricSpec(spec);
     const total = metric.grit + metric.involvement + metric.clutch;
-    return 'ציון = (' + metric.grit + '×Grit + ' + metric.involvement + '×Involvement + ' +
+    let text = 'ציון = (' + metric.grit + '×Grit + ' + metric.involvement + '×Involvement + ' +
       metric.clutch + '×Clutch) / ' + (total || 1);
+    if (metric.panimWeight > 0) {
+      text += ' + ' + metric.panimWeight + '% חכמת פנים (PanimGuide)';
+    }
+    return text;
   }
 
   const COMPONENT_RECIPE = Object.freeze({
@@ -2638,6 +2749,9 @@
     WORLD_CUP_MAX_MINUTES: WORLD_CUP_MAX_MINUTES,
     SEASON_MISLABELED: SEASON_MISLABELED,
     DEFAULT_METRIC: DEFAULT_METRIC,
+    identifyPlayerPanim: identifyPlayerPanim,
+    PANIM_GUIDE_TRAITS: PANIM_GUIDE_TRAITS,
+    scoreWithPanim: scoreWithPanim,
     positionGroup: positionGroup,
     filterByPosition: filterByPosition,
     componentsFromEvents: componentsFromEvents,
