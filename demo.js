@@ -731,9 +731,11 @@
       if (parts.length < 2) return;
       params[safeDecode(parts[0])] = safeDecode(parts.slice(1).join('='));
     });
-    // A key the link leaves out keeps its default, so "#sel=Kane" does not zero every weight.
+    // A key the link leaves out, or one that isn't a number ("#g=abc"), keeps its default,
+    // so "#sel=Kane" does not zero every weight.
     function pick(key, fallback) {
-      return params[key] === undefined || params[key] === '' ? fallback : params[key];
+      const value = params[key];
+      return value === undefined || value === '' || !Number.isFinite(Number(value)) ? fallback : value;
     }
     return normalizeMetricSpec({
       grit: pick('g', DEFAULT_METRIC.grit),

@@ -317,6 +317,11 @@ test('permalink hash encodes and decodes metric state', () => {
   const empty = parseMetricHash('');
   assert.deepEqual(normalizeMetricSpec(empty), normalizeMetricSpec(DEFAULT_METRIC));
   assert.equal(parseMetricHash('#').grit, DEFAULT_METRIC.grit);
+  // A malformed weight in a shared link keeps its default instead of becoming 0.
+  const malformed = parseMetricHash('#g=abc&c=NaN&i=20');
+  assert.equal(malformed.grit, empty.grit);
+  assert.equal(malformed.clutch, empty.clutch);
+  assert.equal(malformed.involvement, 20);
   const hashed = serializeMetricHash({
     grit: 12,
     involvement: 34,
