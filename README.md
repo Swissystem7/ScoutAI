@@ -69,3 +69,5 @@ ScoutAI הוא כלי לימוד בדפדפן: הוא מציג איך מרכיב
 פתחו `index.html` דרך GitHub Pages או שרת סטטי מקומי (fetch יחסי לא יעבוד מ־`file://`).
 
 הרצה מקומית (גם ב-Windows): `npm ci`, `npm test`, ואז `npx --yes http-server -p 8080 .` (או `python -m http.server 8080`) ופתחו `http://localhost:8080/`. מבנה הקוד וזרימת הנתונים: [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+בדיקות קצה-לקצה (Playwright, דסקטופ + מובייל 360px, בלי רשת חיצונית): פעם אחת `npx playwright install chromium`, ואז `npm run test:e2e`. הבדיקות נמצאות ב־`e2e/` ואינן חלק מ־`npm test`.

@@ -39,10 +39,22 @@ Every number shown must be traceable to a field in the active file; source label
 ## Run and test
 
 ```sh
-npm ci          # no dependencies; installs nothing, but verifies the lockfile
+npm ci          # no runtime dependencies; installs only the dev tool @playwright/test
 npm test        # node --test: runs every test/*.test.js
 npx --yes http-server -p 8080 .   # or: python -m http.server 8080
 ```
+
+End-to-end tests (CT-014) live in `e2e/` and are not part of `npm test`:
+
+```sh
+npx playwright install chromium   # once per machine
+npm run test:e2e                  # Playwright, desktop + 360px mobile, serves via tools/serve.js
+```
+
+They cover the first visit, building a metric (weights, threshold, shared hash link, exercise hint),
+search / position filter / player selection with the radar comparison, the 8-step course pager, the
+synthetic BYOD layer and back, and the trap / licence / offer pages. Every request that leaves
+`127.0.0.1` is aborted and fails the test, so the suite needs no network.
 
 Then open `http://localhost:8080/`. Opening `index.html` from `file://` does not work, because the
 relative `fetch` of the dataset is blocked there.
