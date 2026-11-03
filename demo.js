@@ -1944,7 +1944,8 @@
       text = text.replace(GROUP_STRIP_RE, '');
     } else if (!decimalComma && /^[-+]?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$/.test(text)) {
       text = text.replace(/,/g, '');
-    } else if (decimalComma && /^[-+]?[1-9]\d{0,2}(?:\.\d{3}){2,}(?:,\d+)?$/.test(text)) {
+    } else if (decimalComma && /^[-+]?[1-9]\d{0,2}(?:(?:\.\d{3}){2,}(?:,\d+)?|(?:\.\d{3})+,\d+)$/.test(text)) {
+      // One dot group counts as thousands only before a decimal comma ("1.234,5"); "1.234" stays a decimal.
       text = text.replace(/\./g, '');
     }
     if (decimalComma && /^[-+]?\d+,\d+$/.test(text)) text = text.replace(',', '.');
