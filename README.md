@@ -67,3 +67,5 @@ ScoutAI הוא כלי לימוד בדפדפן: הוא מציג איך מרכיב
 - כל מספר על המסך חייב להיות בר-מעקב עד השדה בקובץ הפעיל. אם טענתם קובץ משלכם, השיעור והחוקר מציגים `USER_LICENSED_DATA` ולא את מונדיאל 2018.
 
 פתחו `index.html` דרך GitHub Pages או שרת סטטי מקומי (fetch יחסי לא יעבוד מ־`file://`).
+
+הרצה מקומית (גם ב-Windows): `npm ci`, `npm test`, ואז `npx --yes http-server -p 8080 .` (או `python -m http.server 8080`) ופתחו `http://localhost:8080/`. מבנה הקוד וזרימת הנתונים: [`ARCHITECTURE.md`](ARCHITECTURE.md).
