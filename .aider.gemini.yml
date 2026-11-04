@@ -1,0 +1,4 @@
+# Fallback profile. Aider reads GEMINI_API_KEY from the environment.
+# Run: aider --config .aider.gemini.yml
+model: gemini/gemini-3.5-flash-lite
+weak-model: gemini/gemini-3.5-flash-lite
