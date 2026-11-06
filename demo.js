@@ -731,9 +731,11 @@
       if (parts.length < 2) return;
       params[safeDecode(parts[0])] = safeDecode(parts.slice(1).join('='));
     });
-    // A key the link leaves out keeps its default, so "#sel=Kane" does not zero every weight.
+    // A key the link leaves out, or one that isn't a number ("#g=abc"), keeps its default,
+    // so "#sel=Kane" does not zero every weight.
     function pick(key, fallback) {
-      return params[key] === undefined || params[key] === '' ? fallback : params[key];
+      const value = params[key];
+      return value === undefined || value === '' || !Number.isFinite(Number(value)) ? fallback : value;
     }
     return normalizeMetricSpec({
       grit: pick('g', DEFAULT_METRIC.grit),
@@ -1944,7 +1946,8 @@
       text = text.replace(GROUP_STRIP_RE, '');
     } else if (!decimalComma && /^[-+]?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$/.test(text)) {
       text = text.replace(/,/g, '');
-    } else if (decimalComma && /^[-+]?[1-9]\d{0,2}(?:\.\d{3}){2,}(?:,\d+)?$/.test(text)) {
+    } else if (decimalComma && /^[-+]?[1-9]\d{0,2}(?:(?:\.\d{3}){2,}(?:,\d+)?|(?:\.\d{3})+,\d+)$/.test(text)) {
+      // One dot group counts as thousands only before a decimal comma ("1.234,5"); "1.234" stays a decimal.
       text = text.replace(/\./g, '');
     }
     if (decimalComma && /^[-+]?\d+,\d+$/.test(text)) text = text.replace(',', '.');

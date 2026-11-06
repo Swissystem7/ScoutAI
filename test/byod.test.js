@@ -1185,3 +1185,14 @@ test('a valid file whose players all fall under the minutes threshold says so at
   assert.ok(html.includes('ערך הסף שהיה מכניס שחקנים לדירוג'), 'the BYOD help text must mention the threshold message');
   assert.ok(fs.readFileSync(path.join(root, 'README.md'), 'utf8').includes('ערך הסף שהיה מכניס שחקנים לדירוג'), 'README must mention the threshold message');
 });
+
+test('`;` file: one dot thousands group followed by a decimal comma is a number, not an error', () => {
+  // German/Austrian Excel writes 1234.5 as "1.234,5". The decimal comma makes the dot a thousands mark.
+  assert.equal(csvNumber('1.234,5', true), 1234.5);
+  assert.equal(csvNumber('-1.234,56', true), -1234.56);
+  assert.equal(csvNumber('12.345,0', true), 12345);
+  // Still ambiguous or malformed, still unchanged.
+  assert.equal(csvNumber('1.234', true), 1.234, 'one dot group alone stays a decimal');
+  assert.equal(csvNumber('1.23,5', true), null, 'a dot group must have three digits');
+  assert.equal(csvNumber('1.234,5', false), null, 'comma file: the comma is never a decimal mark');
+});

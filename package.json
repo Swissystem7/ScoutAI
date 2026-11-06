@@ -3,7 +3,15 @@
   "private": true,
   "description": "Hebrew RTL educational lab: build a transparent football metric on StatsBomb Open Data",
   "scripts": {
+    "start": "node tools/serve.js",
     "test": "node --test",
-    "pr-size": "node tools/pr-size.js"
+    "pr-size": "node tools/pr-size.js",
+    "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }

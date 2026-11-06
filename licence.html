@@ -22,7 +22,14 @@
     table{width:100%;border-collapse:collapse;font-size:.95rem}th,td{text-align:start;padding:10px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}
     footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
     :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}
-    @media(max-width:650px){.banner{position:static;padding:12px}.shell{padding:12px}}
+    @media(max-width:650px){.banner{position:static;padding:12px}.shell{padding:12px}.card{overflow-wrap:anywhere}}
+    /* CT-010: every tap target is at least 44x44 CSS px (WCAG 2.5.5), checkbox/radio labels form the target */
+    .skip{display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box}
+    .lesson-nav button,.course-nav button{min-width:44px}
+    input[type=range]{min-height:44px}
+    input[type=checkbox],input[type=radio]{width:24px;height:24px;margin:0;flex:none;accent-color:#145c3d}
+    label:has(> input[type=checkbox]),label:has(> input[type=radio]){display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer}
+    footer a,.nav a{display:inline-flex;align-items:center;min-height:44px;min-width:44px;justify-content:center}
   </style>
 </head>
 <body>

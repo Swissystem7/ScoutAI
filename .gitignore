@@ -11,3 +11,5 @@ build/
 graphify-out/
 *.key
 *.pem
+test-results/
+playwright-report/
