@@ -6,7 +6,11 @@ Commands from the repository root:
 npm test
 ```
 
-That runs `node --test test/demo.test.js test/trap.test.js test/byod.test.js`.
+That runs `node --test`, which picks up every `test/*.test.js` file.
+
+Recorded on 2026-11-03 (CT-010 health pass): `npm test` → tests 155, pass 155, fail 0.
+
+The older record below is kept for history.
 
 Recorded on 2026-08-13 after the honesty pass (single data layer, no video theater, no factory `lib/`, BYOD provenance, shipped-file receipts):
 

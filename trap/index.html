@@ -43,6 +43,13 @@
     .nav a,.toc a{display:inline-flex;align-items:center}
     .toc a{padding:8px 10px}
     @media(max-width:650px){.slider-row{grid-template-columns:1fr}.banner{position:static;padding:12px}.shell{padding:12px}}
+    /* CT-010: every tap target is at least 44x44 CSS px (WCAG 2.5.5), checkbox/radio labels form the target */
+    .skip{display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box}
+    .lesson-nav button,.course-nav button{min-width:44px}
+    input[type=range]{min-height:44px}
+    input[type=checkbox],input[type=radio]{width:24px;height:24px;margin:0;flex:none;accent-color:#145c3d}
+    label:has(> input[type=checkbox]),label:has(> input[type=radio]){display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer}
+    footer a,.nav a{display:inline-flex;align-items:center;min-height:44px;min-width:44px;justify-content:center}
   </style>
 </head>
 <body>
@@ -119,10 +126,10 @@
       <button id="resetAttic" class="secondary" type="button" disabled>החזירו ל־50/50/50</button>
     </div>
     <p id="atticProof" class="status" role="status" aria-live="polite"></p>
-    <div id="atticRank" class="table-wrap"></div>
+    <div id="atticRank" class="table-wrap" tabindex="0" role="region" aria-label="דירוג הארכיון"></div>
     <h3>מה שהוקלד בארכיון — לא מדידה</h3>
     <p class="muted">העתק מדויק של שדות הקלט מ־<code>attic/proof-demo.js</code>. הדף לא ממיר אותם למודל פנים. כפתור הארכיון לוקח רק את <strong>ממוצע המספרים שהוקלדו</strong> כפיצ'ר שקוף אחד.</p>
-    <pre class="archive" id="archiveDump"></pre>
+    <pre class="archive" id="archiveDump" tabindex="0" role="region" aria-label="ערכי הארכיון כפי שהוקלדו"></pre>
   </section>
 
   <section class="card" id="falsify">

@@ -75,6 +75,13 @@
       th,td{padding:8px 6px}
       .card{padding:16px}
     }
+    /* CT-010: every tap target is at least 44x44 CSS px (WCAG 2.5.5), checkbox/radio labels form the target */
+    .skip{display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box}
+    .lesson-nav button,.course-nav button{min-width:44px}
+    input[type=range]{min-height:44px}
+    input[type=checkbox],input[type=radio]{width:24px;height:24px;margin:0;flex:none;accent-color:#145c3d}
+    label:has(> input[type=checkbox]),label:has(> input[type=radio]){display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer}
+    footer a,.nav a{display:inline-flex;align-items:center;min-height:44px;min-width:44px;justify-content:center}
   </style>
 </head>
 <body>
@@ -243,7 +250,7 @@
     <button id="downloadExplorerCsv" class="secondary" type="button" disabled title="בחרו שחקן בטבלה כדי לייצא את חוקר הספירות ב-CSV" aria-describedby="explorerCsvStatus">הורידו את הטבלה (CSV)</button>
     <p id="explorerCsvStatus" class="status" role="status" aria-live="polite"></p>
     <ol id="explorerReceipt" class="receipt"></ol>
-    <div id="explorerTable" class="table-wrap">
+    <div id="explorerTable" class="table-wrap" tabindex="0" role="region" aria-label="יומן הספירות של השחקן הנבחר">
       <p class="notice">בחרו שחקן בטבלה כדי לראות את יומן הספירות המלא.</p>
     </div>
   </section>
@@ -292,9 +299,9 @@
     <button id="downloadCsv" class="secondary" type="button" disabled>הורידו ספר ספירות (CSV)</button>
     <p id="exportStatus" class="status" role="status" aria-live="polite"></p>
     <h3>פסקה לציטוט</h3>
-    <p id="methodText" class="export-box">הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה.</p>
+    <p id="methodText" class="export-box" tabindex="0" role="region" aria-label="פסקת מתודולוגיה">הגדירו משקלות במעבדה כדי ליצור פסקת מתודולוגיה.</p>
     <h3>JSON</h3>
-    <pre id="exportJson" class="export-box" dir="ltr">הגדירו משקלות במעבדה כדי ליצור חבילת ייצוא ב-JSON.</pre>
+    <pre id="exportJson" class="export-box" dir="ltr" tabindex="0" role="region" aria-label="חבילת ייצוא JSON">הגדירו משקלות במעבדה כדי ליצור חבילת ייצוא ב-JSON.</pre>
   </section>
 
   <section class="card" id="glossary">
