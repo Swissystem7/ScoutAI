@@ -8,7 +8,7 @@ const test = require('node:test');
 const root = path.join(__dirname, '..');
 // Pages whose inline scripts look elements up by id. The suite has no DOM, so a renamed id
 // would only surface in the browser as "Cannot read properties of null".
-const PAGES = ['index.html', path.join('trap', 'index.html')];
+const PAGES = ['index.html', path.join('trap', 'index.html'), path.join('basketball', 'index.html')];
 
 function read(page) {
   return fs.readFileSync(path.join(root, page), 'utf8');

@@ -12,6 +12,7 @@ const PAGES = {
   'offer.html': base + 'offer.html',
   'licence.html': base + 'licence.html',
   'trap/index.html': base + 'trap/',
+  'basketball/index.html': base + 'basketball/',
 };
 
 // Resolve every href on a page to the site page it opens, so ../ and trap/ and index.html all compare equal.
