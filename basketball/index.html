@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>מעבדת כדורסל — ScoutAI</title>
+  <meta name="description" content="מעבדת כדורסל: בנו מדד שקוף ל-40 דקות על קובץ CSV שלכם, בדקו אותו על קבוצות מוחזקות, והעמידו את PanimGuide למבחן מול רעש ומחקרים.">
+  <style>
+    :root{font-family:Arial,sans-serif;color:#17211b;background:#f3f6f1}*{box-sizing:border-box}
+    body{margin:0}.skip{position:absolute;inset-inline-start:-999px;top:8px;background:#fff;color:#10281d;padding:8px 12px;border-radius:8px;z-index:5}
+    .skip:focus{inset-inline-start:8px}.shell{max-width:1040px;margin:auto;padding:24px}
+    .banner{position:sticky;top:0;z-index:2;background:#10281d;color:#fff;padding:16px;border-radius:14px;line-height:1.6}
+    .banner code,.badge{background:#dff4e7;color:#0f3d26;border-radius:999px;padding:4px 8px;font-weight:700}.banner code{display:inline-block;margin:2px}
+    .card{background:#fff;border:1px solid #dbe4dc;border-radius:18px;padding:22px;margin-top:18px}h1,h2{margin-top:0}p,li{line-height:1.65}
+    label{font-weight:700}input,button,select{font:inherit;padding:11px;border-radius:10px;border:1px solid #8a9a8e}
+    button{background:#145c3d;color:#fff;font-weight:700;cursor:pointer;margin-top:10px}button:disabled{opacity:0.6;cursor:not-allowed}
+    button.secondary{background:#fff;color:#145c3d;border:2px solid #145c3d;margin-inline-end:8px}
+    .notice{border-inline-start:4px solid #8a5a00;background:#fff6dd;padding:12px;color:#3d2e00}.danger{border-inline-start:4px solid #8a1f1f;background:#f8ecec;padding:12px;color:#3d1010}
+    .ok{border-inline-start:4px solid #145c3d;background:#e6f3ea;padding:12px;color:#0f3d26}
+    .toc,.nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}.toc a,.nav a{color:#dff4e7;font-weight:700;text-decoration:underline;display:inline-flex;align-items:center;padding:8px 10px}
+    .sport{display:flex;gap:8px;margin:0 0 12px}.sport a{border:2px solid #145c3d;border-radius:999px;padding:8px 14px;color:#145c3d;font-weight:700;text-decoration:none;display:inline-flex;align-items:center}
+    .sport a[aria-current="page"]{background:#145c3d;color:#fff}
+    .sliders{display:grid;gap:12px;margin:16px 0}.slider-row{display:grid;grid-template-columns:200px 1fr 60px;gap:10px;align-items:center}
+    .slider-row input[type=range]{width:100%;padding:0;border:0;accent-color:#145c3d}
+    .formula{font-size:1rem;color:#0f3d26;margin:12px 0;font-weight:700}
+    .table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:.95rem}caption{text-align:start;font-weight:700;padding:8px 0}
+    th,td{text-align:start;padding:9px 8px;border-bottom:1px solid #c5d0c6;vertical-align:top}th{font-size:.85rem;color:#2d3a32}
+    td.num,th.num{direction:ltr;text-align:end;font-variant-numeric:tabular-nums}
+    .muted{color:#3d4a42;font-size:.88rem}.status{min-height:1.5em;font-weight:700}
+    .row-inline{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.row-inline label{display:flex;gap:8px;align-items:center}
+    ul.msgs{margin:8px 0;padding-inline-start:20px}ul.msgs li{margin:4px 0}
+    .sources li{margin-bottom:10px}.sources a{color:#0f3d26}
+    .verdict{font-size:1.02rem;line-height:1.7}
+    details{margin-top:16px;border-top:1px solid #dbe4dc;padding-top:6px}summary{cursor:pointer;padding:12px 0;min-height:44px}
+    :focus-visible{outline:3px solid #0b3d28;outline-offset:3px}input[type=range]:focus-visible{outline-offset:4px}
+    button,select,input[type=file],.nav a,.toc a,.sport a{min-height:44px}
+    input[type=checkbox]{width:22px;height:22px}
+    footer{color:#3d4a42;font-size:.9rem;margin:22px 0}
+    @media(max-width:650px){.slider-row{grid-template-columns:1fr}.banner{position:static;padding:12px}.shell{padding:12px}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#load">דלגו לטעינת נתונים</a>
+<a class="skip" href="#builder">דלגו לבניית המדד</a>
+<a class="skip" href="#ranking">דלגו לדירוג</a>
+<a class="skip" href="#validate">דלגו לאימות</a>
+<a class="skip" href="#panim">דלגו לבדיקת שורה חדשה</a>
+<a class="skip" href="#research">דלגו למקורות</a>
+<main class="shell">
+  <aside class="banner" aria-label="סיווג המעבדה">
+    <code>BASKETBALL_LAB</code> מעבדת לימוד, לא שירות סקאוטינג.
+    <code>USER_DATA_ONLY</code> אין כאן ליגה אמיתית מובנית: רק קובץ שאתם רשאים להריץ, או דוגמה סינתטית.
+    <code>NO_AI</code> אין מודל, רק נוסחה גלויה.
+    <code>NEW_LINE_UNDER_TEST</code> שפת גוף, צורת פנים ו-PanimGuide נכנסים כ«שורה חדשה» שנבדקת, לא כמדד מוכרז.
+    <nav class="toc" aria-label="מעבר לחלקי המעבדה">
+      <a href="#load">1. נתונים</a>
+      <a href="#builder">2. בנה מדד</a>
+      <a href="#ranking">3. דירוג</a>
+      <a href="#validate">4. אימות</a>
+      <a href="#panim">5. שורה חדשה</a>
+      <a href="#research">6. מה המחקר אומר</a>
+    </nav>
+    <div class="nav" aria-label="ניווט חיצוני">
+      <a href="../">מעבדת הכדורגל</a>
+      <a href="../trap/">מלכודת הפיצ'רים</a>
+      <a href="../licence.html">רישיון</a>
+      <a href="../offer.html">סדנה</a>
+    </div>
+  </aside>
+
+  <section class="card" id="hero">
+    <nav class="sport" aria-label="בחירת ענף">
+      <a href="../">כדורגל</a>
+      <a href="./" aria-current="page">כדורסל</a>
+    </nav>
+    <h1>מעבדת כדורסל — מדד שקוף ל-40 דקות</h1>
+    <p>אותו רעיון כמו מעבדת הכדורגל: נוסחה גלויה שאפשר להתווכח עליה, כל מספר ניתן למעקב עד התא בקובץ, ובדיקה על קבוצות שהמדד לא «ראה». ההבדל: אין כאן נתונים פתוחים מובנים. טוענים קובץ CSV שיש לכם זכות להריץ (ייצוא Basketball-Reference, ייצוא Excel של ליגה, טבלה ידנית), או את הדוגמה הסינתטית.</p>
+    <p class="muted">ערכים ל-40 דקות כי זה אורך משחק FIBA (ליגת העל, היורוליג). הקובץ לא נשלח לשום שרת.</p>
+  </section>
+
+  <section class="card" id="load" aria-labelledby="loadTitle">
+    <h2 id="loadTitle">1. טעינת נתונים</h2>
+    <p>עמודות שנקראות (באנגלית או בעברית): שם (Player), קבוצה (Team), עמדה (Pos), משחקים (G), <strong>דקות (MP / MIN) — חובה</strong>, PTS, TRB, ORB, DRB, AST, STL, BLK, TOV, FG, FGA, FT, FTA, 3P, 3PA, PF, ‎+/-‎, PIR / EFF. קובץ «ממוצע למשחק» עם עמודת G מוכפל אוטומטית לסכום עונתי, דקות בפורמט 32:15 נקראות, ושחקן שעבר קבוצה (שורת TOT / 2TM) נספר פעם אחת.</p>
+    <p><strong>כל עמודה מספרית אחרת</strong> (קידוד שפת גוף, fWHR מתמונות, מגעים למשחק, ‎+/-‎ של חצי עונה שני…) לא נכנסת לנוסחה — היא הופכת ל«שורה חדשה» שאפשר לבדוק בחלק 5, ואפשר גם לבחור אותה כיעד.</p>
+    <div class="row-inline">
+      <label for="bbFile">קובץ CSV:</label>
+      <input id="bbFile" type="file" accept=".csv,text/csv,text/plain">
+    </div>
+    <div class="row-inline">
+      <label><input id="bbAttest" type="checkbox"> יש לי רישיון להריץ את הקובץ הזה מקומית (ScoutAI לא מעניק רישיון)</label>
+    </div>
+    <div class="row-inline">
+      <button id="bbLoadFile" type="button" disabled>טען את הקובץ שלי</button>
+      <button id="bbExample" type="button" class="secondary">טען דוגמה סינתטית</button>
+    </div>
+    <p id="bbStatus" class="status" role="status" aria-live="polite">עוד לא נטען קובץ.</p>
+    <div id="bbMessages"></div>
+  </section>
+
+  <section class="card" id="builder" aria-labelledby="builderTitle">
+    <h2 id="builderTitle">2. בנה מדד</h2>
+    <p>שלושה רכיבים, כל אחד 0–100. המשקלות ידניים: ברירת המחדל נותנת לקליעה הכי הרבה כי קליעה היא הגורם הגדול מבין «ארבעת הגורמים» של דין אוליבר. זו נקודת פתיחה לוויכוח, לא כיול.</p>
+    <div class="sliders">
+      <div class="slider-row">
+        <label id="wDefLabel" for="wDef">הגנה</label>
+        <input id="wDef" type="range" min="0" max="100" step="5" value="30" aria-labelledby="wDefLabel" aria-valuetext="הגנה, 30">
+        <strong id="wDefVal" aria-hidden="true">30</strong>
+      </div>
+      <div class="slider-row">
+        <label id="wPlayLabel" for="wPlay">יצירה</label>
+        <input id="wPlay" type="range" min="0" max="100" step="5" value="30" aria-labelledby="wPlayLabel" aria-valuetext="יצירה, 30">
+        <strong id="wPlayVal" aria-hidden="true">30</strong>
+      </div>
+      <div class="slider-row">
+        <label id="wScoreLabel" for="wScore">קליעה</label>
+        <input id="wScore" type="range" min="0" max="100" step="5" value="40" aria-labelledby="wScoreLabel" aria-valuetext="קליעה, 40">
+        <strong id="wScoreVal" aria-hidden="true">40</strong>
+      </div>
+      <div class="slider-row">
+        <label id="bbMinLabel" for="bbMinMinutes">סף דקות</label>
+        <input id="bbMinMinutes" type="range" min="0" max="1500" step="50" value="250" aria-labelledby="bbMinLabel" aria-valuetext="סף דקות, 250">
+        <strong id="bbMinMinutesVal" aria-hidden="true">250</strong>
+      </div>
+    </div>
+    <button id="bbReset" type="button" class="secondary">חזרה ל-30/30/40 ו-250 דקות</button>
+    <p id="bbFormula" class="formula">מדד = 0.3×הגנה + 0.3×יצירה + 0.4×קליעה</p>
+    <div class="table-wrap">
+      <table>
+        <caption>מה נכנס לכל רכיב (כל ספירה ל-40 דקות, מחולקת בתקרה וחתוכה ל-0–100)</caption>
+        <thead><tr><th scope="col">רכיב</th><th scope="col">מתכון</th><th scope="col">למה</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">הגנה</th><td>45% חטיפות (תקרה 2.5) · 40% חסימות (תקרה 2) · 15% ריבאונד הגנה (תקרה 9)</td><td>ב-Box Plus/Minus 2.0 חטיפה וחסימה שוות פי 5–10 מריבאונד הגנה. BPM גם מזהיר שהבוקס-סקור «מוגבל מאוד» במדידת הגנה — ולכן גם הרכיב הזה.</td></tr>
+          <tr><th scope="row">יצירה</th><td>60% אסיסטים (תקרה 9) · 40% יחס אסיסט/איבוד (תקרה 3)</td><td>איבוד הוא אחד מארבעת הגורמים (כ-25%), ובמקדמי BPM איבוד שווה כמעט נקודה שלמה בשלילה.</td></tr>
+          <tr><th scope="row">קליעה</th><td>50% נקודות (תקרה 30) · 50% True Shooting %, מ-40% (0) עד 70% (100)</td><td>TS% = PTS / (2 × (FGA + 0.44 × FTA)) — ההגדרה של Basketball-Reference. בלי FGA בקובץ: נקודות בלבד.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="ranking" aria-labelledby="rankingTitle">
+    <h2 id="rankingTitle">3. דירוג</h2>
+    <div id="bbRanking"><p class="muted">טענו קובץ כדי לראות דירוג.</p></div>
+  </section>
+
+  <section class="card" id="validate" aria-labelledby="validateTitle">
+    <h2 id="validateTitle">4. אימות על קבוצות מוחזקות</h2>
+    <p>חצי מהקבוצות בקובץ הן «אימון» והחצי השני «מבחן», כך ששחקני אותה קבוצה לא נמצאים בשני הצדדים. Spearman ρ בודק אם סדר המדד דומה לסדר של יעד שלא נבחר מראש. זו אותה עונה — לא עונה מוחזקת.</p>
+    <div class="row-inline">
+      <label for="bbOutcome">יעד:</label>
+      <select id="bbOutcome" disabled><option value="">טענו קובץ קודם</option></select>
+    </div>
+    <div id="bbValidation"></div>
+  </section>
+
+  <section class="card" id="panim" aria-labelledby="panimTitle">
+    <h2 id="panimTitle">5. בדיקת שורה חדשה — שפת גוף, פנים, כל עמודה</h2>
+    <p>כאן בודקים אם שורה שאינה בבוקס-סקור — קידוד שפת גוף, יחס רוחב-גובה של הפנים (fWHR) מתמונות, מגעים בין שחקנים, או PanimGuide — באמת אומרת משהו על השחקן. אותו פיצול קבוצות ואותו יעד כמו המדד, ושתי שאלות על קבוצות המבחן:</p>
+    <ol>
+      <li><strong>האם השורה חוזה את היעד?</strong> מערבבים את השורה בין שחקני המבחן 1,000 פעמים. טווח ה-|ρ| שמתקבל ממזל בלבד הוא «טווח הרעש». ρ בתוך הטווח = אין ראיה.</li>
+      <li><strong>האם היא מוסיפה משהו מעבר לסטטיסטיקה?</strong> ρ חלקי: הקשר בין השורה ליעד אחרי שמנכים את המדד. שורה שחוזה רק כי היא חוזרת על הבוקס-סקור לא מגלה שום דבר חדש על השחקן.</li>
+    </ol>
+    <div class="row-inline">
+      <label for="bbFeature">השורה לבדיקה:</label>
+      <select id="bbFeature" disabled><option value="">טענו קובץ קודם</option></select>
+      <label><input id="bbFeaturePer40" type="checkbox"> זו ספירה עונתית — חלקו ל-40 דקות</label>
+    </div>
+    <p class="muted">היעד נבחר בחלק 4.</p>
+    <div id="bbPanim"><p class="muted">טענו קובץ כדי להריץ את המבחן.</p></div>
+    <details id="protocol">
+      <summary><strong>איך מודדים שורה של שפת גוף או פנים — פרוטוקול לפי המחקר</strong></summary>
+      <ol>
+        <li><strong>מחליטים מראש</strong> מה מודדים ומול איזה יעד, וכותבים את זה לפני שמסתכלים בתוצאות. שורה שנבחרה אחרי שראו את הנתונים «תעבוד» תמיד.</li>
+        <li><strong>בוחרים התנהגות מוגדרת:</strong>
+          <ul>
+            <li>מגעים בין שחקנים (Kraus et al. 2010, NBA): כמה פעמים שחקן נוגע בחבר קבוצה — כיף, היי-פייב, חיבוק, נגיעה בראש, התגודדות — ל-40 דקות.</li>
+            <li>תנועות ידיים (Lian et al. 2026, מונדיאל 2022): לדקה — טקטיות (מבקש כדור, מכוון), רגשיות חיוביות (מחיאות, עידוד), רגשיות שליליות (ידיים באוויר מתסכול).</li>
+            <li>יציבה לפני זריקה (מבוסס על NBCSP של Furley &amp; Roth 2021, שפותח לפנדלים): ראש מורם או מושפל, מבט לסל או לרצפה, גו זקוף או שמוט — בסולם קבוע לפני כל זריקת עונשין.</li>
+            <li>פנים (Sato et al. 2021): fWHR = רוחב בין עצמות הלחיים חלקי הגובה מהשפה העליונה לגבות, מתמונה רשמית חזיתית.</li>
+          </ul>
+        </li>
+        <li><strong>מקודדים מווידאו בלי קול ובלי לראות סטטיסטיקה,</strong> לדקה של משחק. שני מקודדים על לפחות 20% מהמשחקים; מסכימים ברמה סבירה (κ ≥ 0.6) לפני שממשיכים.</li>
+        <li><strong>מודדים מוקדם, בודקים מאוחר:</strong> כמו Kraus et al. — קידוד ממשחקי תחילת העונה, ויעד מהמשך העונה. אפשר להוסיף לקובץ עמודה כמו «+/- חצי שני» ולבחור אותה כיעד בחלק 4.</li>
+        <li><strong>מוסיפים עמודה לקובץ</strong> (שם חופשי, בעברית או באנגלית), טוענים, ובוחרים אותה כאן.</li>
+        <li><strong>תוצאה אחת היא לא אישור.</strong> אם השורה עוברת את שתי השאלות — חוזרים על זה בעונה הבאה, עם אותו פרוטוקול.</li>
+      </ol>
+      <p class="muted">המעבדה לא מנתחת וידאו או תמונות — היא בודקת את המספרים שמדדתם. ניתוח אוטומטי של תנוחות גוף מווידאו (3D pose) קיים במחקר (Journal of Nonverbal Behavior, 2026), אבל דורש עבודה מחוץ לדפדפן.</p>
+    </details>
+  </section>
+
+  <section class="card" id="research" aria-labelledby="researchTitle">
+    <h2 id="researchTitle">6. מה המחקר אומר</h2>
+    <h3>על הנוסחה</h3>
+    <ul class="sources">
+      <li><strong>True Shooting %</strong> — PTS / (2 × (FGA + 0.44 × FTA)). <a href="https://www.basketball-reference.com/about/glossary.html" rel="noopener">Basketball-Reference, Glossary</a>. 0.44 הוא קירוב לחלק מזריקות העונשין שמסיימות התקפה.</li>
+      <li><strong>ארבעת הגורמים</strong> (Dean Oliver): קליעה כ-40%, איבודים 25%, ריבאונד 20%, עונשין 15%. ניתוחים מאוחרים שינו את המשקלות אבל לא את הסדר. <a href="https://www.basketball-reference.com/about/factors.html" rel="noopener">Basketball-Reference, Four Factors</a>.</li>
+      <li><strong>Box Plus/Minus 2.0</strong>: חטיפה 1.0–1.37, חסימה 0.70–1.33, ריבאונד הגנה 0.12–0.18, איבוד ‎-0.96 (נקודות ל-100 פוזשנים, לפי עמדה). «בהגנה הבוקס-סקור מוגבל מאוד». שחקנים עם מעט דקות מרוסנים עד 450 דקות. <a href="https://www.basketball-reference.com/about/bpm2.html" rel="noopener">Basketball-Reference, About BPM</a>.</li>
+      <li><strong>יציבות מדדים</strong>: Franks, D'Amour, Cervone &amp; Bornn (2016), «Meta-analytics», Journal of Quantitative Analysis in Sports 12(4):151–165 — מודדים יציבות והבחנה של מדדי NBA, אחרי הוצאת שחקנים מתחת ל-250 דקות; אחוז שלשות גולמי הכי פחות יציב. <a href="https://arxiv.org/abs/1609.09830" rel="noopener">arXiv:1609.09830</a>.</li>
+      <li><strong>כמה מדגם צריך</strong>: Medvedovsky (2020) — ‎+/-‎ צריך «ריפוד» של יותר מ-1,000 פוזשנים ממוצעים, ואחוז שלשות כ-240 זריקות, לפני שהם יותר אות מרעש. <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/" rel="noopener">NBA Stabilization Rates and the Padding Approach</a>.</li>
+      <li><strong>PIR</strong> (ACB 1991, יורוליג): (נקודות + ריבאונדים + אסיסטים + חטיפות + חסימות + עבירות שנסחטו) פחות (החטאות שדה + החטאות עונשין + איבודים + זריקות שנחסמו + עבירות). בדוגמה הסינתטית: גרסה מפושטת בלי עבירות שנסחטו וזריקות שנחסמו. <a href="https://en.wikipedia.org/wiki/Performance_index_rating" rel="noopener">Performance index rating</a>.</li>
+    </ul>
+    <h3>על שפת גוף וביצועים</h3>
+    <ul class="sources">
+      <li><strong>מגעים ב-NBA:</strong> Kraus, Huang &amp; Keltner (2010), Emotion 10:745–749 — 294 שחקנים מכל 30 הקבוצות, משחק אחד לכל קבוצה מחודשי העונה הראשונים; 12 סוגי מגע. מגע מוקדם בעונה ניבא ביצועים אישיים וקבוצתיים מאוחרים, גם אחרי שליטה במעמד, בציפיות ובביצועים המוקדמים. מגבלה: משחק אחד לקבוצה. <a href="https://experts.illinois.edu/en/publications/tactile-communication-cooperation-and-performance-an-ethological-/" rel="noopener">פרטי המאמר</a>.</li>
+      <li><strong>חגיגה בפנדלים:</strong> Moll, Jordet &amp; Pepping (2010), Journal of Sports Sciences 28(9):983–992 — 151 בעיטות בדו-קרבי פנדלים במונדיאלים ויורו: חגיגה בשתי ידיים נקשרה לניצחון בדו-קרב, והבעיטה הבאה של היריב הוחטאה יותר. קשר, לא סיבתיות. <a href="https://pure.cardiffmet.ac.uk/en/publications/emotional-contagion-in-soccer-penalty-shootouts-celebration-of-in/" rel="noopener">פרטי המאמר</a>.</li>
+      <li><strong>שפת גוף ורושם:</strong> Furley, Dicks &amp; Memmert (2012), Journal of Sport &amp; Exercise Psychology 34(1):61–82 — בועט עם שפת גוף דומיננטית נשפט טוב יותר ע״י צופים. זה מודד רושם, לא ביצוע. <a href="https://fis.dshs-koeln.de/en/publications/nonverbal-behavior-in-soccer-the-influence-of-dominant-and-submis/" rel="noopener">פרטי המאמר</a>.</li>
+      <li><strong>מי מוביל:</strong> Furley &amp; Schweizer (2014), Journal of Nonverbal Behavior 38:13–29 — צופים זיהו מי מוביל ומי מפגר מקטעי וידאו קצרים בלי קול, בענפים קבוצתיים ואישיים. <a href="https://link.springer.com/article/10.1007/s10919-013-0168-7" rel="noopener">doi:10.1007/s10919-013-0168-7</a>.</li>
+      <li><strong>שיטת קידוד:</strong> Furley &amp; Roth (2021), Journal of Sport &amp; Exercise Psychology 43(2):140–154 — NBCSP, מערכת קידוד לשפת גוף בפנדלים (ראש, מבט, גו, ידיים) עם אמינות בין-מקודדים טובה לרוב הפריטים. <a href="https://journals.humankinetics.com/view/journals/jsep/43/2/article-p140.xml" rel="noopener">doi:10.1123/jsep.2020-0066</a>.</li>
+      <li><strong>מונדיאל 2022:</strong> Lian, Gjesdal, Fletcher &amp; Jordet (2026), Frontiers in Psychology 16:1699943 — 143 שחקנים, תנועות ידיים לדקה (κ 0.66–0.83): <em>אין</em> הבדל בין ניצחון, תיקו והפסד. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12865708/" rel="noopener">PMC12865708</a>.</li>
+    </ul>
+    <p class="notice">המחקר על שפת גוף אמיתי ומעורב: יש תוצאות חיוביות (מגעים ב-NBA, חגיגות בפנדלים), יש תוצאות ריקות (מונדיאל 2022), והרבה ממנו מודד רושם של צופים ולא ביצוע. כמעט אין מחקר שבודק אם שפת הגוף של שחקן חוזה את <em>הסטטיסטיקה שלו עצמו</em> מעבר לבוקס-סקור, על קבוצות מוחזקות — וזה בדיוק מה שחלק 5 בודק.</p>
+    <h3>על פנים וביצועים</h3>
+    <ul class="sources">
+      <li><strong>כדורסל:</strong> Sato et al. (2021), Frontiers in Psychology 12:714819 — 482 שחקני B-League (יפן), עונה אחת (2019–20), יחס רוחב-גובה של הפנים (fWHR) נמדד מתמונות רשמיות חזיתיות ע״י שני מודדים. אחרי שליטה בדקות וב-BMI: קשר ל-EFF ‏(β=0.15, כ-2% מהשונות); לזריקות לסל אפקט «זניח» (0.2%). לא נבדק בעונה שנייה. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8416241/" rel="noopener">PMC8416241</a>.</li>
+      <li><strong>כדורגל, מונדיאל 2010:</strong> Welker, Goetz, Galicia, Liphardt &amp; Carré (2015), Adaptive Human Behavior and Physiology 1:17–29 — כ-1,000 שחקנים; fWHR נקשר לשערים ובישולים רק אצל חלוצים. פרשנות מאוחרת העלתה חשש שגובה מבלבל את הקשר. <a href="https://snelab.nipissingu.ca/wp-content/uploads/sites/32/2014/10/Welker-Goets-Galicia-Lipardt-and-Carre.pdf" rel="noopener">PDF</a>.</li>
+      <li><strong>כדורגל, יפן:</strong> Fujii, Goto &amp; Takagishi (2016), Letters on Evolutionary Behavioral Science 7(1):37–40 — 343 שחקני J-League, עונת 2012: אין קשר בין fWHR לשערים באף עמדה. <a href="https://lebs.hbesj.org/index.php/lebs/article/view/lebs.2016.49" rel="noopener">LEBS</a>.</li>
+      <li><strong>בייסבול:</strong> Tsujimura &amp; Banissy (2013), Biology Letters — קשר להום-ראנים בשתי עונות; תגובה של Mayew (2013) באותו כתב עת בחנה מחדש את הקשר מול BMI. <a href="https://doi.org/10.1098/rsbl.2013.0140" rel="noopener">doi:10.1098/rsbl.2013.0140</a>.</li>
+      <li><strong>מטה-אנליזה:</strong> Geniole et al. (2015), PLOS ONE — fWHR והתנהגות מאיימת אצל גברים: r≈0.16 (n=4,603); החוקרים עצמם מתארים את הקשר כ«קטן למדי». <a href="https://doi.org/10.1371/journal.pone.0132726" rel="noopener">doi:10.1371/journal.pone.0132726</a>.</li>
+      <li><strong>המדגם הגדול:</strong> Kosinski (2017), Psychological Science 28(11):1675–1682 — 137,163 אנשים, 55 סולמות התנהגות: fWHR לא קשור באופן משמעותי לאף אחד מהם. <a href="https://doi.org/10.1177/0956797617716929" rel="noopener">doi:10.1177/0956797617716929</a>.</li>
+    </ul>
+    <p class="notice"><strong>השורה התחתונה:</strong> המחקר האמיתי על פנים מודד <em>תמונות</em>, ומוצא לכל היותר אפקט קטן (בכדורסל: כ-2% מהשונות, בעונה אחת), שלא תמיד חוזר במדגמים אחרים. PanimGuide לא מודד תמונות בכלל: הוא קורא את אותיות השם והקבוצה. מי שרוצה לבדוק השערת פנים באמת — הפרוטוקול של Sato et al. הוא נקודת ההתחלה: תמונות רשמיות חזיתיות, שני מודדים בלתי תלויים, השערה ויעד שנקבעים מראש, ועונה נוספת לבדיקה.</p>
+  </section>
+
+  <footer>ScoutAI · מעבדת כדורסל מקומית · לא שירות ניתוח מאומת · <a href="../licence.html">רישיון</a> · <a href="../offer.html">סדנה</a> · <a href="../">מעבדת הכדורגל</a></footer>
+</main>
+<script src="../demo.js"></script>
+<script src="../basketball.js"></script>
+<script>
+(function () {
+  'use strict';
+  const Demo = window.ScoutAIDemo;
+  const BB = window.ScoutAIBasketball;
+  const RANKING_LIMIT = 100;
+  let store = null;
+  let spec = Object.assign({}, BB.DEFAULT_SPEC);
+  let sourceNote = '';
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
+  function fmt(value) {
+    return value == null ? '—' : String(value);
+  }
+
+  function fmtP(p) {
+    if (p == null) return '—';
+    return p <= 0.001 ? 'p≤0.001' : 'p=' + p;
+  }
+
+  const fileInput = document.getElementById('bbFile');
+  const attest = document.getElementById('bbAttest');
+  const loadButton = document.getElementById('bbLoadFile');
+  const exampleButton = document.getElementById('bbExample');
+  const status = document.getElementById('bbStatus');
+  const messages = document.getElementById('bbMessages');
+  const outcomeSelect = document.getElementById('bbOutcome');
+  const featureSelect = document.getElementById('bbFeature');
+  const featurePer40 = document.getElementById('bbFeaturePer40');
+  const sliders = [
+    { id: 'wDef', key: 'defense', label: 'הגנה' },
+    { id: 'wPlay', key: 'playmaking', label: 'יצירה' },
+    { id: 'wScore', key: 'scoring', label: 'קליעה' },
+    { id: 'bbMinMinutes', key: 'minMinutes', label: 'סף דקות' }
+  ];
+
+  function syncLoadButton() {
+    loadButton.disabled = !(fileInput.files && fileInput.files.length && attest.checked);
+  }
+
+  function showMessages(parsed) {
+    let html = '';
+    if (parsed.errors && parsed.errors.length) {
+      html += '<div class="danger"><strong>שגיאות (' + parsed.errors.length + '):</strong><ul class="msgs">' +
+        parsed.errors.slice(0, 20).map(function (m) { return '<li>' + escapeHtml(m) + '</li>'; }).join('') +
+        (parsed.errors.length > 20 ? '<li>ועוד ' + (parsed.errors.length - 20) + '</li>' : '') + '</ul></div>';
+    }
+    if (parsed.warnings && parsed.warnings.length) {
+      html += '<div class="notice"><strong>מה המעבדה עשתה עם הקובץ:</strong><ul class="msgs">' +
+        parsed.warnings.map(function (m) { return '<li>' + escapeHtml(m) + '</li>'; }).join('') + '</ul></div>';
+    }
+    messages.innerHTML = html;
+  }
+
+  function accept(parsed, label) {
+    showMessages(parsed);
+    if (!parsed.ok) {
+      store = null;
+      status.textContent = 'הקובץ לא נטען: ' + (parsed.errors[0] || 'שגיאה');
+      render();
+      return;
+    }
+    store = BB.createBasketballStore(parsed);
+    sourceNote = parsed.provenance === Demo.SYNTHETIC_PROVENANCE
+      ? 'דוגמה סינתטית: אין כאן ליגה, קבוצה או שחקן אמיתיים. ‎+/-‎ בקובץ נבנה מאותה «יכולת» נסתרת שמייצרת את הסטטיסטיקה, ולכן המדד «מצליח» עליו — זו תכונה של המחולל, לא ממצא. «שפת גוף (אקראי)» היא מספר אקראי, ו«בקרה (מושתל)» נבנתה מאותה יכולת נסתרת כדי להראות שהמבחן יודע לזהות קשר. אף אחת מהן לא מדידה של שפת גוף.'
+      : 'קובץ שלכם (USER_LICENSED_DATA). המספרים כאן טובים רק כמו הקובץ.';
+    status.textContent = 'נטענו ' + parsed.players.length + ' שחקנים מ-' + label + '.';
+    outcomeSelect.disabled = !store.outcomes.length;
+    outcomeSelect.innerHTML = store.outcomes.length
+      ? store.outcomes.map(function (o) { return '<option value="' + o.id + '">' + escapeHtml(o.label) + '</option>'; }).join('')
+      : '<option value="">אין בקובץ יעד לבדיקה (‎+/-‎, PIR, נקודות או ריבאונדים)</option>';
+    spec.outcomeId = store.outcomes.length ? store.outcomes[0].id : '';
+    outcomeSelect.value = spec.outcomeId;
+    featureSelect.disabled = false;
+    featureSelect.innerHTML = store.features.map(function (f) {
+      return '<option value="' + escapeHtml(f.id) + '">' + escapeHtml(f.label) + '</option>';
+    }).join('');
+    spec.featureId = store.features[0].id;
+    featureSelect.value = spec.featureId;
+    featurePer40.checked = false;
+    spec.featurePer40 = false;
+    render();
+  }
+
+  function renderRanking(derived) {
+    const root = document.getElementById('bbRanking');
+    if (!store) {
+      root.innerHTML = '<p class="muted">טענו קובץ כדי לראות דירוג.</p>';
+      return;
+    }
+    if (!derived.rows.length) {
+      root.innerHTML = '<p class="notice">' + escapeHtml(derived.thresholdNote) + '</p>';
+      return;
+    }
+    const shown = derived.rows.slice(0, RANKING_LIMIT);
+    root.innerHTML = '<p class="muted">' + escapeHtml(sourceNote) + '</p>' +
+      '<div class="table-wrap"><table><caption>' + derived.rows.length + ' שחקנים מעל ' + derived.spec.minMinutes + ' דקות' +
+      (derived.rows.length > RANKING_LIMIT ? ' (מוצגים ' + RANKING_LIMIT + ' הראשונים)' : '') + '</caption>' +
+      '<thead><tr><th scope="col" class="num">#</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">עמדה</th>' +
+      '<th scope="col" class="num">דקות</th><th scope="col" class="num">מדד</th><th scope="col" class="num">הגנה</th><th scope="col" class="num">יצירה</th>' +
+      '<th scope="col" class="num">קליעה</th><th scope="col" class="num">נק׳/40</th><th scope="col" class="num">TS%</th></tr></thead><tbody>' +
+      shown.map(function (r) {
+        const raw = r.components.raw;
+        return '<tr><td class="num">' + r.rank + '</td><th scope="row">' + escapeHtml(r.name) + '</th><td>' + escapeHtml(r.team) + '</td>' +
+          '<td>' + escapeHtml(r.position) + (r.positionGroup !== 'OT' ? ' <span class="muted">(' + r.positionGroup + ')</span>' : '') + '</td>' +
+          '<td class="num">' + Math.round(r.minutes) + '</td><td class="num"><strong>' + r.score + '</strong></td>' +
+          '<td class="num">' + r.components.defense + '</td><td class="num">' + r.components.playmaking + '</td><td class="num">' + r.components.scoring + '</td>' +
+          '<td class="num">' + raw.points40 + '</td><td class="num">' + (raw.ts == null ? '—' : Math.round(raw.ts * 1000) / 10) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function renderValidation(derived) {
+    const root = document.getElementById('bbValidation');
+    const v = derived && derived.validation;
+    if (!store || !v) {
+      root.innerHTML = store ? '<p class="notice">אין בקובץ עמודה שאפשר לבדוק מולה (‎+/-‎, PIR, נקודות או ריבאונדים).</p>' : '';
+      return;
+    }
+    root.innerHTML = '<p class="muted">' + escapeHtml(v.splitLabel) + (v.withoutOutcome ? ' · ' + v.withoutOutcome + ' שחקנים בלי ערך יעד לא נכללו' : '') + '</p>' +
+      '<div class="table-wrap"><table><caption>Spearman ρ מול ' + escapeHtml(v.outcomeLabel) + '</caption>' +
+      '<thead><tr><th scope="col">חלק</th><th scope="col" class="num">שחקנים</th><th scope="col" class="num">מדד</th><th scope="col" class="num">הגנה</th><th scope="col" class="num">יצירה</th><th scope="col" class="num">קליעה</th></tr></thead><tbody>' +
+      [['אימון', v.train], ['מבחן', v.test]].map(function (pair) {
+        const s = pair[1];
+        return '<tr><th scope="row">' + pair[0] + '</th><td class="num">' + s.n + '</td><td class="num"><strong>' + fmt(s.rho) + '</strong></td>' +
+          '<td class="num">' + fmt(s.componentRho.defense) + '</td><td class="num">' + fmt(s.componentRho.playmaking) + '</td><td class="num">' + fmt(s.componentRho.scoring) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="' + (v.leaky ? 'notice' : 'ok') + '">' + escapeHtml(v.verdict) + '</p>';
+  }
+
+  function renderPanim(derived) {
+    const root = document.getElementById('bbPanim');
+    const f = derived && derived.feature;
+    if (!store || !f) {
+      root.innerHTML = '<p class="muted">טענו קובץ עם יעד לבדיקה כדי להריץ את המבחן.</p>';
+      return;
+    }
+    if (f.error) {
+      root.innerHTML = '<p class="notice">' + escapeHtml(f.error) + '</p>';
+      return;
+    }
+    const hit = (f.test.p != null && f.test.p < 0.05) || (f.test.partialP != null && f.test.partialP < 0.05);
+    let html = '<p class="verdict ' + (hit ? 'notice' : 'ok') + '">' + escapeHtml(f.verdict) + '</p>' +
+      '<div class="table-wrap"><table><caption>«' + escapeHtml(f.featureLabel) + '»' + (f.per40 ? ' (ל-40 דקות)' : '') +
+      ' מול ' + escapeHtml(f.outcomeLabel) + ', אותו פיצול קבוצות</caption>' +
+      '<thead><tr><th scope="col">חלק</th><th scope="col" class="num">שחקנים</th><th scope="col" class="num">ρ השורה</th>' +
+      '<th scope="col" class="num">ρ חלקי (מעבר למדד)</th><th scope="col" class="num">ρ המדד</th></tr></thead><tbody>' +
+      '<tr><th scope="row">אימון</th><td class="num">' + f.train.n + '</td><td class="num">' + fmt(f.train.rho) + '</td>' +
+      '<td class="num">' + fmt(f.train.partial) + '</td><td class="num">' + fmt(f.train.metricRho) + '</td></tr>' +
+      '<tr><th scope="row">מבחן</th><td class="num">' + f.test.n + '</td>' +
+      '<td class="num"><strong>' + fmt(f.test.rho) + '</strong> <span class="muted">' + fmtP(f.test.p) + '</span></td>' +
+      '<td class="num"><strong>' + fmt(f.test.partial) + '</strong> <span class="muted">' + fmtP(f.test.partialP) + '</span></td>' +
+      '<td class="num">' + fmt(f.test.metricRho) + ' <span class="muted">' + fmtP(f.test.metricP) + '</span></td></tr>' +
+      '</tbody></table></div>' +
+      '<p class="muted">טווח הרעש במבחן (95% מ-' + f.iterations + ' ערבובים של השורה): ρ ‎±' + fmt(f.noiseBand) + '‎, ρ חלקי ‎±' + fmt(f.partialNoiseBand) +
+      '‎. p = חלק הערבובים שנתנו ערך גדול או שווה לזה שנמדד.' + (f.excluded ? ' ' + f.excluded + ' שחקנים בלי ערך בשורה או ביעד לא נכללו.' : '') + '</p>';
+    const p = f.featureId === BB.PANIM_FEATURE ? derived.panim : null;
+    if (p && p.spelling) {
+      html += '<div class="table-wrap"><table><caption>אותו שחקן, כתיב אחר (קבוצה: ' + escapeHtml(p.spelling.team || '—') + ')</caption>' +
+        '<thead><tr><th scope="col">השם כפי שנכתב</th><th scope="col" class="num">ציון PanimGuide</th></tr></thead><tbody>' +
+        p.spelling.probes.map(function (probe) {
+          return '<tr><td>' + escapeHtml(probe.name) + '</td><td class="num">' + probe.score + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<p class="' + (p.spelling.changes ? 'notice' : 'muted') + '">' + (p.spelling.changes
+          ? 'הציון זז כשרק הכתיב זז. מדד של פנים לא היה זז — PanimGuide קורא את אותיות השם.'
+          : 'בשחקן הזה הכתיבים נתנו אותו ציון; נסו שחקן אחר — הציון עדיין נגזר מהשם בלבד.') + '</p>';
+    }
+    root.innerHTML = html;
+  }
+
+  function render() {
+    sliders.forEach(function (s) {
+      const input = document.getElementById(s.id);
+      const value = Number(input.value);
+      spec[s.key] = value;
+      document.getElementById(s.id + 'Val').textContent = String(value);
+      input.setAttribute('aria-valuetext', s.label + ', ' + value);
+    });
+    document.getElementById('bbFormula').textContent = BB.formatFormula(spec);
+    const derived = store ? store.derive(spec) : null;
+    if (derived) spec.outcomeId = derived.spec.outcomeId;
+    renderRanking(derived);
+    renderValidation(derived);
+    renderPanim(derived);
+  }
+
+  fileInput.addEventListener('change', syncLoadButton);
+  attest.addEventListener('change', syncLoadButton);
+  loadButton.addEventListener('click', function () {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    status.textContent = 'קורא את ' + file.name + '…';
+    const reader = new FileReader();
+    reader.onload = function () {
+      const decoded = Demo.decodeUserFile(new Uint8Array(reader.result));
+      const parsed = BB.parseBasketballCsv(decoded.text, { attested: attest.checked, fileName: file.name });
+      if (decoded.warnings && decoded.warnings.length) parsed.warnings = decoded.warnings.concat(parsed.warnings || []);
+      accept(parsed, file.name);
+    };
+    reader.onerror = function () { status.textContent = 'לא הצלחתי לקרוא את הקובץ.'; };
+    reader.readAsArrayBuffer(file);
+  });
+  exampleButton.addEventListener('click', function () {
+    status.textContent = 'טוען דוגמה סינתטית…';
+    fetch('../' + BB.EXAMPLE_PATH)
+      .then(function (response) {
+        if (!response.ok) throw new Error('missing');
+        return response.text();
+      })
+      .then(function (text) { accept(BB.parseBasketballCsv(text, { synthetic: true }), 'הדוגמה הסינתטית'); })
+      .catch(function () {
+        status.textContent = 'הדוגמה נטענת רק דרך שרת (GitHub Pages או שרת מקומי), לא מקובץ שנפתח ישירות (file://).';
+      });
+  });
+  sliders.forEach(function (s) {
+    document.getElementById(s.id).addEventListener('input', render);
+  });
+  outcomeSelect.addEventListener('change', function () {
+    spec.outcomeId = outcomeSelect.value;
+    render();
+  });
+  featureSelect.addEventListener('change', function () {
+    spec.featureId = featureSelect.value;
+    render();
+  });
+  featurePer40.addEventListener('change', function () {
+    spec.featurePer40 = featurePer40.checked;
+    render();
+  });
+  document.getElementById('bbReset').addEventListener('click', function () {
+    document.getElementById('wDef').value = BB.DEFAULT_SPEC.defense;
+    document.getElementById('wPlay').value = BB.DEFAULT_SPEC.playmaking;
+    document.getElementById('wScore').value = BB.DEFAULT_SPEC.scoring;
+    document.getElementById('bbMinMinutes').value = BB.DEFAULT_SPEC.minMinutes;
+    render();
+    status.textContent = 'המשקלות חזרו ל-30/30/40 וסף 250 דקות.';
+  });
+  render();
+}());
+</script>
+</body>
+</html>
