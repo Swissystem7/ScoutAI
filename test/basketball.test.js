@@ -330,7 +330,7 @@ test('basketball page is Hebrew RTL, accessible, and cites its research', () => 
 });
 
 test('basketball runtime has no outbound network, forms or submission path', () => {
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
+  const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((m) => m[1]).join('\n');
   const runtime = scripts + '\n' + engine;
   [/XMLHttpRequest/i, /sendBeacon/i, /WebSocket/i, /<form\b/i, /type=["']submit/i, /mailto:/i,
     /https?:\/\//i, /fetch\s*\(\s*['"`]https?:/i].forEach((pattern) => assert.doesNotMatch(runtime, pattern));
