@@ -114,33 +114,56 @@ test('positions: codes, words and Hebrew land in G / F / C', () => {
   assert.equal(BB.positionGroup(''), 'OT');
 });
 
-test('components follow the documented recipe: TS% with 0.44 FTA, steals and blocks outweigh DRB', () => {
-  const row = { minutes: 400, points: 200, fga: 150, fta: 50, assists: 60, turnovers: 20, steals: 20, blocks: 10, defRebounds: 60 };
+test('components follow the documented recipe: TS% with 0.44 FTA; defense is steals and blocks only', () => {
+  const row = { minutes: 400, points: 200, fga: 150, fta: 50, assists: 60, turnovers: 20, steals: 20, blocks: 10, defRebounds: 60, offRebounds: 30 };
   const c = BB.componentsFor(row);
   assert.equal(c.raw.points40, 20);
   assert.equal(c.raw.ts, Math.round(200 / (2 * (150 + 0.44 * 50)) * 100) / 100);
   assert.equal(c.raw.astTo, 3);
-  // steals 2/40 → 80, blocks 1/40 → 50, DRB 6/40 → 66.7
-  assert.equal(c.defense, Math.round((80 * 0.45 + 50 * 0.4 + (6 / 9 * 100) * 0.15) * 10) / 10);
-  assert.ok(engine.includes('0.45') && engine.includes('* 0.15'));
+  // steals 2/40 → 80, blocks 1/40 → 50; DRB no longer sits in defense.
+  assert.equal(c.defense, Math.round((80 * 0.53 + 50 * 0.47) * 10) / 10);
+  // ORB 3/40 → 60 (cap 5), DRB 6/40 → 66.7 (cap 9); 60% ORB, 40% DRB.
+  assert.equal(c.raw.offRebounds40, 3);
+  assert.equal(c.rebounding, Math.round((60 * 0.6 + (6 / 9 * 100) * 0.4) * 10) / 10);
+  assert.ok(engine.includes('* 0.53') && engine.includes('scaleCap(offRebounds, 5) * 0.6'));
 });
 
-test('missing TOV / FGA / DRB fall back openly and say so', () => {
+test('a rebounding centre now scores on rebounding; a guard with the same defense does not', () => {
+  const centre = BB.componentsFor({ minutes: 800, offRebounds: 80, defRebounds: 180, steals: 16, blocks: 40 });
+  const guard = BB.componentsFor({ minutes: 800, offRebounds: 15, defRebounds: 60, steals: 16, blocks: 40 });
+  assert.equal(centre.defense, guard.defense);
+  // ORB 4/40 → 80, DRB 9/40 → 100: 0.6 × 80 + 0.4 × 100 = 88.
+  assert.equal(centre.rebounding, 88);
+  assert.ok(guard.rebounding < 40, 'guard rebounding ' + guard.rebounding);
+});
+
+test('missing TOV / FGA / ORB / DRB fall back openly and say so', () => {
   const c = BB.componentsFor({ minutes: 400, points: 200, assists: 60, rebounds: 80 });
-  assert.deepEqual(c.estimated.sort(), ['defRebounds', 'fga', 'turnovers']);
+  assert.deepEqual(c.estimated.sort(), ['defRebounds', 'fga', 'offRebounds', 'turnovers']);
   const exact = BB.componentsFor({ minutes: 400, rebounds: 80, offRebounds: 20 });
   assert.equal(exact.raw.defRebounds40, 6);
   assert.equal(exact.estimated.indexOf('defRebounds'), -1);
+  const fromDrb = BB.componentsFor({ minutes: 400, rebounds: 80, defRebounds: 60 });
+  assert.equal(fromDrb.raw.offRebounds40, 2);
+  assert.equal(fromDrb.estimated.indexOf('offRebounds'), -1);
+  const parsed = parse('Player,Tm,MP,TRB\nA,X,800,200\nB,Y,700,100\n');
+  assert.ok(parsed.warnings.some((w) => /ORB/.test(w) && /25%/.test(w)));
+  assert.ok(parse('Player,Tm,MP,PTS\nA,X,800,200\nB,Y,700,100\n').warnings.some((w) => /אין ריבאונדים/.test(w)));
 });
 
-test('default weights 30/30/40 and the 250-minute floor are the documented defaults', () => {
+test('default weights 24/20/24/32 (Four Factors rebounding share) and the 250-minute floor', () => {
   assert.deepEqual(
-    { d: BB.DEFAULT_SPEC.defense, p: BB.DEFAULT_SPEC.playmaking, s: BB.DEFAULT_SPEC.scoring, m: BB.DEFAULT_SPEC.minMinutes },
-    { d: 30, p: 30, s: 40, m: 250 }
+    { d: BB.DEFAULT_SPEC.defense, r: BB.DEFAULT_SPEC.rebounding, p: BB.DEFAULT_SPEC.playmaking, s: BB.DEFAULT_SPEC.scoring, m: BB.DEFAULT_SPEC.minMinutes },
+    { d: 24, r: 20, p: 24, s: 32, m: 250 }
   );
-  assert.equal(BB.formatFormula(BB.DEFAULT_SPEC), 'מדד = 0.3×הגנה + 0.3×יצירה + 0.4×קליעה');
-  assert.equal(BB.compositeScore({ defense: 50, playmaking: 50, scoring: 50 }, BB.DEFAULT_SPEC), 50);
-  assert.equal(BB.compositeScore({ defense: 50, playmaking: 50, scoring: 50 }, { defense: 0, playmaking: 0, scoring: 0 }), 0);
+  // The old 30/30/40 proportions are kept inside the remaining 80%.
+  assert.equal(BB.DEFAULT_SPEC.defense / 0.8, 30);
+  assert.equal(BB.DEFAULT_SPEC.scoring / 0.8, 40);
+  assert.equal(BB.formatFormula(BB.DEFAULT_SPEC), 'מדד = 0.24×הגנה + 0.2×ריבאונד + 0.24×יצירה + 0.32×קליעה');
+  const half = { defense: 50, rebounding: 50, playmaking: 50, scoring: 50 };
+  assert.equal(BB.compositeScore(half, BB.DEFAULT_SPEC), 50);
+  assert.equal(BB.compositeScore(half, { defense: 0, rebounding: 0, playmaking: 0, scoring: 0 }), 0);
+  assert.equal(BB.formatFormula({ defense: 0, rebounding: 0, playmaking: 0, scoring: 0 }), 'כל המשקלות 0 — אין מדד');
 });
 
 test('the team split keeps every team on one side and the halves the same size', () => {
@@ -301,10 +324,117 @@ test('testing a column against itself is refused', () => {
   assert.match(d.feature.error, /אותה עמודה/);
 });
 
+// A small game log: `quality(i, round)` sets player i's level in a round.
+function gameLog(players, rounds, quality, extraHeader) {
+  const head = 'Round,Player,Team,MP,PTS,ORB,DRB,AST,STL,BLK,TOV,FGA,FTA,+/-,PIR' + (extraHeader || '');
+  const lines = [head];
+  for (let r = 1; r <= rounds; r += 1) {
+    for (let i = 0; i < players; i += 1) {
+      const q = quality(i, r);
+      // Every count rises with q, so a higher q is a better player on every component.
+      lines.push([r, 'P' + i, 'T' + (i % 8), 25, 8 + 2 * q, 1 + Math.floor(q / 3), 3 + Math.floor(q / 2), 1 + Math.floor(q / 2), 1,
+        Math.floor(q / 4), 2, 8 + q, 2, q - 5, 6 + 2 * q].join(','));
+    }
+  }
+  return lines.join('\n');
+}
+
+test('a Round / מחזור column makes a game log: summed to a season, games kept for part 6', () => {
+  const csv = [
+    'מחזור,Player,Tm,MP,PTS,AST',
+    'Game 1,A,X,30,20,5',
+    'Game 1,B,Y,20,8,2',
+    'Game 2,A,X,32,10,3',
+    'Game 3,A,Z,28,14,4',
+    ',B,Y,22,6,1'
+  ].join('\n');
+  const parsed = parse(csv);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.gameLog.rounds, [1, 2, 3]);
+  assert.equal(parsed.gameLog.lines.length, 4);
+  const a = parsed.players.find((p) => p.name === 'A');
+  assert.deepEqual({ g: a.games, min: a.minutes, pts: a.points, ast: a.assists, team: a.team }, { g: 3, min: 90, pts: 44, ast: 12, team: 'Z' });
+  assert.equal(parsed.perGame, false);
+  assert.ok(parsed.errors.some((e) => /חסר מחזור/.test(e)));
+  assert.ok(parsed.warnings.some((w) => /קובץ משחק-משחק/.test(w) && /מחזורים 1–3/.test(w)));
+  assert.ok(parsed.warnings.some((w) => /ביותר מקבוצה אחת/.test(w) && /A/.test(w)));
+  // A season file has no game log.
+  assert.equal(parse('Player,Tm,MP,PTS\nA,X,800,300\nB,Y,700,200\n').gameLog, null);
+});
+
+test('start of season: the metric sees only the early rounds, the target only the later ones', () => {
+  // P0 is the best player early and the only worst one later; everyone else is steady.
+  const csv = gameLog(24, 8, (i, r) => (i === 0 ? (r <= 2 ? 10 : 0) : 1 + (i % 9)));
+  const store = BB.createBasketballStore(parse(csv));
+  const s = store.derive({ outcomeId: 'pir', minMinutes: 0, splitRound: 2, target: 'P0' }, { iterations: 200 }).season;
+  assert.equal(s.splitRound, 2);
+  assert.equal(s.earlyRounds, 2);
+  assert.equal(s.laterRounds, 6);
+  assert.equal(s.earlyFloor, 2 * BB.MIN_PER_ROUND);
+  assert.equal(s.target.found, true);
+  assert.equal(s.target.ranks.find((r) => r.id === 'metric').rank, 1);
+  assert.equal(s.target.laterRank, s.laterPlayers);
+  assert.match(s.verdict, /דוגמה, לא הוכחה/);
+});
+
+test('start of season: a lasting skill is detected, a reshuffled one stays in the noise', () => {
+  const steady = BB.createBasketballStore(parse(gameLog(48, 8, (i) => i % 10)));
+  const kept = steady.derive({ outcomeId: 'pir', splitRound: 2 }, { iterations: 300 }).season;
+  const metric = kept.predictors[0];
+  assert.equal(metric.id, 'metric');
+  assert.ok(metric.rho > 0.8 && metric.p < 0.05, 'steady ρ=' + metric.rho);
+  assert.match(kept.verdict, /חוזה את/);
+  assert.ok(kept.predictors.some((p) => p.id === 'pir' && p.sameAsTarget));
+
+  // Later quality is a fixed scramble of early quality: no lasting skill.
+  const shuffled = BB.createBasketballStore(parse(gameLog(48, 8, (i, r) => (r <= 2 ? i % 10 : (i * 3 + 5) % 10))));
+  const lost = shuffled.derive({ outcomeId: 'plusMinus', splitRound: 2 }, { iterations: 300 }).season;
+  assert.ok(lost.predictors[0].p >= 0.05, 'scrambled p=' + lost.predictors[0].p);
+  assert.match(lost.verdict, /לא חוזה/);
+});
+
+test('start of season: unknown or low-minute target players are reported, not ranked', () => {
+  const store = BB.createBasketballStore(parse(gameLog(20, 6, (i) => i % 7)));
+  const missing = store.derive({ outcomeId: 'pir', target: 'Nobody' }, { iterations: 50 }).season;
+  assert.equal(missing.target.found, false);
+  assert.match(missing.verdict, /לא נמצא שחקן/);
+  const csv = gameLog(20, 6, (i) => i % 7) + '\n1,Bench,T1,3,2,0,1,0,0,0,0,1,0,0,1';
+  const bench = BB.createBasketballStore(parse(csv)).derive({ outcomeId: 'pir', target: 'bench' }, { iterations: 50 }).season;
+  assert.equal(bench.target.found, true);
+  assert.equal(bench.target.eligible, false);
+  assert.match(bench.verdict, /מתחת לסף/);
+});
+
+test('start of season: the default split is about a quarter of the season, never the last round', () => {
+  assert.equal(BB.defaultSplitRound([1, 2]), 1);
+  assert.equal(BB.defaultSplitRound([1, 2, 3, 4, 5, 6, 7, 8]), 2);
+  assert.equal(BB.defaultSplitRound(Array.from({ length: 32 }, (_, i) => i + 1)), 8);
+  assert.equal(BB.defaultSplitRound([5]), null);
+  const one = BB.createBasketballStore(parse('Round,Player,Tm,MP,PIR\n1,A,X,30,10\n1,B,Y,20,5\n'));
+  assert.match(one.derive({ outcomeId: 'pir' }).season.error, /מחזור אחד/);
+});
+
+test('synthetic game log: 80 invented players, 14 rounds, written by the same seeded generator', () => {
+  const text = fs.readFileSync(path.join(root, BB.GAMELOG_EXAMPLE_PATH), 'utf8');
+  const parsed = BB.parseBasketballCsv(text, { synthetic: true });
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.provenance, Demo.SYNTHETIC_PROVENANCE);
+  assert.equal(parsed.players.length, 80);
+  assert.equal(parsed.gameLog.rounds.length, 14);
+  assert.ok(parsed.players.every((p) => /דמו/.test(p.name)));
+  assert.match(fs.readFileSync(path.join(root, 'tools', 'make-basketball-example.js'), 'utf8'), /basketball\.gamelog\.example\.csv/);
+  const store = BB.createBasketballStore(parsed);
+  const a = store.derive({ outcomeId: 'pir' }, { iterations: 200 }).season;
+  const b = store.derive({ outcomeId: 'pir' }, { iterations: 200 }).season;
+  assert.deepEqual(a, b);
+  assert.equal(a.splitRound, BB.defaultSplitRound(parsed.gameLog.rounds));
+  assert.ok(a.top.length === 10 && a.n > 40);
+});
+
 test('basketball page is Hebrew RTL, accessible, and cites its research', () => {
   assert.match(html, /lang="he"/);
   assert.match(html, /dir="rtl"/);
-  ['load', 'builder', 'ranking', 'validate', 'panim', 'research'].forEach((id) => {
+  ['load', 'builder', 'ranking', 'validate', 'panim', 'season', 'research'].forEach((id) => {
     assert.match(html, new RegExp('<a class="skip" href="#' + id + '">'));
     assert.match(html, new RegExp('<section class="card" id="' + id + '"'));
   });

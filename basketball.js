@@ -22,26 +22,41 @@
   const USER_DATA_PROVENANCE = Demo.USER_DATA_PROVENANCE;
   const SYNTHETIC_PROVENANCE = Demo.SYNTHETIC_PROVENANCE;
   const EXAMPLE_PATH = 'data/basketball.example.csv';
+  const GAMELOG_EXAMPLE_PATH = 'data/basketball.gamelog.example.csv';
 
   // Scoring gets the largest default weight because shooting is the largest
   // of Dean Oliver's Four Factors (about 40%; later regressions put it at
-  // 45-54%). 250 minutes is the floor Franks et al. (2016, JQAS) used before
+  // 45-54%). Rebounding is 20%, its Four Factors share; the other three keep
+  // their earlier 30/30/40 proportions inside the remaining 80%. Rebounding
+  // was added after a check on five Israeli Premier League seasons showed
+  // the recipe without offensive rebounds ranked centres far too low; the
+  // weight comes from the Four Factors, it was not fitted to that data.
+  // 250 minutes is the floor Franks et al. (2016, JQAS) used before
   // judging NBA box-score metrics; below it per-minute rates are mostly noise.
   // Sources are listed on basketball/index.html.
   const DEFAULT_SPEC = Object.freeze({
-    defense: 30,
-    playmaking: 30,
-    scoring: 40,
+    defense: 24,
+    rebounding: 20,
+    playmaking: 24,
+    scoring: 32,
     minMinutes: 250,
-    outcomeId: ''
+    outcomeId: '',
+    splitRound: 0,
+    target: ''
   });
 
-  const COMPONENT_LABELS = Object.freeze({ defense: 'הגנה', playmaking: 'יצירה', scoring: 'קליעה' });
+  const COMPONENTS = Object.freeze(['defense', 'rebounding', 'playmaking', 'scoring']);
+  const COMPONENT_LABELS = Object.freeze({ defense: 'הגנה', rebounding: 'ריבאונד', playmaking: 'יצירה', scoring: 'קליעה' });
+
+  // Start-of-season test: a player must average this many minutes per
+  // round on each side of the split to be ranked (10 a round is a rotation
+  // player, not a starter-only filter).
+  const MIN_PER_ROUND = 10;
 
   const FIELDS = Object.freeze([
     'name', 'team', 'position', 'games', 'minutes', 'points', 'rebounds', 'offRebounds', 'defRebounds',
     'assists', 'steals', 'blocks', 'turnovers', 'fgm', 'fga', 'ftm', 'fta', 'threePm', 'threePa',
-    'fouls', 'plusMinus', 'pir'
+    'fouls', 'plusMinus', 'pir', 'round'
   ]);
   const TEXT_FIELDS = Object.freeze(['name', 'team', 'position']);
   // +/- and efficiency can be negative; every other count cannot.
@@ -71,8 +86,14 @@
     '3pa': 'threePa', '3fga': 'threePa',
     pf: 'fouls', 'עבירות': 'fouls',
     '+/-': 'plusMinus', '+-': 'plusMinus', pm: 'plusMinus', plusminus: 'plusMinus', 'פלוסמינוס': 'plusMinus',
-    eff: 'pir', efficiency: 'pir', val: 'pir', valuation: 'pir', 'מדד': 'pir', 'מדדיעילות': 'pir'
+    eff: 'pir', efficiency: 'pir', val: 'pir', valuation: 'pir', 'מדד': 'pir', 'מדדיעילות': 'pir',
+    rnd: 'round', rd: 'round', matchday: 'round', gameweek: 'round', 'מחזור': 'round'
   });
+
+  // Every count a game log sums into a season (not text, not G, not round).
+  const SUM_FIELDS = Object.freeze(FIELDS.filter(function (key) {
+    return ['name', 'team', 'position', 'games', 'round'].indexOf(key) < 0;
+  }));
 
   // Basketball-Reference lists a traded player once per team plus one
   // combined row whose team is TOT (before 2024) or 2TM / 3TM (since).
@@ -293,6 +314,10 @@
           const parsed = minutesValue(cell, decimalComma);
           if (parsed && parsed.clock) clockCells += 1;
           value = parsed ? parsed.value : null;
+        } else if (key === 'round') {
+          // "5", "Round 5", "Game 5" (basket.co.il), "מחזור 5".
+          const digits = /^\D{0,12}?(\d{1,3})\s*$/.exec(String(cell).trim());
+          value = digits ? Number(digits[1]) : null;
         } else {
           value = Demo.csvNumber(cell, decimalComma);
         }
@@ -346,6 +371,125 @@
       warnings.push('עמודת ' + String(header[col[key]]).trim() + ': ' + missing[key] + ' תאים ריקים (- / N/A) נחשבים חסרים, לא 0');
     });
 
+    // A Round / מחזור column means one row per player per game: sum the
+    // season for the ranking, and keep the games for the start-of-season test.
+    if (own(col, 'round')) {
+      const log = gameLogFrom(players, errors, warnings);
+      if (!log) return fail(errors.length ? errors : ['לא נמצאו שורות משחק עם מחזור']);
+      return finish(log.totals, false, log);
+    }
+    const season = seasonRowsFrom(players, col, warnings);
+    return finish(season.kept, season.perGame, null);
+
+    function finish(kept, perGame, gameLog) {
+      const noMinutes = kept.filter(function (row) { return !has(row, 'minutes') || row.minutes <= 0; }).map(function (row) { return row.name; });
+      if (noMinutes.length) warnings.push('בלי דקות (לא ידורגו): ' + shownList(noMinutes));
+
+      if (!own(col, 'assists')) warnings.push('אין עמודת אסיסטים (AST) — יצירה תהיה 0 לכולם');
+      else if (!own(col, 'turnovers')) warnings.push('אין עמודת איבודים (TOV) — יצירה מחושבת מאסיסטים בלבד, בלי יחס אסיסט/איבוד');
+      if (!own(col, 'fga')) warnings.push('אין זריקות לסל (FGA) — קליעה מחושבת מנקודות בלבד, בלי אחוז קליעה אמיתי (TS%)');
+      const hasTrb = own(col, 'rebounds');
+      const hasOrb = own(col, 'offRebounds');
+      const hasDrb = own(col, 'defRebounds');
+      if (!hasTrb && !hasOrb && !hasDrb) {
+        warnings.push('אין ריבאונדים בקובץ — ריבאונד יהיה 0 לכולם');
+      } else {
+        if (!hasDrb) {
+          if (hasTrb && hasOrb) warnings.push('ריבאונד הגנה חושב כ-TRB פחות ORB');
+          else if (hasTrb) warnings.push('אין ריבאונד הגנה (DRB) — הוערך כ-75% מהריבאונדים (TRB), הערכה ולא מדידה');
+        }
+        if (!hasOrb) {
+          if (hasTrb && hasDrb) warnings.push('ריבאונד התקפה חושב כ-TRB פחות DRB');
+          else if (hasTrb) warnings.push('אין ריבאונד התקפה (ORB) — הוערך כ-25% מהריבאונדים (TRB), הערכה ולא מדידה');
+          else warnings.push('אין ריבאונד התקפה (ORB) ולא TRB — ריבאונד מחושב מריבאונד הגנה בלבד');
+        }
+      }
+
+      if (!kept.length) return fail(errors.length ? errors : ['לא נמצאו שחקנים']);
+      if (kept.length < 2) warnings.push('שחקן אחד — הדירוג יהיה טריוויאלי');
+
+      return {
+        ok: true,
+        errors: errors,
+        warnings: warnings,
+        players: kept,
+        perGame: perGame,
+        gameLog: gameLog,
+        columns: Object.keys(col),
+        lines: lines,
+        provenance: synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE,
+        source: {
+          dataset: opts.fileName || (synthetic ? EXAMPLE_PATH : 'user-upload'),
+          sport: 'basketball',
+          license: synthetic
+            ? 'Synthetic teaching file shipped with ScoutAI — not match data'
+            : 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
+        }
+      };
+    }
+  }
+
+  // One row per player per game → season totals, plus the games themselves.
+  function gameLogFrom(rows, errors, warnings) {
+    const games = rows.filter(function (row) {
+      if (has(row, 'round')) return true;
+      errors.push('שורה ' + row.line + ' (' + row.name + '): חסר מחזור — השורה דולגה');
+      return false;
+    });
+    if (!games.length) return null;
+    const rounds = [];
+    games.forEach(function (row) { if (rounds.indexOf(row.round) < 0) rounds.push(row.round); });
+    rounds.sort(function (a, b) { return a - b; });
+    const totals = aggregateGameLines(games);
+    const movers = totals.filter(function (p) { return p.teamCount > 1; }).map(function (p) { return p.name; });
+    warnings.push('קובץ משחק-משחק: ' + games.length + ' שורות, ' + totals.length + ' שחקנים, מחזורים ' + rounds[0] + '–' +
+      rounds[rounds.length - 1] + ' (' + rounds.length + '). הדירוג והאימות רצים על סכום העונה; חלק 6 משווה תחילת עונה להמשך.');
+    if (movers.length) {
+      warnings.push('שחקנים ששיחקו ביותר מקבוצה אחת נספרו פעם אחת, תחת הקבוצה האחרונה שלהם: ' + shownList(movers));
+    }
+    return { lines: games, rounds: rounds, totals: totals };
+  }
+
+  // Sums game rows per player name. A player who moved team mid-season is
+  // one player, listed under the team of his latest round.
+  function aggregateGameLines(lines) {
+    const byName = {};
+    const order = [];
+    lines.forEach(function (line) {
+      let p = byName[line.name];
+      if (!p) {
+        p = { name: line.name, games: 0, teams: [], lastRound: -Infinity };
+        byName[line.name] = p;
+        order.push(line.name);
+      }
+      if (line.team && p.teams.indexOf(line.team) < 0) p.teams.push(line.team);
+      const roundNo = has(line, 'round') ? line.round : p.lastRound;
+      if (roundNo >= p.lastRound) {
+        p.lastRound = roundNo;
+        if (line.team) p.team = line.team;
+      }
+      if (line.position && !p.position) p.position = line.position;
+      SUM_FIELDS.forEach(function (key) {
+        if (has(line, key)) p[key] = round2((p[key] || 0) + line[key]);
+      });
+      if (has(line, 'minutes') && line.minutes > 0) p.games += 1;
+      if (line.extra) {
+        if (!p.extra) p.extra = {};
+        Object.keys(line.extra).forEach(function (label) {
+          p.extra[label] = round2((p.extra[label] || 0) + line.extra[label]);
+        });
+      }
+    });
+    return order.map(function (name) {
+      const p = byName[name];
+      const out = Object.assign({}, p, { teamCount: p.teams.length });
+      delete out.teams;
+      delete out.lastRound;
+      return out;
+    });
+  }
+
+  function seasonRowsFrom(players, col, warnings) {
     // Traded players: keep the combined TOT / 2TM row, drop the per-team rows.
     const combined = {};
     players.forEach(function (row) { if (MULTI_TEAM_RE.test(row.team || '')) combined[row.name] = true; });
@@ -400,39 +544,7 @@
         warnings.push('הדקות הגבוהות בקובץ הן ' + round1(maxMinutes) + ' — נראה כמו ממוצע למשחק או משחק בודד, ואין עמודת משחקים (G). ערכים ל-40 דקות נכונים, אבל סף הדקות מתייחס לדקות שבקובץ — הורידו אותו.');
       }
     }
-
-    const noMinutes = kept.filter(function (row) { return !has(row, 'minutes') || row.minutes <= 0; }).map(function (row) { return row.name; });
-    if (noMinutes.length) warnings.push('בלי דקות (לא ידורגו): ' + shownList(noMinutes));
-
-    if (!own(col, 'assists')) warnings.push('אין עמודת אסיסטים (AST) — יצירה תהיה 0 לכולם');
-    else if (!own(col, 'turnovers')) warnings.push('אין עמודת איבודים (TOV) — יצירה מחושבת מאסיסטים בלבד, בלי יחס אסיסט/איבוד');
-    if (!own(col, 'fga')) warnings.push('אין זריקות לסל (FGA) — קליעה מחושבת מנקודות בלבד, בלי אחוז קליעה אמיתי (TS%)');
-    if (!own(col, 'defRebounds')) {
-      if (own(col, 'rebounds') && own(col, 'offRebounds')) warnings.push('ריבאונד הגנה חושב כ-TRB פחות ORB');
-      else if (own(col, 'rebounds')) warnings.push('אין ריבאונד הגנה (DRB) — הוערך כ-75% מהריבאונדים (TRB), הערכה ולא מדידה');
-      else warnings.push('אין ריבאונדים בקובץ — הגנה מחושבת מחטיפות וחסימות בלבד');
-    }
-
-    if (!kept.length) return fail(errors.length ? errors : ['לא נמצאו שחקנים']);
-    if (kept.length < 2) warnings.push('שחקן אחד — הדירוג יהיה טריוויאלי');
-
-    return {
-      ok: true,
-      errors: errors,
-      warnings: warnings,
-      players: kept,
-      perGame: perGame,
-      columns: Object.keys(col),
-      lines: lines,
-      provenance: synthetic ? SYNTHETIC_PROVENANCE : USER_DATA_PROVENANCE,
-      source: {
-        dataset: opts.fileName || (synthetic ? EXAMPLE_PATH : 'user-upload'),
-        sport: 'basketball',
-        license: synthetic
-          ? 'Synthetic teaching file shipped with ScoutAI — not match data'
-          : 'User attested they licensed this file for local processing; ScoutAI does not grant that licence'
-      }
-    };
+    return { kept: kept, perGame: perGame };
   }
 
   // --------------------------------------------------------- positions ---
@@ -480,11 +592,24 @@
       defRebounds = per40(row.rebounds * 0.75, minutes);
       estimated.push('defRebounds');
     }
+    let offRebounds = 0;
+    if (has(row, 'offRebounds')) {
+      offRebounds = per40(row.offRebounds, minutes);
+    } else if (has(row, 'rebounds') && has(row, 'defRebounds')) {
+      offRebounds = per40(Math.max(0, row.rebounds - row.defRebounds), minutes);
+    } else if (has(row, 'rebounds')) {
+      offRebounds = per40(row.rebounds * 0.25, minutes);
+      estimated.push('offRebounds');
+    }
     // Box Plus/Minus 2.0 (Basketball-Reference) values a steal or a block at
-    // roughly 0.7-1.4 points and a defensive rebound at 0.12-0.18: "it really
-    // doesn't matter who on the team gets them". Hence the small DRB share.
-    // BPM also warns the box score is "quite limited" on defense.
-    const defense = round1(scaleCap(steals, 2.5) * 0.45 + scaleCap(blocks, 2) * 0.4 + scaleCap(defRebounds, 9) * 0.15);
+    // roughly 0.7-1.4 points. BPM also warns the box score is "quite
+    // limited" on defense.
+    const defense = round1(scaleCap(steals, 2.5) * 0.53 + scaleCap(blocks, 2) * 0.47);
+    // Rebounding is a Four Factors factor (about 20%). BPM 2.0 values an
+    // offensive rebound at 0.18-0.61 points and a defensive one at
+    // 0.12-0.18 ("it really doesn't matter who on the team gets them"),
+    // hence 60% ORB / 40% DRB. Caps: 5 ORB and 9 DRB per 40 minutes.
+    const rebounding = round1(scaleCap(offRebounds, 5) * 0.6 + scaleCap(defRebounds, 9) * 0.4);
 
     const assists = per40(row.assists, minutes);
     let astTo = null;
@@ -515,11 +640,13 @@
 
     return {
       defense: defense,
+      rebounding: rebounding,
       playmaking: playmaking,
       scoring: scoring,
       raw: {
         steals40: round2(steals),
         blocks40: round2(blocks),
+        offRebounds40: round2(offRebounds),
         defRebounds40: round2(defRebounds),
         assists40: round2(assists),
         astTo: astTo == null ? null : round2(astTo),
@@ -532,30 +659,41 @@
 
   function normalizeSpec(spec) {
     const src = spec || {};
+    const weight = function (key) { return clamp(src[key] == null ? DEFAULT_SPEC[key] : src[key], 0, 100); };
     return {
-      defense: clamp(src.defense == null ? DEFAULT_SPEC.defense : src.defense, 0, 100),
-      playmaking: clamp(src.playmaking == null ? DEFAULT_SPEC.playmaking : src.playmaking, 0, 100),
-      scoring: clamp(src.scoring == null ? DEFAULT_SPEC.scoring : src.scoring, 0, 100),
+      defense: weight('defense'),
+      rebounding: weight('rebounding'),
+      playmaking: weight('playmaking'),
+      scoring: weight('scoring'),
       minMinutes: clamp(src.minMinutes == null ? DEFAULT_SPEC.minMinutes : src.minMinutes, 0, 4000),
       outcomeId: src.outcomeId ? String(src.outcomeId) : '',
       featureId: src.featureId ? String(src.featureId) : '',
-      featurePer40: !!src.featurePer40
+      featurePer40: !!src.featurePer40,
+      splitRound: Math.max(0, Math.round(Number(src.splitRound) || 0)),
+      target: String(src.target == null ? '' : src.target).trim().slice(0, 80)
     };
+  }
+
+  function weightTotal(w) {
+    return COMPONENTS.reduce(function (sum, key) { return sum + w[key]; }, 0);
   }
 
   function compositeScore(components, spec) {
     const w = normalizeSpec(spec);
-    const total = w.defense + w.playmaking + w.scoring;
+    const total = weightTotal(w);
     if (!total) return 0;
-    return round2((components.defense * w.defense + components.playmaking * w.playmaking + components.scoring * w.scoring) / total);
+    return round2(COMPONENTS.reduce(function (sum, key) {
+      return sum + (Number(components[key]) || 0) * w[key];
+    }, 0) / total);
   }
 
   function formatFormula(spec) {
     const w = normalizeSpec(spec);
-    const total = w.defense + w.playmaking + w.scoring;
+    const total = weightTotal(w);
     if (!total) return 'כל המשקלות 0 — אין מדד';
-    const share = function (v) { return round2(v / total); };
-    return 'מדד = ' + share(w.defense) + '×הגנה + ' + share(w.playmaking) + '×יצירה + ' + share(w.scoring) + '×קליעה';
+    return 'מדד = ' + COMPONENTS.map(function (key) {
+      return round2(w[key] / total) + '×' + COMPONENT_LABELS[key];
+    }).join(' + ');
   }
 
   // ---------------------------------------------------------- outcomes ---
@@ -568,7 +706,7 @@
     Object.freeze({ id: 'points', field: 'points', label: 'נקודות ל-40 דקות', leaky: true,
       note: 'קליעה בנויה מנקודות — הקשר מובנה (דליפה).' }),
     Object.freeze({ id: 'rebounds', field: 'rebounds', label: 'ריבאונדים ל-40 דקות', leaky: true,
-      note: 'הגנה כוללת ריבאונד הגנה — חלק מהקשר מובנה.' })
+      note: 'רכיב הריבאונד בנוי מאותם ריבאונדים — הקשר מובנה (דליפה).' })
   ]);
 
   // Extra CSV columns are addressed as 'x:<header>', both as a new line to
@@ -700,6 +838,7 @@
     }).concat(lines.map(function (label) { return outcomeMeta(EXTRA_PREFIX + label); }));
     const features = lines.map(function (label) { return featureMeta(EXTRA_PREFIX + label); })
       .concat([featureMeta(PANIM_FEATURE)]);
+    const gameLog = parsed && parsed.gameLog && parsed.gameLog.rounds.length ? parsed.gameLog : null;
 
     function derive(spec, options) {
       const metric = normalizeSpec(spec);
@@ -723,7 +862,8 @@
         thresholdNote: rows.length ? '' : 'אף שחקן לא עובר סף ' + metric.minMinutes + ' דקות. הדקות הגבוהות בקובץ: ' + round1(maxMinutes) + '.',
         validation: outcome ? validateMetric(rows, outcome.id) : null,
         feature: outcome ? featureTest(rows, feature.id, outcome.id, Object.assign({}, options, { per40: metric.featurePer40 })) : null,
-        panim: outcome ? panimTest(rows, outcome.id, options) : null
+        panim: outcome ? panimTest(rows, outcome.id, options) : null,
+        season: gameLog && outcome ? seasonSplitTest(gameLog, metric, options) : null
       };
     }
 
@@ -732,6 +872,7 @@
       outcomes: available,
       features: features,
       lines: lines,
+      gameLog: gameLog,
       derive: derive,
       provenance: parsed && parsed.provenance,
       source: parsed && parsed.source
@@ -770,6 +911,7 @@
         rho: rhoOf(fold, 'score', outcomeId),
         componentRho: {
           defense: rhoOf(fold, 'defense', outcomeId),
+          rebounding: rhoOf(fold, 'rebounding', outcomeId),
           playmaking: rhoOf(fold, 'playmaking', outcomeId),
           scoring: rhoOf(fold, 'scoring', outcomeId)
         }
@@ -1086,11 +1228,219 @@
     return notes.join(' ');
   }
 
+  // --------------------------------------------- start of season test ---
+
+  // The scout's question: looking only at the first rounds, would I have
+  // seen who is good for the rest of the season? The metric is computed on
+  // rounds up to the split, the target (chosen in part 4) only on the rounds
+  // after it, so the two never share a game. The metric is compared with
+  // each simple early number, including the target predicting itself.
+
+  function defaultSplitRound(rounds) {
+    if (!rounds || rounds.length < 2) return null;
+    const idx = Math.max(0, Math.min(rounds.length - 2, Math.round(rounds.length / 4) - 1));
+    return rounds[idx];
+  }
+
+  // 1 = highest; ties share the better rank. Rows without a value get null.
+  function rankOf(rows, valueOf, row) {
+    const v = valueOf(row);
+    if (v == null) return null;
+    let above = 0;
+    rows.forEach(function (r) {
+      const w = valueOf(r);
+      if (w != null && w > v) above += 1;
+    });
+    return above + 1;
+  }
+
+  function findPlayer(rows, query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return null;
+    return rows.find(function (r) { return String(r.name).toLowerCase() === q; }) ||
+      rows.find(function (r) { return String(r.name).toLowerCase().indexOf(q) >= 0; }) || null;
+  }
+
+  function seasonSplitTest(gameLog, spec, options) {
+    const opts = options || {};
+    const iterations = opts.iterations || 1000;
+    const seed = opts.seed == null ? 20261114 : opts.seed;
+    const metric = normalizeSpec(spec);
+    const rounds = gameLog && gameLog.rounds ? gameLog.rounds : [];
+    const result = { rounds: rounds, iterations: iterations, splitRound: null, predictors: [], top: [] };
+    if (rounds.length < 2) {
+      result.error = 'בקובץ יש מחזור אחד בלבד — אין תחילת עונה והמשך להשוות.';
+      return result;
+    }
+    let split = metric.splitRound || defaultSplitRound(rounds);
+    if (split < rounds[0]) split = rounds[0];
+    if (split >= rounds[rounds.length - 1]) split = rounds[rounds.length - 2];
+    const earlyRounds = rounds.filter(function (r) { return r <= split; }).length;
+    const laterRounds = rounds.length - earlyRounds;
+    const earlyFloor = MIN_PER_ROUND * earlyRounds;
+    const laterFloor = MIN_PER_ROUND * laterRounds;
+    const early = aggregateGameLines(gameLog.lines.filter(function (l) { return l.round <= split; })).map(prepare);
+    const later = aggregateGameLines(gameLog.lines.filter(function (l) { return l.round > split; })).map(prepare);
+    const earlyRows = early
+      .filter(function (p) { return p.minutes > 0 && p.minutes >= earlyFloor; })
+      .map(function (p) { return Object.assign({}, p, { score: compositeScore(p.components, metric) }); })
+      .sort(function (a, b) { return (b.score - a.score) || String(a.name).localeCompare(String(b.name)); })
+      .map(function (p, i) { return Object.assign({}, p, { rank: i + 1 }); });
+    const outcomeId = metric.outcomeId;
+    const oMeta = outcomeMeta(outcomeId);
+    const laterBy = {};
+    later.forEach(function (p) {
+      if (p.minutes >= laterFloor && outcomeValue(p, outcomeId) != null) laterBy[p.name] = p;
+    });
+    const laterRows = Object.keys(laterBy).map(function (name) { return laterBy[name]; });
+    const laterValue = function (row) { return outcomeValue(row, outcomeId); };
+
+    Object.assign(result, {
+      splitRound: split,
+      firstRound: rounds[0],
+      lastRound: rounds[rounds.length - 1],
+      earlyRounds: earlyRounds,
+      laterRounds: laterRounds,
+      earlyFloor: earlyFloor,
+      laterFloor: laterFloor,
+      outcomeId: outcomeId,
+      outcomeLabel: oMeta ? oMeta.label : outcomeId,
+      leaky: !!(oMeta && oMeta.leaky),
+      earlyPlayers: earlyRows.length,
+      laterPlayers: laterRows.length
+    });
+
+    const pairs = earlyRows.filter(function (r) { return laterBy[r.name]; })
+      .map(function (r) { return { row: r, y: laterValue(laterBy[r.name]) }; });
+    result.n = pairs.length;
+
+    const predictors = [{ id: 'metric', label: 'המדד שבניתם', value: function (r) { return r.score; } }];
+    OUTCOMES.forEach(function (o) {
+      predictors.push({ id: o.id, label: o.label + ' בתחילת העונה', value: function (r) { return r.outcomes[o.id]; } });
+    });
+    if (extraLabel(outcomeId) != null) {
+      predictors.push({ id: outcomeId, label: result.outcomeLabel + ' בתחילת העונה', value: function (r) { return outcomeValue(r, outcomeId); } });
+    }
+    result.predictors = predictors.map(function (pred) {
+      const usable = pairs.filter(function (p) { return pred.value(p.row) != null; });
+      const xs = usable.map(function (p) { return pred.value(p.row); });
+      const ys = usable.map(function (p) { return p.y; });
+      const out = {
+        id: pred.id,
+        label: pred.label,
+        n: usable.length,
+        rho: usable.length >= 4 ? Demo.spearman(xs, ys) : null,
+        p: null,
+        noiseBand: null,
+        sameAsTarget: pred.id === outcomeId
+      };
+      if (out.rho != null) {
+        const rng = mulberry32(seed);
+        const shuffled = ys.slice();
+        const nullAbs = [];
+        for (let k = 0; k < iterations; k += 1) {
+          shuffleInPlace(shuffled, rng);
+          nullAbs.push(Math.abs(Demo.spearman(xs, shuffled) || 0));
+        }
+        nullAbs.sort(function (a, b) { return a - b; });
+        out.p = pValue(nullAbs, out.rho);
+        out.noiseBand = round2(quantile(nullAbs, 0.95));
+      }
+      return out;
+    }).filter(function (p) { return p.id === 'metric' || p.n > 0; });
+
+    result.top = earlyRows.slice(0, 10).map(function (r) {
+      const l = laterBy[r.name];
+      return {
+        rank: r.rank,
+        name: r.name,
+        team: r.team,
+        score: r.score,
+        later: l ? laterValue(l) : null,
+        laterRank: l ? rankOf(laterRows, laterValue, l) : null
+      };
+    });
+
+    if (metric.target) {
+      const hit = findPlayer(early, metric.target);
+      if (!hit) {
+        result.target = { query: metric.target, found: false };
+      } else {
+        const ranked = earlyRows.find(function (r) { return r.name === hit.name; });
+        const target = {
+          query: metric.target,
+          found: true,
+          name: hit.name,
+          team: hit.team,
+          earlyMinutes: round1(hit.minutes),
+          eligible: !!ranked,
+          ranks: []
+        };
+        if (ranked) {
+          target.ranks = predictors.map(function (pred) {
+            return { id: pred.id, label: pred.label, rank: rankOf(earlyRows, pred.value, ranked) };
+          }).filter(function (r) { return r.rank != null; });
+        }
+        const l = laterBy[hit.name];
+        if (l) {
+          target.laterValue = laterValue(l);
+          target.laterRank = rankOf(laterRows, laterValue, l);
+        }
+        result.target = target;
+      }
+    }
+    result.verdict = seasonVerdict(result);
+    return result;
+  }
+
+  function seasonVerdict(result) {
+    const notes = [];
+    const range = result.firstRound === result.splitRound ? 'ממחזור ' + result.splitRound : 'ממחזורים ' + result.firstRound + '–' + result.splitRound;
+    const m = result.predictors[0];
+    if (!m || result.n < 15 || m.rho == null) {
+      notes.push('רק ' + result.n + ' שחקנים שיחקו מספיק גם בתחילת העונה וגם בהמשך — אי אפשר להכריע.');
+    } else {
+      if (m.p != null && m.p < 0.05) {
+        notes.push('המדד ' + range + ' חוזה את ' + result.outcomeLabel + ' במחזורים שאחריו: ρ=' + m.rho + ' (' + fmtP(m.p) + ', טווח הרעש ±' + m.noiseBand + ').');
+      } else {
+        notes.push('המדד ' + range + ' לא חוזה את ' + result.outcomeLabel + ' במחזורים שאחריו: ρ=' + m.rho + ', בתוך טווח הרעש (±' + m.noiseBand + ', ' + fmtP(m.p) + ').');
+      }
+      const others = result.predictors.slice(1).filter(function (p) { return p.rho != null; })
+        .sort(function (a, b) { return b.rho - a.rho; });
+      const best = others[0];
+      if (best) {
+        if (best.rho > m.rho + 0.05) {
+          notes.push('«' + best.label + '» חוזה טוב יותר (ρ=' + best.rho + ') — על היעד הזה המדד לא מוסיף על מספר פשוט מתחילת העונה.' +
+            (best.sameAsTarget ? ' זה אותו מספר שחוזר על עצמו, רף קשה; כדאי לבדוק גם יעד אחר.' : ''));
+        } else if (m.rho > best.rho + 0.05) {
+          notes.push('זה טוב יותר מכל מספר בודד מתחילת העונה (הקרוב ביותר: «' + best.label + '», ρ=' + best.rho + ').');
+        } else {
+          notes.push('בערך כמו «' + best.label + '» (ρ=' + best.rho + ').');
+        }
+      }
+    }
+    const t = result.target;
+    if (t && !t.found) notes.push('לא נמצא שחקן בשם «' + t.query + '» במחזורים הראשונים.');
+    if (t && t.found && !t.eligible) {
+      notes.push(t.name + ' שיחק ' + t.earlyMinutes + ' דקות עד מחזור ' + result.splitRound + ', מתחת לסף של ' + result.earlyFloor + ' — המדד לא דירג אותו.');
+    }
+    if (t && t.found && t.eligible) {
+      const mine = t.ranks.find(function (r) { return r.id === 'metric'; });
+      notes.push(t.name + ' היה במקום ' + mine.rank + ' מתוך ' + result.earlyPlayers + ' במדד אחרי מחזור ' + result.splitRound + '. שחקן אחד הוא דוגמה, לא הוכחה.');
+    }
+    notes.push('עונה אחת. המחזור הוא לפי הלוח — משחק שנדחה נספר במחזור המקורי שלו.');
+    notes.push(MULTIPLE_TESTS_NOTE);
+    return notes.join(' ');
+  }
+
   return {
     PER_MINUTES: PER_MINUTES,
     MAX_GAME_MINUTES: MAX_GAME_MINUTES,
     EXAMPLE_PATH: EXAMPLE_PATH,
+    GAMELOG_EXAMPLE_PATH: GAMELOG_EXAMPLE_PATH,
+    MIN_PER_ROUND: MIN_PER_ROUND,
     DEFAULT_SPEC: DEFAULT_SPEC,
+    COMPONENTS: COMPONENTS,
     COMPONENT_LABELS: COMPONENT_LABELS,
     FIELDS: FIELDS,
     HEADER_ALIASES: HEADER_ALIASES,
@@ -1113,6 +1463,9 @@
     partialRho: partialRho,
     featureTest: featureTest,
     spellingProbe: spellingProbe,
-    panimTest: panimTest
+    panimTest: panimTest,
+    aggregateGameLines: aggregateGameLines,
+    defaultSplitRound: defaultSplitRound,
+    seasonSplitTest: seasonSplitTest
   };
 }));

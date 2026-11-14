@@ -108,3 +108,79 @@ const csv = [header].concat(rows).map(function (cells) { return cells.join(',');
 const out = path.join(__dirname, '..', 'data', 'basketball.example.csv');
 fs.writeFileSync(out, csv, 'utf8');
 console.log('wrote ' + rows.length + ' synthetic players to ' + path.relative(process.cwd(), out));
+
+// ---------------------------------------------------------------------------
+// data/basketball.gamelog.example.csv: a SYNTHETIC game-by-game season (one
+// row per player per round) for the start-of-season test. Its own seeded
+// stream, so the season file above does not change.
+//
+// Each player has a hidden skill that drifts during the season (some improve,
+// some fade), and every game adds noise. So even a good metric cannot read
+// the rest of the season perfectly from the first rounds — on purpose.
+const rand3 = mulberry32(2026111402);
+function gauss3() {
+  const u = Math.max(rand3(), 1e-12);
+  const v = rand3();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+const ROUNDS = 14;
+
+function gameCount(rate, minutes, skill) {
+  const value = rate * (1 + 0.16 * skill) * (1 + 0.35 * gauss3()) * minutes / 40;
+  return Math.max(0, Math.round(value));
+}
+
+const players = [];
+TEAMS.forEach(function (letter) {
+  const teamEffect = gauss3() * 2.5;
+  ROSTER.forEach(function (pos, k) {
+    const skill = gauss3();
+    players.push({
+      name: ROLE[pos].word + ' דמו ' + letter + (k + 1),
+      team: 'קבוצה ' + letter + '׳',
+      pos: pos,
+      skill: skill,
+      drift: 0.6 * gauss3(),
+      mpg: Math.max(6, Math.min(34, 20 + 6 * skill + 4 * gauss3() - (k >= 5 ? 6 : 0))),
+      teamEffect: teamEffect
+    });
+  });
+});
+
+const logRows = [];
+for (let round = 1; round <= ROUNDS; round += 1) {
+  players.forEach(function (p) {
+    if (rand3() < 0.05) return; // did not play
+    const role = ROLE[p.pos];
+    const skill = p.skill + p.drift * (round - 1) / (ROUNDS - 1);
+    const minutes = Math.max(3, Math.min(40, Math.round(p.mpg * (1 + 0.15 * gauss3()))));
+    const fga = gameCount(role.fga, minutes, skill * 0.6);
+    const tpa = Math.min(fga, gameCount(role.tpa, minutes, 0));
+    const twoPa = fga - tpa;
+    const twoPm = Math.round(twoPa * Math.max(0.2, Math.min(0.8, 0.5 + 0.03 * skill + 0.1 * gauss3())));
+    const tpm = Math.round(tpa * Math.max(0, Math.min(0.7, 0.35 + 0.02 * skill + 0.12 * gauss3())));
+    const fta = gameCount(role.fta, minutes, skill * 0.5);
+    const ftm = Math.round(fta * Math.max(0.3, Math.min(1, 0.74 + 0.03 * skill + 0.12 * gauss3())));
+    const points = twoPm * 2 + tpm * 3 + ftm;
+    const orb = gameCount(role.orb, minutes, skill);
+    const drb = gameCount(role.drb, minutes, skill);
+    const ast = gameCount(role.ast, minutes, skill);
+    const stl = gameCount(role.stl, minutes, skill);
+    const blk = gameCount(role.blk, minutes, skill);
+    const tov = gameCount(role.tov, minutes, -0.5 * skill);
+    const pf = Math.min(5, gameCount(role.pf, minutes, 0));
+    const plusMinus = Math.round((4 * skill + p.teamEffect) * minutes / 40 + 7 * gauss3() * Math.sqrt(minutes / 40));
+    const fgm = twoPm + tpm;
+    const pir = points + orb + drb + ast + stl + blk - (fga - fgm) - (fta - ftm) - tov - pf;
+    logRows.push([round, p.name, p.team, p.pos, minutes, points, orb + drb, orb, drb, ast, stl, blk, tov,
+      fgm, fga, ftm, fta, tpm, tpa, pf, plusMinus, pir]);
+  });
+}
+
+const logHeader = ['Round', 'Player', 'Team', 'Pos', 'MP', 'PTS', 'TRB', 'ORB', 'DRB', 'AST', 'STL', 'BLK', 'TOV',
+  'FG', 'FGA', 'FT', 'FTA', '3P', '3PA', 'PF', '+/-', 'PIR'];
+const logCsv = [logHeader].concat(logRows).map(function (cells) { return cells.join(','); }).join('\n') + '\n';
+const logOut = path.join(__dirname, '..', 'data', 'basketball.gamelog.example.csv');
+fs.writeFileSync(logOut, logCsv, 'utf8');
+console.log('wrote ' + logRows.length + ' synthetic game rows (' + players.length + ' players, ' + ROUNDS + ' rounds) to ' +
+  path.relative(process.cwd(), logOut));

@@ -45,6 +45,7 @@
 <a class="skip" href="#ranking">דלגו לדירוג</a>
 <a class="skip" href="#validate">דלגו לאימות</a>
 <a class="skip" href="#panim">דלגו לבדיקת שורה חדשה</a>
+<a class="skip" href="#season">דלגו לתחילת עונה מול המשך</a>
 <a class="skip" href="#research">דלגו למקורות</a>
 <main class="shell">
   <aside class="banner" aria-label="סיווג המעבדה">
@@ -58,7 +59,8 @@
       <a href="#ranking">3. דירוג</a>
       <a href="#validate">4. אימות</a>
       <a href="#panim">5. שורה חדשה</a>
-      <a href="#research">6. מה המחקר אומר</a>
+      <a href="#season">6. תחילת עונה</a>
+      <a href="#research">7. מה המחקר אומר</a>
     </nav>
     <div class="nav" aria-label="ניווט חיצוני">
       <a href="../">מעבדת הכדורגל</a>
@@ -82,6 +84,7 @@
     <h2 id="loadTitle">1. טעינת נתונים</h2>
     <p>עמודות שנקראות (באנגלית או בעברית): שם (Player), קבוצה (Team), עמדה (Pos), משחקים (G), <strong>דקות (MP / MIN) — חובה</strong>, PTS, TRB, ORB, DRB, AST, STL, BLK, TOV, FG, FGA, FT, FTA, 3P, 3PA, PF, ‎+/-‎, PIR / EFF. קובץ «ממוצע למשחק» עם עמודת G מוכפל אוטומטית לסכום עונתי, דקות בפורמט 32:15 נקראות, ושחקן שעבר קבוצה (שורת TOT / 2TM) נספר פעם אחת.</p>
     <p><strong>כל עמודה מספרית אחרת</strong> (קידוד שפת גוף, fWHR מתמונות, מגעים למשחק, ‎+/-‎ של חצי עונה שני…) לא נכנסת לנוסחה — היא הופכת ל«שורה חדשה» שאפשר לבדוק בחלק 5, ואפשר גם לבחור אותה כיעד.</p>
+    <p><strong>קובץ משחק-משחק:</strong> אם יש עמודת מחזור (Round / מחזור), כל שורה היא שחקן במשחק אחד. המעבדה מסכמת את העונה לדירוג ולאימות, ושומרת את המשחקים לחלק 6 — תחילת עונה מול המשך עונה.</p>
     <div class="row-inline">
       <label for="bbFile">קובץ CSV:</label>
       <input id="bbFile" type="file" accept=".csv,text/csv,text/plain">
@@ -92,6 +95,7 @@
     <div class="row-inline">
       <button id="bbLoadFile" type="button" disabled>טען את הקובץ שלי</button>
       <button id="bbExample" type="button" class="secondary">טען דוגמה סינתטית</button>
+      <button id="bbExampleLog" type="button" class="secondary">טען דוגמה סינתטית משחק-משחק</button>
     </div>
     <p id="bbStatus" class="status" role="status" aria-live="polite">עוד לא נטען קובץ.</p>
     <div id="bbMessages"></div>
@@ -99,22 +103,27 @@
 
   <section class="card" id="builder" aria-labelledby="builderTitle">
     <h2 id="builderTitle">2. בנה מדד</h2>
-    <p>שלושה רכיבים, כל אחד 0–100. המשקלות ידניים: ברירת המחדל נותנת לקליעה הכי הרבה כי קליעה היא הגורם הגדול מבין «ארבעת הגורמים» של דין אוליבר. זו נקודת פתיחה לוויכוח, לא כיול.</p>
+    <p>ארבעה רכיבים, כל אחד 0–100. המשקלות ידניים: ברירת המחדל נותנת לקליעה הכי הרבה כי קליעה היא הגורם הגדול מבין «ארבעת הגורמים» של דין אוליבר, ולריבאונד 20% — החלק שלו באותם ארבעה גורמים. זו נקודת פתיחה לוויכוח, לא כיול.</p>
     <div class="sliders">
       <div class="slider-row">
         <label id="wDefLabel" for="wDef">הגנה</label>
-        <input id="wDef" type="range" min="0" max="100" step="5" value="30" aria-labelledby="wDefLabel" aria-valuetext="הגנה, 30">
-        <strong id="wDefVal" aria-hidden="true">30</strong>
+        <input id="wDef" type="range" min="0" max="100" step="1" value="24" aria-labelledby="wDefLabel" aria-valuetext="הגנה, 24">
+        <strong id="wDefVal" aria-hidden="true">24</strong>
+      </div>
+      <div class="slider-row">
+        <label id="wRebLabel" for="wReb">ריבאונד</label>
+        <input id="wReb" type="range" min="0" max="100" step="1" value="20" aria-labelledby="wRebLabel" aria-valuetext="ריבאונד, 20">
+        <strong id="wRebVal" aria-hidden="true">20</strong>
       </div>
       <div class="slider-row">
         <label id="wPlayLabel" for="wPlay">יצירה</label>
-        <input id="wPlay" type="range" min="0" max="100" step="5" value="30" aria-labelledby="wPlayLabel" aria-valuetext="יצירה, 30">
-        <strong id="wPlayVal" aria-hidden="true">30</strong>
+        <input id="wPlay" type="range" min="0" max="100" step="1" value="24" aria-labelledby="wPlayLabel" aria-valuetext="יצירה, 24">
+        <strong id="wPlayVal" aria-hidden="true">24</strong>
       </div>
       <div class="slider-row">
         <label id="wScoreLabel" for="wScore">קליעה</label>
-        <input id="wScore" type="range" min="0" max="100" step="5" value="40" aria-labelledby="wScoreLabel" aria-valuetext="קליעה, 40">
-        <strong id="wScoreVal" aria-hidden="true">40</strong>
+        <input id="wScore" type="range" min="0" max="100" step="1" value="32" aria-labelledby="wScoreLabel" aria-valuetext="קליעה, 32">
+        <strong id="wScoreVal" aria-hidden="true">32</strong>
       </div>
       <div class="slider-row">
         <label id="bbMinLabel" for="bbMinMinutes">סף דקות</label>
@@ -122,14 +131,15 @@
         <strong id="bbMinMinutesVal" aria-hidden="true">250</strong>
       </div>
     </div>
-    <button id="bbReset" type="button" class="secondary">חזרה ל-30/30/40 ו-250 דקות</button>
-    <p id="bbFormula" class="formula">מדד = 0.3×הגנה + 0.3×יצירה + 0.4×קליעה</p>
+    <button id="bbReset" type="button" class="secondary">חזרה ל-24/20/24/32 ו-250 דקות</button>
+    <p id="bbFormula" class="formula">מדד = 0.24×הגנה + 0.2×ריבאונד + 0.24×יצירה + 0.32×קליעה</p>
     <div class="table-wrap">
       <table>
         <caption>מה נכנס לכל רכיב (כל ספירה ל-40 דקות, מחולקת בתקרה וחתוכה ל-0–100)</caption>
         <thead><tr><th scope="col">רכיב</th><th scope="col">מתכון</th><th scope="col">למה</th></tr></thead>
         <tbody>
-          <tr><th scope="row">הגנה</th><td>45% חטיפות (תקרה 2.5) · 40% חסימות (תקרה 2) · 15% ריבאונד הגנה (תקרה 9)</td><td>ב-Box Plus/Minus 2.0 חטיפה וחסימה שוות פי 5–10 מריבאונד הגנה. BPM גם מזהיר שהבוקס-סקור «מוגבל מאוד» במדידת הגנה — ולכן גם הרכיב הזה.</td></tr>
+          <tr><th scope="row">הגנה</th><td>53% חטיפות (תקרה 2.5) · 47% חסימות (תקרה 2)</td><td>ב-Box Plus/Minus 2.0 חטיפה וחסימה שוות 0.7–1.4 נקודות. BPM גם מזהיר שהבוקס-סקור «מוגבל מאוד» במדידת הגנה — ולכן גם הרכיב הזה.</td></tr>
+          <tr><th scope="row">ריבאונד</th><td>60% ריבאונד התקפה (תקרה 5) · 40% ריבאונד הגנה (תקרה 9)</td><td>ריבאונד הוא אחד מארבעת הגורמים (כ-20%). ב-BPM 2.0 ריבאונד התקפה שווה 0.18–0.61 נקודות וריבאונד הגנה רק 0.12–0.18, כי ריבאונד הגנה «לא משנה מי בקבוצה לוקח». הרכיב נוסף אחרי בדיקה על חמש עונות של ליגת העל: בלי ריבאונד התקפה המתכון דירג סנטרים נמוך מדי. המשקל לקוח מארבעת הגורמים, לא כויל על הנתונים.</td></tr>
           <tr><th scope="row">יצירה</th><td>60% אסיסטים (תקרה 9) · 40% יחס אסיסט/איבוד (תקרה 3)</td><td>איבוד הוא אחד מארבעת הגורמים (כ-25%), ובמקדמי BPM איבוד שווה כמעט נקודה שלמה בשלילה.</td></tr>
           <tr><th scope="row">קליעה</th><td>50% נקודות (תקרה 30) · 50% True Shooting %, מ-40% (0) עד 70% (100)</td><td>TS% = PTS / (2 × (FGA + 0.44 × FTA)) — ההגדרה של Basketball-Reference. בלי FGA בקובץ: נקודות בלבד.</td></tr>
         </tbody>
@@ -187,13 +197,34 @@
     </details>
   </section>
 
+  <section class="card" id="season" aria-labelledby="seasonTitle">
+    <h2 id="seasonTitle">6. תחילת עונה מול המשך עונה</h2>
+    <p>השאלה של סקאוט: אם הייתי מסתכל רק על המחזורים הראשונים — הייתי רואה מי יהיה טוב בהמשך? כאן המדד מחושב רק מהמחזורים עד הסף, והיעד (מחלק 4) רק מהמחזורים שאחריו. אין משחק משותף לשני הצדדים, ולכן זו בדיקה אמיתית קדימה בזמן, לא באותה עונה.</p>
+    <p>המדד מושווה לכל מספר פשוט מתחילת העונה — כולל היעד עצמו (למשל PIR מוקדם מול PIR מאוחר). מדד ששווה משהו צריך לחזות לפחות כמו המספר הפשוט. נכנסים לבדיקה שחקנים עם לפחות 10 דקות למחזור בממוצע בכל צד.</p>
+    <p class="muted">צריך קובץ משחק-משחק עם עמודת מחזור (Round / מחזור). קובץ של סיכום עונה לא מספיק לבדיקה הזו.</p>
+    <div class="sliders">
+      <div class="slider-row">
+        <label id="bbSplitLabel" for="bbSplitRound">תחילת העונה נגמרת במחזור</label>
+        <input id="bbSplitRound" type="range" min="1" max="2" step="1" value="1" disabled aria-labelledby="bbSplitLabel" aria-valuetext="סוף תחילת העונה, מחזור 1">
+        <strong id="bbSplitRoundVal" aria-hidden="true">—</strong>
+      </div>
+    </div>
+    <div class="row-inline">
+      <label for="bbTarget">שחקן לבדיקה (למשל מי שסיים MVP):</label>
+      <input id="bbTarget" type="text" list="bbTargetList" autocomplete="off" disabled>
+      <datalist id="bbTargetList"></datalist>
+    </div>
+    <p class="muted">היעד נבחר בחלק 4.</p>
+    <div id="bbSeason"><p class="muted">טענו קובץ משחק-משחק כדי להריץ את הבדיקה.</p></div>
+  </section>
+
   <section class="card" id="research" aria-labelledby="researchTitle">
-    <h2 id="researchTitle">6. מה המחקר אומר</h2>
+    <h2 id="researchTitle">7. מה המחקר אומר</h2>
     <h3>על הנוסחה</h3>
     <ul class="sources">
       <li><strong>True Shooting %</strong> — PTS / (2 × (FGA + 0.44 × FTA)). <a href="https://www.basketball-reference.com/about/glossary.html" rel="noopener">Basketball-Reference, Glossary</a>. 0.44 הוא קירוב לחלק מזריקות העונשין שמסיימות התקפה.</li>
       <li><strong>ארבעת הגורמים</strong> (Dean Oliver): קליעה כ-40%, איבודים 25%, ריבאונד 20%, עונשין 15%. ניתוחים מאוחרים שינו את המשקלות אבל לא את הסדר. <a href="https://www.basketball-reference.com/about/factors.html" rel="noopener">Basketball-Reference, Four Factors</a>.</li>
-      <li><strong>Box Plus/Minus 2.0</strong>: חטיפה 1.0–1.37, חסימה 0.70–1.33, ריבאונד הגנה 0.12–0.18, איבוד ‎-0.96 (נקודות ל-100 פוזשנים, לפי עמדה). «בהגנה הבוקס-סקור מוגבל מאוד». שחקנים עם מעט דקות מרוסנים עד 450 דקות. <a href="https://www.basketball-reference.com/about/bpm2.html" rel="noopener">Basketball-Reference, About BPM</a>.</li>
+      <li><strong>Box Plus/Minus 2.0</strong>: חטיפה 1.0–1.37, חסימה 0.70–1.33, ריבאונד התקפה 0.18–0.61, ריבאונד הגנה 0.12–0.18, איבוד ‎-0.96 (נקודות ל-100 פוזשנים, לפי עמדה). «בהגנה הבוקס-סקור מוגבל מאוד». שחקנים עם מעט דקות מרוסנים עד 450 דקות. <a href="https://www.basketball-reference.com/about/bpm2.html" rel="noopener">Basketball-Reference, About BPM</a>.</li>
       <li><strong>יציבות מדדים</strong>: Franks, D'Amour, Cervone &amp; Bornn (2016), «Meta-analytics», Journal of Quantitative Analysis in Sports 12(4):151–165 — מודדים יציבות והבחנה של מדדי NBA, אחרי הוצאת שחקנים מתחת ל-250 דקות; אחוז שלשות גולמי הכי פחות יציב. <a href="https://arxiv.org/abs/1609.09830" rel="noopener">arXiv:1609.09830</a>.</li>
       <li><strong>כמה מדגם צריך</strong>: Medvedovsky (2020) — ‎+/-‎ צריך «ריפוד» של יותר מ-1,000 פוזשנים ממוצעים, ואחוז שלשות כ-240 זריקות, לפני שהם יותר אות מרעש. <a href="https://kmedved.com/2020/08/06/nba-stabilization-rates-and-the-padding-approach/" rel="noopener">NBA Stabilization Rates and the Padding Approach</a>.</li>
       <li><strong>PIR</strong> (ACB 1991, יורוליג): (נקודות + ריבאונדים + אסיסטים + חטיפות + חסימות + עבירות שנסחטו) פחות (החטאות שדה + החטאות עונשין + איבודים + זריקות שנחסמו + עבירות). בדוגמה הסינתטית: גרסה מפושטת בלי עבירות שנסחטו וזריקות שנחסמו. <a href="https://en.wikipedia.org/wiki/Performance_index_rating" rel="noopener">Performance index rating</a>.</li>
@@ -258,8 +289,13 @@
   const outcomeSelect = document.getElementById('bbOutcome');
   const featureSelect = document.getElementById('bbFeature');
   const featurePer40 = document.getElementById('bbFeaturePer40');
+  const exampleLogButton = document.getElementById('bbExampleLog');
+  const splitInput = document.getElementById('bbSplitRound');
+  const targetInput = document.getElementById('bbTarget');
+  const targetList = document.getElementById('bbTargetList');
   const sliders = [
     { id: 'wDef', key: 'defense', label: 'הגנה' },
+    { id: 'wReb', key: 'rebounding', label: 'ריבאונד' },
     { id: 'wPlay', key: 'playmaking', label: 'יצירה' },
     { id: 'wScore', key: 'scoring', label: 'קליעה' },
     { id: 'bbMinMinutes', key: 'minMinutes', label: 'סף דקות' }
@@ -288,13 +324,20 @@
     if (!parsed.ok) {
       store = null;
       status.textContent = 'הקובץ לא נטען: ' + (parsed.errors[0] || 'שגיאה');
+      setupSeason();
       render();
       return;
     }
     store = BB.createBasketballStore(parsed);
-    sourceNote = parsed.provenance === Demo.SYNTHETIC_PROVENANCE
-      ? 'דוגמה סינתטית: אין כאן ליגה, קבוצה או שחקן אמיתיים. ‎+/-‎ בקובץ נבנה מאותה «יכולת» נסתרת שמייצרת את הסטטיסטיקה, ולכן המדד «מצליח» עליו — זו תכונה של המחולל, לא ממצא. «שפת גוף (אקראי)» היא מספר אקראי, ו«בקרה (מושתל)» נבנתה מאותה יכולת נסתרת כדי להראות שהמבחן יודע לזהות קשר. אף אחת מהן לא מדידה של שפת גוף.'
-      : 'קובץ שלכם (USER_LICENSED_DATA). המספרים כאן טובים רק כמו הקובץ.';
+    const synthetic = parsed.provenance === Demo.SYNTHETIC_PROVENANCE;
+    if (synthetic && store.gameLog) {
+      sourceNote = 'דוגמה סינתטית משחק-משחק: אין כאן ליגה, קבוצה או שחקן אמיתיים. כל שחקן מקבל «יכולת» נסתרת שזזה קצת במהלך העונה (יש שמשתפרים ויש שנחלשים), וכל משחק מוסיף רעש. לכן גם מדד טוב לא יחזה את ההמשך בדיוק — וזו בדיוק הנקודה.';
+    } else if (synthetic) {
+      sourceNote = 'דוגמה סינתטית: אין כאן ליגה, קבוצה או שחקן אמיתיים. ‎+/-‎ בקובץ נבנה מאותה «יכולת» נסתרת שמייצרת את הסטטיסטיקה, ולכן המדד «מצליח» עליו — זו תכונה של המחולל, לא ממצא. «שפת גוף (אקראי)» היא מספר אקראי, ו«בקרה (מושתל)» נבנתה מאותה יכולת נסתרת כדי להראות שהמבחן יודע לזהות קשר. אף אחת מהן לא מדידה של שפת גוף.';
+    } else {
+      sourceNote = 'קובץ שלכם (USER_LICENSED_DATA). המספרים כאן טובים רק כמו הקובץ.';
+    }
+    setupSeason();
     status.textContent = 'נטענו ' + parsed.players.length + ' שחקנים מ-' + label + '.';
     outcomeSelect.disabled = !store.outcomes.length;
     outcomeSelect.innerHTML = store.outcomes.length
@@ -313,6 +356,89 @@
     render();
   }
 
+  // Part 6 needs a game log; its controls stay off otherwise.
+  function setupSeason() {
+    const log = store && store.gameLog;
+    spec.target = '';
+    targetInput.value = '';
+    targetList.innerHTML = '';
+    if (!log || log.rounds.length < 2) {
+      spec.splitRound = 0;
+      splitInput.disabled = true;
+      targetInput.disabled = true;
+      document.getElementById('bbSplitRoundVal').textContent = '—';
+      return;
+    }
+    const rounds = log.rounds;
+    splitInput.min = String(rounds[0]);
+    splitInput.max = String(rounds[rounds.length - 2]);
+    splitInput.value = String(BB.defaultSplitRound(rounds));
+    splitInput.disabled = false;
+    spec.splitRound = Number(splitInput.value);
+    targetInput.disabled = false;
+    targetList.innerHTML = store.players.map(function (p) { return p.name; })
+      .sort(function (a, b) { return a.localeCompare(b); })
+      .map(function (name) { return '<option value="' + escapeHtml(name) + '"></option>'; }).join('');
+  }
+
+  function renderSeason(derived) {
+    const root = document.getElementById('bbSeason');
+    const valueOut = document.getElementById('bbSplitRoundVal');
+    if (!store || !store.gameLog) {
+      root.innerHTML = store
+        ? '<p class="notice">הקובץ הזה הוא סיכום עונה, בלי עמודת מחזור. כדי לבדוק תחילת עונה מול המשך צריך שורה לכל שחקן בכל משחק, עם עמודת Round / מחזור.</p>'
+        : '<p class="muted">טענו קובץ משחק-משחק כדי להריץ את הבדיקה.</p>';
+      return;
+    }
+    const s = derived && derived.season;
+    if (!s) {
+      root.innerHTML = '<p class="notice">אין בקובץ יעד לבדיקה (‎+/-‎, PIR, נקודות או ריבאונדים).</p>';
+      return;
+    }
+    if (s.error) {
+      root.innerHTML = '<p class="notice">' + escapeHtml(s.error) + '</p>';
+      return;
+    }
+    valueOut.textContent = String(s.splitRound);
+    splitInput.setAttribute('aria-valuetext', 'סוף תחילת העונה, מחזור ' + s.splitRound);
+    const metric = s.predictors[0];
+    const hit = metric && metric.p != null && metric.p < 0.05;
+    let html = '<p class="muted">' + escapeHtml(sourceNote) + '</p>' +
+      '<p class="verdict ' + (hit ? 'ok' : 'notice') + '">' + escapeHtml(s.verdict) + '</p>' +
+      '<div class="table-wrap"><table><caption>מה חוזה את ' + escapeHtml(s.outcomeLabel) + ' במחזורים ' + (s.splitRound + 1) + '–' + s.lastRound +
+      ', לפי מחזורים ' + s.firstRound + '–' + s.splitRound + ' (' + s.n + ' שחקנים בשני הצדדים)</caption>' +
+      '<thead><tr><th scope="col">מתחילת העונה</th><th scope="col" class="num">שחקנים</th><th scope="col" class="num">ρ</th><th scope="col" class="num">p</th><th scope="col" class="num">טווח רעש</th></tr></thead><tbody>' +
+      s.predictors.map(function (p) {
+        const name = p.id === 'metric' ? '<strong>' + escapeHtml(p.label) + '</strong>' : escapeHtml(p.label) + (p.sameAsTarget ? ' <span class="muted">(אותו מספר כמו היעד)</span>' : '');
+        return '<tr><th scope="row">' + name + '</th><td class="num">' + p.n + '</td><td class="num">' + fmt(p.rho) + '</td><td class="num">' + fmtP(p.p) + '</td><td class="num">' + (p.noiseBand == null ? '—' : '±' + p.noiseBand) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="muted">סף: ' + s.earlyFloor + ' דקות במחזורים הראשונים (' + s.earlyPlayers + ' שחקנים דורגו), ' + s.laterFloor + ' דקות בהמשך. p מ-' + s.iterations + ' ערבובים של היעד.</p>';
+    if (s.target) {
+      const t = s.target;
+      if (!t.found) {
+        html += '<p class="notice">לא נמצא שחקן בשם «' + escapeHtml(t.query) + '» במחזורים ' + s.firstRound + '–' + s.splitRound + '.</p>';
+      } else if (!t.eligible) {
+        html += '<p class="notice">' + escapeHtml(t.name) + ' שיחק ' + t.earlyMinutes + ' דקות עד מחזור ' + s.splitRound + ', מתחת לסף ' + s.earlyFloor + ' — לא דורג.</p>';
+      } else {
+        html += '<div class="table-wrap"><table><caption>' + escapeHtml(t.name) + ' (' + escapeHtml(t.team) + ') אחרי מחזור ' + s.splitRound + ', מתוך ' + s.earlyPlayers + ' שחקנים</caption>' +
+          '<thead><tr><th scope="col">דירוג לפי</th><th scope="col" class="num">מקום</th></tr></thead><tbody>' +
+          t.ranks.map(function (r) {
+            return '<tr><th scope="row">' + escapeHtml(r.label) + '</th><td class="num">' + r.rank + '</td></tr>';
+          }).join('') +
+          (t.laterRank ? '<tr><th scope="row">' + escapeHtml(s.outcomeLabel) + ' בהמשך העונה (בפועל)</th><td class="num">' + t.laterRank + ' מתוך ' + s.laterPlayers + '</td></tr>' : '') +
+          '</tbody></table></div>';
+      }
+    }
+    html += '<div class="table-wrap"><table><caption>עשרת הראשונים במדד אחרי מחזור ' + s.splitRound + ', ואיפה סיימו בהמשך</caption>' +
+      '<thead><tr><th scope="col" class="num">#</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col" class="num">מדד</th>' +
+      '<th scope="col" class="num">' + escapeHtml(s.outcomeLabel) + ' בהמשך</th><th scope="col" class="num">מקום בהמשך</th></tr></thead><tbody>' +
+      s.top.map(function (r) {
+        return '<tr><td class="num">' + r.rank + '</td><th scope="row">' + escapeHtml(r.name) + '</th><td>' + escapeHtml(r.team) + '</td><td class="num">' + r.score + '</td>' +
+          '<td class="num">' + fmt(r.later) + '</td><td class="num">' + (r.laterRank ? r.laterRank + ' / ' + s.laterPlayers : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    root.innerHTML = html;
+  }
+
   function renderRanking(derived) {
     const root = document.getElementById('bbRanking');
     if (!store) {
@@ -328,14 +454,14 @@
       '<div class="table-wrap"><table><caption>' + derived.rows.length + ' שחקנים מעל ' + derived.spec.minMinutes + ' דקות' +
       (derived.rows.length > RANKING_LIMIT ? ' (מוצגים ' + RANKING_LIMIT + ' הראשונים)' : '') + '</caption>' +
       '<thead><tr><th scope="col" class="num">#</th><th scope="col">שם</th><th scope="col">קבוצה</th><th scope="col">עמדה</th>' +
-      '<th scope="col" class="num">דקות</th><th scope="col" class="num">מדד</th><th scope="col" class="num">הגנה</th><th scope="col" class="num">יצירה</th>' +
+      '<th scope="col" class="num">דקות</th><th scope="col" class="num">מדד</th><th scope="col" class="num">הגנה</th><th scope="col" class="num">ריבאונד</th><th scope="col" class="num">יצירה</th>' +
       '<th scope="col" class="num">קליעה</th><th scope="col" class="num">נק׳/40</th><th scope="col" class="num">TS%</th></tr></thead><tbody>' +
       shown.map(function (r) {
         const raw = r.components.raw;
         return '<tr><td class="num">' + r.rank + '</td><th scope="row">' + escapeHtml(r.name) + '</th><td>' + escapeHtml(r.team) + '</td>' +
           '<td>' + escapeHtml(r.position) + (r.positionGroup !== 'OT' ? ' <span class="muted">(' + r.positionGroup + ')</span>' : '') + '</td>' +
           '<td class="num">' + Math.round(r.minutes) + '</td><td class="num"><strong>' + r.score + '</strong></td>' +
-          '<td class="num">' + r.components.defense + '</td><td class="num">' + r.components.playmaking + '</td><td class="num">' + r.components.scoring + '</td>' +
+          '<td class="num">' + r.components.defense + '</td><td class="num">' + r.components.rebounding + '</td><td class="num">' + r.components.playmaking + '</td><td class="num">' + r.components.scoring + '</td>' +
           '<td class="num">' + raw.points40 + '</td><td class="num">' + (raw.ts == null ? '—' : Math.round(raw.ts * 1000) / 10) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
@@ -349,11 +475,11 @@
     }
     root.innerHTML = '<p class="muted">' + escapeHtml(v.splitLabel) + (v.withoutOutcome ? ' · ' + v.withoutOutcome + ' שחקנים בלי ערך יעד לא נכללו' : '') + '</p>' +
       '<div class="table-wrap"><table><caption>Spearman ρ מול ' + escapeHtml(v.outcomeLabel) + '</caption>' +
-      '<thead><tr><th scope="col">חלק</th><th scope="col" class="num">שחקנים</th><th scope="col" class="num">מדד</th><th scope="col" class="num">הגנה</th><th scope="col" class="num">יצירה</th><th scope="col" class="num">קליעה</th></tr></thead><tbody>' +
+      '<thead><tr><th scope="col">חלק</th><th scope="col" class="num">שחקנים</th><th scope="col" class="num">מדד</th><th scope="col" class="num">הגנה</th><th scope="col" class="num">ריבאונד</th><th scope="col" class="num">יצירה</th><th scope="col" class="num">קליעה</th></tr></thead><tbody>' +
       [['אימון', v.train], ['מבחן', v.test]].map(function (pair) {
         const s = pair[1];
         return '<tr><th scope="row">' + pair[0] + '</th><td class="num">' + s.n + '</td><td class="num"><strong>' + fmt(s.rho) + '</strong></td>' +
-          '<td class="num">' + fmt(s.componentRho.defense) + '</td><td class="num">' + fmt(s.componentRho.playmaking) + '</td><td class="num">' + fmt(s.componentRho.scoring) + '</td></tr>';
+          '<td class="num">' + fmt(s.componentRho.defense) + '</td><td class="num">' + fmt(s.componentRho.rebounding) + '</td><td class="num">' + fmt(s.componentRho.playmaking) + '</td><td class="num">' + fmt(s.componentRho.scoring) + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
       '<p class="' + (v.leaky ? 'notice' : 'ok') + '">' + escapeHtml(v.verdict) + '</p>';
   }
@@ -412,6 +538,20 @@
     renderRanking(derived);
     renderValidation(derived);
     renderPanim(derived);
+    renderSeason(derived);
+  }
+
+  function loadExample(path, label) {
+    status.textContent = 'טוען ' + label + '…';
+    fetch('../' + path)
+      .then(function (response) {
+        if (!response.ok) throw new Error('missing');
+        return response.text();
+      })
+      .then(function (text) { accept(BB.parseBasketballCsv(text, { synthetic: true, fileName: path }), label); })
+      .catch(function () {
+        status.textContent = 'הדוגמה נטענת רק דרך שרת (GitHub Pages או שרת מקומי), לא מקובץ שנפתח ישירות (file://).';
+      });
   }
 
   fileInput.addEventListener('change', syncLoadButton);
@@ -431,16 +571,22 @@
     reader.readAsArrayBuffer(file);
   });
   exampleButton.addEventListener('click', function () {
-    status.textContent = 'טוען דוגמה סינתטית…';
-    fetch('../' + BB.EXAMPLE_PATH)
-      .then(function (response) {
-        if (!response.ok) throw new Error('missing');
-        return response.text();
-      })
-      .then(function (text) { accept(BB.parseBasketballCsv(text, { synthetic: true }), 'הדוגמה הסינתטית'); })
-      .catch(function () {
-        status.textContent = 'הדוגמה נטענת רק דרך שרת (GitHub Pages או שרת מקומי), לא מקובץ שנפתח ישירות (file://).';
-      });
+    loadExample(BB.EXAMPLE_PATH, 'הדוגמה הסינתטית');
+  });
+  exampleLogButton.addEventListener('click', function () {
+    loadExample(BB.GAMELOG_EXAMPLE_PATH, 'הדוגמה הסינתטית משחק-משחק');
+  });
+  splitInput.addEventListener('input', function () {
+    spec.splitRound = Number(splitInput.value);
+    render();
+  });
+  let targetTimer = null;
+  targetInput.addEventListener('input', function () {
+    clearTimeout(targetTimer);
+    targetTimer = setTimeout(function () {
+      spec.target = targetInput.value;
+      render();
+    }, 250);
   });
   sliders.forEach(function (s) {
     document.getElementById(s.id).addEventListener('input', render);
@@ -459,11 +605,12 @@
   });
   document.getElementById('bbReset').addEventListener('click', function () {
     document.getElementById('wDef').value = BB.DEFAULT_SPEC.defense;
+    document.getElementById('wReb').value = BB.DEFAULT_SPEC.rebounding;
     document.getElementById('wPlay').value = BB.DEFAULT_SPEC.playmaking;
     document.getElementById('wScore').value = BB.DEFAULT_SPEC.scoring;
     document.getElementById('bbMinMinutes').value = BB.DEFAULT_SPEC.minMinutes;
     render();
-    status.textContent = 'המשקלות חזרו ל-30/30/40 וסף 250 דקות.';
+    status.textContent = 'המשקלות חזרו ל-24/20/24/32 (הגנה/ריבאונד/יצירה/קליעה) וסף 250 דקות.';
   });
   render();
 }());
