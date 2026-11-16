@@ -890,3 +890,21 @@ test('event explorer exports its table as CSV with the score-fields filter and p
   assert.match(html, /<button id="downloadExplorerCsv"[^>]*disabled/);
   assert.match(html, /id="explorerCsvStatus"[^>]*role="status"[^>]*aria-live="polite"/);
 });
+
+test('guided exercise buttons hand off focus, sync aria-labels, and link their controlled regions', () => {
+  assert.match(html, /<button id="applyHint" class="secondary" type="button" aria-controls="exerciseSummary exerciseChecks" aria-describedby="exerciseSummary">/);
+  assert.match(html, /<button id="resetExercise" class="secondary" type="button" disabled title="[^"]+" aria-label="[^"]+" aria-controls="exerciseSummary exerciseChecks" aria-describedby="exerciseSummary">/);
+  assert.match(html, /<ul id="exerciseChecks" class="checks" aria-label="בדיקות עצמיות של התרגיל המודרך"><\/ul>/);
+  assert.match(html, /applyHint\.setAttribute\('aria-label', hintTitle\)/);
+  assert.match(html, /resetExercise\.setAttribute\('aria-label', resetTitle\)/);
+  assert.match(html, /אין נתוני תרגיל זמינים — אין נקודת התחלה להציע/);
+  assert.match(html, /אין נתוני תרגיל זמינים — אין מה לאפס/);
+  assert.match(html, /if \(resetBtn && !resetBtn\.disabled && resetBtn\.focus\) resetBtn\.focus\(\);/);
+  assert.match(html, /if \(hintBtn && !hintBtn\.disabled && hintBtn\.focus\) hintBtn\.focus\(\);/);
+  const applyAt = html.indexOf("document.getElementById('applyHint').addEventListener('click'");
+  const applyFocusAt = html.indexOf('resetBtn.focus()');
+  const resetAt = html.indexOf("document.getElementById('resetExercise').addEventListener('click'");
+  const resetFocusAt = html.indexOf('hintBtn.focus()');
+  assert.ok(applyAt > 0 && applyFocusAt > applyAt && applyFocusAt < resetAt, 'applyHint hands focus to resetExercise');
+  assert.ok(resetAt > 0 && resetFocusAt > resetAt, 'resetExercise hands focus back to applyHint');
+});
