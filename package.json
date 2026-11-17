@@ -4,6 +4,10 @@
   "description": "Hebrew RTL educational lab: build a transparent football metric on StatsBomb Open Data",
   "scripts": {
     "test": "node --test",
-    "pr-size": "node tools/pr-size.js"
+    "pr-size": "node tools/pr-size.js",
+    "check:style": "biome check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7"
   }
 }
