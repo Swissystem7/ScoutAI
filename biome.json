@@ -1,0 +1,77 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.7/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": ["**/*.js"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "none"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noInnerDeclarations": "warn"
+      },
+      "suspicious": {
+        "noRedeclare": "warn",
+        "noAssignInExpressions": "warn",
+        "useIterableCallbackReturn": "warn"
+      }
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "overrides": [
+    {
+      "includes": [
+        "attic/proof-big5.js",
+        "attic/proof-body.js",
+        "attic/proof-composite.js",
+        "attic/proof-demo.js",
+        "attic/proof-identity.js",
+        "attic/proof-match.js",
+        "attic/proof-offball.js",
+        "attic/proof-tournament.js",
+        "attic/proof-xt.js",
+        "basketball.js",
+        "demo.js",
+        "test/basketball.test.js",
+        "test/byod.test.js",
+        "test/csv-export-with-provenance.test.js",
+        "test/data.test.js",
+        "test/demo.test.js",
+        "test/filter-by-position.test.js",
+        "test/lessonFirstStructure.test.js",
+        "test/links.test.js",
+        "test/pages.test.js",
+        "test/position-ut-audit.test.js",
+        "test/pr-size.test.js",
+        "test/trap.test.js",
+        "tools/make-basketball-example.js",
+        "tools/pr-size.js",
+        "trap.js"
+      ],
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ]
+}

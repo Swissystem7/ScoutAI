@@ -1243,12 +1243,12 @@
   }
 
   // 1 = highest; ties share the better rank. Rows without a value get null.
-  function rankOf(rows, valueOf, row) {
-    const v = valueOf(row);
+  function rankOf(rows, readValue, row) {
+    const v = readValue(row);
     if (v == null) return null;
     let above = 0;
     rows.forEach(function (r) {
-      const w = valueOf(r);
+      const w = readValue(r);
       if (w != null && w > v) above += 1;
     });
     return above + 1;
