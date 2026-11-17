@@ -1,0 +1,24 @@
+{
+  "name": "ScoutAI – Codespaces",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [3000],
+  "secrets": {
+    "ANTHROPIC_API_KEY": { "description": "Optional: Claude Code via API key (otherwise run `claude` and log in once)" },
+    "GEMINI_API_KEY": { "description": "Required for the Aider Gemini fallback (and optional for the Gemini CLI). Set the key only in this Codespaces secret." },
+    "OPENAI_API_BASE": { "description": "Required for Aider: OpenAI-compatible gateway URL. It must end with /p1/v1. Set the current host only in this Codespaces secret." },
+    "OPENAI_API_KEY": { "description": "Required for Aider: bearer token for the OpenAI-compatible gateway." },
+    "CAMBER_API_KEY": { "description": "Optional: Camber CLI auth. Set only if INSTALL_CAMBER=1. Value comes from the Camber profile page." },
+    "MDB_MCP_CONNECTION_STRING": { "description": "Required for the MongoDB MCP server. Connection string only; do not commit it." },
+    "INSTALL_CAMBER": { "description": "Optional: set to 1 to run .devcontainer/camber-install.sh during post-create." }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] },
+    "vscode": { "extensions": ["GitHub.copilot", "GitHub.copilot-chat"] }
+  }
+}
