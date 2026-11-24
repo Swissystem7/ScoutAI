@@ -176,11 +176,11 @@
     <p id="exercisePrompt"></p>
     <p class="muted">בדיקה עצמית מול אותה שכבת מונדיאל 2018 — לא מבחן סקאוטינג ואין תשובה מדעית אחת.</p>
     <div class="actions">
-      <button id="applyHint" class="secondary" type="button">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
-      <button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)">איפוס תרגיל לברירת מחדל (40/30/30)</button>
+      <button id="applyHint" class="secondary" type="button" aria-controls="exerciseSummary exerciseChecks" aria-describedby="exerciseSummary">הציעו נקודת התחלה (70/20/10 + נרמול עמדה)</button>
+      <button id="resetExercise" class="secondary" type="button" disabled title="משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)" aria-label="משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)" aria-controls="exerciseSummary exerciseChecks" aria-describedby="exerciseSummary">איפוס תרגיל לברירת מחדל (40/30/30)</button>
     </div>
     <p id="exerciseSummary" class="status" role="status" aria-live="polite"></p>
-    <ul id="exerciseChecks" class="checks"></ul>
+    <ul id="exerciseChecks" class="checks" aria-label="בדיקות עצמיות של התרגיל המודרך"></ul>
   </section>
 
   <section class="card" id="ranking">
@@ -577,26 +577,38 @@
       document.getElementById('exercisePrompt').textContent = 'טוען תרגיל מודרך לבחינת בלמים…';
       document.getElementById('exerciseSummary').textContent = 'אין נתוני תרגיל זמינים עבור השכבה הנוכחית.';
       document.getElementById('exerciseChecks').innerHTML = '';
-      if (applyHint) applyHint.disabled = true;
-      if (resetExercise) resetExercise.disabled = true;
+      if (applyHint) {
+        applyHint.disabled = true;
+        applyHint.setAttribute('title', 'אין נתוני תרגיל זמינים — אין נקודת התחלה להציע');
+        applyHint.setAttribute('aria-label', 'אין נתוני תרגיל זמינים — אין נקודת התחלה להציע');
+      }
+      if (resetExercise) {
+        resetExercise.disabled = true;
+        resetExercise.setAttribute('title', 'אין נתוני תרגיל זמינים — אין מה לאפס');
+        resetExercise.setAttribute('aria-label', 'אין נתוני תרגיל זמינים — אין מה לאפס');
+      }
       return;
     }
     const spec = current.spec;
     const hintApplied = spec && Number(spec.grit) === 70 && Number(spec.involvement) === 20 &&
       Number(spec.clutch) === 10 && Boolean(spec.normalizePosition);
     if (applyHint) {
-      applyHint.disabled = hintApplied;
-      applyHint.setAttribute('title', hintApplied
+      const hintTitle = hintApplied
         ? 'נקודת ההתחלה של התרגיל (70/20/10 + נרמול עמדה) כבר מיושמת'
-        : 'הציעו נקודת התחלה (70/20/10 + נרמול עמדה)');
+        : 'הציעו נקודת התחלה (70/20/10 + נרמול עמדה)';
+      applyHint.disabled = hintApplied;
+      applyHint.setAttribute('title', hintTitle);
+      applyHint.setAttribute('aria-label', hintTitle);
     }
     if (resetExercise) {
       const isDefault = spec && Number(spec.grit) === 40 && Number(spec.involvement) === 30 &&
         Number(spec.clutch) === 30 && !spec.normalizePosition;
-      resetExercise.disabled = isDefault;
-      resetExercise.setAttribute('title', isDefault
+      const resetTitle = isDefault
         ? 'משקלות המדד כבר בברירת המחדל (40/30/30, ללא נרמול עמדה)'
-        : 'אפסו את משקלות המדד לברירת המחדל של המעבדה (40/30/30)');
+        : 'אפסו את משקלות המדד לברירת המחדל של המעבדה (40/30/30)';
+      resetExercise.disabled = isDefault;
+      resetExercise.setAttribute('title', resetTitle);
+      resetExercise.setAttribute('aria-label', resetTitle);
     }
     document.getElementById('exercisePrompt').textContent = exercise.prompt;
     document.getElementById('exerciseSummary').textContent = (exercise.passed ? 'עברתם. ' : 'עדיין לא. ') + exercise.summary;
@@ -1378,6 +1390,8 @@
     if (summary) {
       summary.textContent = 'נקודת ההתחלה הוחלה (70/20/10 + נרמול עמדה). ' + (summary.textContent || '');
     }
+    const resetBtn = document.getElementById('resetExercise');
+    if (resetBtn && !resetBtn.disabled && resetBtn.focus) resetBtn.focus();
   });
   document.getElementById('resetExercise').addEventListener('click', function () {
     const currentSpec = readSpecFromControls();
@@ -1392,6 +1406,8 @@
     if (summary) {
       summary.textContent = 'התרגיל אופס למדד ברירת המחדל (40/30/30). ' + (summary.textContent || '');
     }
+    const hintBtn = document.getElementById('applyHint');
+    if (hintBtn && !hintBtn.disabled && hintBtn.focus) hintBtn.focus();
   });
   document.getElementById('copyMethod').addEventListener('click', function () {
     const text = document.getElementById('methodText').textContent;
